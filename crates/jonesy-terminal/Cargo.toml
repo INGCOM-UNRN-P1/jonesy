@@ -1,0 +1,10 @@
+[package]
+name = "jonesy-terminal"
+description = "deck: terminal interna de jonesy (portable-pty + pantalla virtual vt100)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+portable-pty.workspace = true
+vt100.workspace = true
