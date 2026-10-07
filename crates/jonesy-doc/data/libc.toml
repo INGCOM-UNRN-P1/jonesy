@@ -1,0 +1,1068 @@
+# Base de conocimiento de quick-doc (RF-9.2): se embebe en el binario.
+# Cada función: firma normalizada, contrato de retorno, parámetros, trampas frecuentes de
+# estudiantes y reglas de cátedra de ripley relacionadas.
+
+# ------------------------------------------------------------------ stdlib.h: memoria
+
+[[funcion]]
+nombre = "malloc"
+cabecera = "stdlib.h"
+firma = "void *malloc(size_t size)"
+descripcion = "Reserva size bytes de memoria dinámica sin inicializar."
+retorno = "Puntero al bloque reservado. NULL si no hay memoria disponible."
+parametros = [{ tipo = "size_t", nombre = "size", desc = "Cantidad de bytes: calculala con sizeof, por ejemplo n * sizeof *p." }]
+trampas = [
+  "Verificá si devolvió NULL antes de usar el puntero.",
+  "La memoria no está inicializada: si necesitás ceros, usá calloc.",
+  "Para un string de n caracteres reservá n + 1 bytes: el '\\0' final también ocupa lugar.",
+  "Todo malloc necesita exactamente un free.",
+]
+reglas = ["0x3001h", "0x300Bh"]
+
+[[funcion]]
+nombre = "calloc"
+cabecera = "stdlib.h"
+firma = "void *calloc(size_t nmemb, size_t size)"
+descripcion = "Reserva memoria para nmemb elementos de size bytes y la inicializa en cero."
+retorno = "Puntero al bloque (todo en cero). NULL si no hay memoria."
+parametros = [
+  { tipo = "size_t", nombre = "nmemb", desc = "Cantidad de elementos." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño de cada elemento: sizeof *p." },
+]
+trampas = ["Verificá si devolvió NULL.", "Ceros en bytes no garantiza punteros NULL ni 0.0 en todas las plataformas (sí en las del curso)."]
+reglas = ["0x3001h", "0x300Bh"]
+
+[[funcion]]
+nombre = "realloc"
+cabecera = "stdlib.h"
+firma = "void *realloc(void *ptr, size_t size)"
+descripcion = "Cambia el tamaño de un bloque dinámico, moviéndolo si hace falta."
+retorno = "Puntero al bloque (puede ser otra dirección). NULL si falla, y el bloque original sigue siendo válido."
+parametros = [
+  { tipo = "void *", nombre = "ptr", desc = "Bloque devuelto por malloc/calloc/realloc, o NULL (equivale a malloc)." },
+  { tipo = "size_t", nombre = "size", desc = "Nuevo tamaño total en bytes." },
+]
+trampas = [
+  "No hagas p = realloc(p, n): si falla, perdés el bloque original (fuga). Usá un puntero auxiliar.",
+  "Los punteros al bloque viejo quedan inválidos si realloc lo movió.",
+]
+reglas = ["0x3001h", "0x300Bh"]
+
+[[funcion]]
+nombre = "free"
+cabecera = "stdlib.h"
+firma = "void free(void *ptr)"
+descripcion = "Libera un bloque de memoria dinámica."
+retorno = "No devuelve nada."
+parametros = [{ tipo = "void *", nombre = "ptr", desc = "Bloque devuelto por malloc/calloc/realloc, o NULL (no hace nada)." }]
+trampas = [
+  "Después de free, asigná NULL al puntero para no usarlo colgado.",
+  "Liberar dos veces el mismo bloque es comportamiento indefinido.",
+  "En estructuras enlazadas, liberá los nodos internos antes que el contenedor.",
+  "No liberes memoria que no vino de malloc (arreglos locales, literales).",
+]
+reglas = ["0x3002h", "0x300Fh"]
+
+[[funcion]]
+nombre = "exit"
+cabecera = "stdlib.h"
+firma = "void exit(int status)"
+descripcion = "Termina el programa: vacía los buffers de stdio y cierra los archivos abiertos."
+retorno = "No vuelve."
+parametros = [{ tipo = "int", nombre = "status", desc = "EXIT_SUCCESS (0) o EXIT_FAILURE." }]
+trampas = ["En funciones de biblioteca preferí devolver un código de error a terminar el programa."]
+reglas = []
+
+[[funcion]]
+nombre = "atoi"
+cabecera = "stdlib.h"
+firma = "int atoi(const char *nptr)"
+descripcion = "Convierte el comienzo de un string a int."
+retorno = "El valor convertido; 0 si no hay número (indistinguible de un \"0\" real)."
+parametros = [{ tipo = "const char *", nombre = "nptr", desc = "String con el número." }]
+trampas = ["No informa errores ni desbordes: usá strtol para validar la entrada."]
+reglas = []
+
+[[funcion]]
+nombre = "strtol"
+cabecera = "stdlib.h"
+firma = "long strtol(const char *nptr, char **endptr, int base)"
+descripcion = "Convierte un string a long, informando dónde terminó el número."
+retorno = "El valor convertido. LONG_MAX/LONG_MIN con errno = ERANGE si desborda; 0 si no hay número."
+parametros = [
+  { tipo = "const char *", nombre = "nptr", desc = "String a convertir." },
+  { tipo = "char **", nombre = "endptr", desc = "Recibe la posición del primer carácter no convertido (o NULL)." },
+  { tipo = "int", nombre = "base", desc = "Base numérica: 10 para decimal, 0 para detectar 0x/0." },
+]
+trampas = ["Si *endptr == nptr no se leyó ningún dígito.", "Poné errno = 0 antes de llamar para detectar ERANGE."]
+reglas = []
+
+[[funcion]]
+nombre = "strtod"
+cabecera = "stdlib.h"
+firma = "double strtod(const char *nptr, char **endptr)"
+descripcion = "Convierte un string a double."
+retorno = "El valor convertido; HUGE_VAL con errno = ERANGE si desborda."
+parametros = [
+  { tipo = "const char *", nombre = "nptr", desc = "String a convertir." },
+  { tipo = "char **", nombre = "endptr", desc = "Recibe dónde terminó el número (o NULL)." },
+]
+trampas = ["Si *endptr == nptr no se leyó ningún número."]
+reglas = []
+
+[[funcion]]
+nombre = "rand"
+cabecera = "stdlib.h"
+firma = "int rand(void)"
+descripcion = "Devuelve un número pseudoaleatorio entre 0 y RAND_MAX."
+retorno = "Entero en [0, RAND_MAX]."
+parametros = []
+trampas = ["Sin srand la secuencia es siempre la misma.", "rand() % n tiene un leve sesgo; para el curso suele alcanzar."]
+reglas = []
+
+[[funcion]]
+nombre = "srand"
+cabecera = "stdlib.h"
+firma = "void srand(unsigned int seed)"
+descripcion = "Fija la semilla de rand."
+retorno = "No devuelve nada."
+parametros = [{ tipo = "unsigned int", nombre = "seed", desc = "Semilla; srand(time(NULL)) para variar entre ejecuciones." }]
+trampas = ["Llamala una sola vez al comienzo del programa, no antes de cada rand."]
+reglas = []
+
+[[funcion]]
+nombre = "qsort"
+cabecera = "stdlib.h"
+firma = "void qsort(void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *))"
+descripcion = "Ordena un arreglo con la función de comparación dada."
+retorno = "No devuelve nada."
+parametros = [
+  { tipo = "void *", nombre = "base", desc = "Primer elemento del arreglo." },
+  { tipo = "size_t", nombre = "nmemb", desc = "Cantidad de elementos." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño de cada elemento: sizeof arreglo[0]." },
+  { tipo = "int (*)(const void *, const void *)", nombre = "compar", desc = "Devuelve <0, 0 o >0 según el orden de los dos elementos." },
+]
+trampas = ["No compares restando enteros (a - b puede desbordar): usá (a > b) - (a < b).", "compar recibe punteros a los elementos, no los elementos."]
+reglas = ["0x2018h"]
+
+[[funcion]]
+nombre = "bsearch"
+cabecera = "stdlib.h"
+firma = "void *bsearch(const void *key, const void *base, size_t nmemb, size_t size, int (*compar)(const void *, const void *))"
+descripcion = "Búsqueda binaria en un arreglo ordenado."
+retorno = "Puntero al elemento encontrado o NULL."
+parametros = [
+  { tipo = "const void *", nombre = "key", desc = "Puntero al valor buscado." },
+  { tipo = "const void *", nombre = "base", desc = "Arreglo ordenado con el mismo criterio que compar." },
+  { tipo = "size_t", nombre = "nmemb", desc = "Cantidad de elementos." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño de cada elemento." },
+  { tipo = "int (*)(const void *, const void *)", nombre = "compar", desc = "Misma comparación usada para ordenar." },
+]
+trampas = ["El arreglo tiene que estar ordenado."]
+reglas = []
+
+[[funcion]]
+nombre = "abs"
+cabecera = "stdlib.h"
+firma = "int abs(int j)"
+descripcion = "Valor absoluto de un int."
+retorno = "|j| (abs(INT_MIN) es comportamiento indefinido)."
+parametros = [{ tipo = "int", nombre = "j", desc = "Valor." }]
+trampas = ["Para double usá fabs (math.h)."]
+reglas = []
+
+# ------------------------------------------------------------------ stdio.h
+
+[[funcion]]
+nombre = "printf"
+cabecera = "stdio.h"
+firma = "int printf(const char *format, ...)"
+descripcion = "Escribe en la salida estándar con formato."
+retorno = "Cantidad de caracteres escritos; negativo si falla."
+parametros = [
+  { tipo = "const char *", nombre = "format", desc = "Formato: %d int, %ld long, %zu size_t, %f double, %c char, %s string, %p puntero." },
+  { tipo = "...", nombre = "...", desc = "Un argumento por especificador, del tipo que corresponde." },
+]
+trampas = [
+  "El especificador tiene que coincidir con el tipo: %d con size_t es incorrecto (usá %zu).",
+  "Nunca pases un string del usuario como formato: printf(s) → printf(\"%s\", s).",
+  "La salida va a un búfer: sin '\\n' puede no verse antes de un crash.",
+]
+reglas = ["0x2002h", "0x5004h"]
+
+[[funcion]]
+nombre = "fprintf"
+cabecera = "stdio.h"
+firma = "int fprintf(FILE *stream, const char *format, ...)"
+descripcion = "Escribe con formato en un archivo (stderr para errores)."
+retorno = "Cantidad de caracteres escritos; negativo si falla."
+parametros = [
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo abierto para escritura, stdout o stderr." },
+  { tipo = "const char *", nombre = "format", desc = "Formato, como en printf." },
+  { tipo = "...", nombre = "...", desc = "Valores a formatear." },
+]
+trampas = ["Los mensajes de error van a stderr, no a stdout."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "sprintf"
+cabecera = "stdio.h"
+firma = "int sprintf(char *str, const char *format, ...)"
+descripcion = "Escribe con formato en un string, sin control de tamaño."
+retorno = "Caracteres escritos (sin el '\\0')."
+parametros = [
+  { tipo = "char *", nombre = "str", desc = "Destino; tiene que alcanzar para todo el resultado." },
+  { tipo = "const char *", nombre = "format", desc = "Formato." },
+  { tipo = "...", nombre = "...", desc = "Valores a formatear." },
+]
+trampas = ["Puede desbordar el destino: usá snprintf."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "snprintf"
+cabecera = "stdio.h"
+firma = "int snprintf(char *str, size_t size, const char *format, ...)"
+descripcion = "Escribe con formato en un string sin pasarse de size bytes (incluido el '\\0')."
+retorno = "Caracteres que se habrían escrito sin límite; si es >= size, el resultado quedó truncado."
+parametros = [
+  { tipo = "char *", nombre = "str", desc = "Destino." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño del destino: sizeof destino si es un arreglo." },
+  { tipo = "const char *", nombre = "format", desc = "Formato." },
+  { tipo = "...", nombre = "...", desc = "Valores a formatear." },
+]
+trampas = ["Compará el retorno con size para detectar truncamiento.", "sizeof de un puntero no es el tamaño del búfer."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "scanf"
+cabecera = "stdio.h"
+firma = "int scanf(const char *format, ...)"
+descripcion = "Lee de la entrada estándar con formato."
+retorno = "Cantidad de valores asignados; EOF si se terminó la entrada antes de leer alguno."
+parametros = [
+  { tipo = "const char *", nombre = "format", desc = "Formato: %d int*, %lf double*, %c char*, %99s char[100]." },
+  { tipo = "...", nombre = "...", desc = "Punteros a las variables: &x (no hace falta & en arreglos de char)." },
+]
+trampas = [
+  "Verificá el retorno: scanf(\"%d\", &x) != 1 significa que no se leyó un número.",
+  "Para double el especificador es %lf, no %f.",
+  "%s sin ancho máximo desborda: usá %99s o mejor fgets.",
+  "El '\\n' queda en la entrada: un %c posterior lo lee (usá \" %c\").",
+]
+reglas = ["0x4002h", "0x5006h", "0x2002h"]
+
+[[funcion]]
+nombre = "fscanf"
+cabecera = "stdio.h"
+firma = "int fscanf(FILE *stream, const char *format, ...)"
+descripcion = "Lee con formato de un archivo."
+retorno = "Cantidad de valores asignados; EOF al final del archivo."
+parametros = [
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo abierto para lectura." },
+  { tipo = "const char *", nombre = "format", desc = "Formato, como en scanf." },
+  { tipo = "...", nombre = "...", desc = "Punteros a las variables." },
+]
+trampas = ["Controlá el retorno en cada lectura, no feof antes de leer."]
+reglas = ["0x4002h", "0x5006h"]
+
+[[funcion]]
+nombre = "sscanf"
+cabecera = "stdio.h"
+firma = "int sscanf(const char *str, const char *format, ...)"
+descripcion = "Lee con formato desde un string (útil después de fgets)."
+retorno = "Cantidad de valores asignados; EOF si el string se terminó antes."
+parametros = [
+  { tipo = "const char *", nombre = "str", desc = "String de entrada." },
+  { tipo = "const char *", nombre = "format", desc = "Formato." },
+  { tipo = "...", nombre = "...", desc = "Punteros a las variables." },
+]
+trampas = ["Verificá el retorno igual que con scanf."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fgets"
+cabecera = "stdio.h"
+firma = "char *fgets(char *s, int size, FILE *stream)"
+descripcion = "Lee una línea (hasta size - 1 caracteres) incluyendo el '\\n'."
+retorno = "s si leyó algo; NULL al final del archivo o ante un error."
+parametros = [
+  { tipo = "char *", nombre = "s", desc = "Búfer destino." },
+  { tipo = "int", nombre = "size", desc = "Tamaño del búfer: sizeof s si es un arreglo." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo o stdin." },
+]
+trampas = [
+  "El '\\n' queda en el búfer: sacalo con s[strcspn(s, \"\\n\")] = '\\0'.",
+  "Si la línea es más larga que el búfer, el resto queda para la próxima lectura.",
+  "Verificá que no devuelva NULL.",
+]
+reglas = ["0x4002h", "0x5006h"]
+
+[[funcion]]
+nombre = "gets"
+cabecera = "stdio.h"
+firma = "char *gets(char *s)"
+descripcion = "Retirada del estándar en C11: lee una línea sin límite de tamaño."
+retorno = "s o NULL."
+parametros = [{ tipo = "char *", nombre = "s", desc = "Búfer destino (sin forma de saber su tamaño)." }]
+trampas = ["No la uses: siempre puede desbordar el búfer. Usá fgets."]
+reglas = ["0x5006h", "0x4002h"]
+
+[[funcion]]
+nombre = "puts"
+cabecera = "stdio.h"
+firma = "int puts(const char *s)"
+descripcion = "Escribe s y un '\\n' en la salida estándar."
+retorno = "No negativo si funciona; EOF si falla."
+parametros = [{ tipo = "const char *", nombre = "s", desc = "String terminado en '\\0'." }]
+trampas = ["Agrega el '\\n' solo (fputs no)."]
+reglas = ["0x2002h"]
+
+[[funcion]]
+nombre = "putchar"
+cabecera = "stdio.h"
+firma = "int putchar(int c)"
+descripcion = "Escribe un carácter en la salida estándar."
+retorno = "El carácter escrito o EOF."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter a escribir." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "getchar"
+cabecera = "stdio.h"
+firma = "int getchar(void)"
+descripcion = "Lee un carácter de la entrada estándar."
+retorno = "El carácter como unsigned char convertido a int, o EOF."
+parametros = []
+trampas = ["Guardá el resultado en un int, no en un char: si no, no podés distinguir EOF."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fopen"
+cabecera = "stdio.h"
+firma = "FILE *fopen(const char *pathname, const char *mode)"
+descripcion = "Abre un archivo."
+retorno = "Puntero al archivo; NULL si no se pudo abrir (errno indica la causa)."
+parametros = [
+  { tipo = "const char *", nombre = "pathname", desc = "Ruta del archivo." },
+  { tipo = "const char *", nombre = "mode", desc = "\"r\" leer, \"w\" escribir (trunca), \"a\" agregar; \"b\" para binario." },
+]
+trampas = ["Verificá si devolvió NULL (perror explica por qué).", "Todo fopen necesita su fclose, también en los caminos de error."]
+reglas = ["0x4001h"]
+
+[[funcion]]
+nombre = "fclose"
+cabecera = "stdio.h"
+firma = "int fclose(FILE *stream)"
+descripcion = "Cierra un archivo y vacía su búfer."
+retorno = "0 si funciona; EOF si falla (por ejemplo, disco lleno al vaciar el búfer)."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo abierto." }]
+trampas = ["No uses el FILE * después de cerrarlo.", "En escritura, verificar el retorno detecta errores de disco."]
+reglas = ["0x4001h"]
+
+[[funcion]]
+nombre = "fread"
+cabecera = "stdio.h"
+firma = "size_t fread(void *ptr, size_t size, size_t nmemb, FILE *stream)"
+descripcion = "Lee nmemb elementos de size bytes desde un archivo binario."
+retorno = "Cantidad de elementos leídos completos (menos que nmemb al final o ante un error)."
+parametros = [
+  { tipo = "void *", nombre = "ptr", desc = "Destino." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño de cada elemento." },
+  { tipo = "size_t", nombre = "nmemb", desc = "Cantidad de elementos." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo abierto en modo binario." },
+]
+trampas = ["Compará el retorno con nmemb.", "Usá feof/ferror después de una lectura corta para saber la causa."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fwrite"
+cabecera = "stdio.h"
+firma = "size_t fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)"
+descripcion = "Escribe nmemb elementos de size bytes en un archivo binario."
+retorno = "Cantidad de elementos escritos; menos que nmemb ante un error."
+parametros = [
+  { tipo = "const void *", nombre = "ptr", desc = "Origen." },
+  { tipo = "size_t", nombre = "size", desc = "Tamaño de cada elemento." },
+  { tipo = "size_t", nombre = "nmemb", desc = "Cantidad de elementos." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo abierto en modo binario." },
+]
+trampas = ["Compará el retorno con nmemb.", "Escribir structs con punteros guarda direcciones, no los datos apuntados."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "feof"
+cabecera = "stdio.h"
+firma = "int feof(FILE *stream)"
+descripcion = "Indica si una lectura previa llegó al final del archivo."
+retorno = "Distinto de 0 si se alcanzó el final."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo." }]
+trampas = ["while (!feof(f)) procesa la última línea dos veces: controlá el retorno de la lectura."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "ferror"
+cabecera = "stdio.h"
+firma = "int ferror(FILE *stream)"
+descripcion = "Indica si hubo un error de E/S en el archivo."
+retorno = "Distinto de 0 si hubo error."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo." }]
+trampas = []
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fseek"
+cabecera = "stdio.h"
+firma = "int fseek(FILE *stream, long offset, int whence)"
+descripcion = "Mueve la posición de lectura/escritura."
+retorno = "0 si funciona; -1 si falla."
+parametros = [
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo." },
+  { tipo = "long", nombre = "offset", desc = "Desplazamiento en bytes." },
+  { tipo = "int", nombre = "whence", desc = "SEEK_SET (inicio), SEEK_CUR (actual) o SEEK_END (final)." },
+]
+trampas = ["En modo texto solo valen posiciones devueltas por ftell."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "ftell"
+cabecera = "stdio.h"
+firma = "long ftell(FILE *stream)"
+descripcion = "Posición actual en el archivo."
+retorno = "La posición en bytes; -1 si falla."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "rewind"
+cabecera = "stdio.h"
+firma = "void rewind(FILE *stream)"
+descripcion = "Vuelve al comienzo del archivo y limpia los indicadores de error y fin."
+retorno = "No devuelve nada."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "perror"
+cabecera = "stdio.h"
+firma = "void perror(const char *s)"
+descripcion = "Imprime en stderr s seguido de la descripción de errno."
+retorno = "No devuelve nada."
+parametros = [{ tipo = "const char *", nombre = "s", desc = "Prefijo (por ejemplo, el nombre del archivo)." }]
+trampas = ["Llamala enseguida del fallo: otra llamada puede cambiar errno."]
+reglas = []
+
+[[funcion]]
+nombre = "fputs"
+cabecera = "stdio.h"
+firma = "int fputs(const char *s, FILE *stream)"
+descripcion = "Escribe un string en un archivo (sin agregar '\\n')."
+retorno = "No negativo si funciona; EOF si falla."
+parametros = [
+  { tipo = "const char *", nombre = "s", desc = "String." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo." },
+]
+trampas = []
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fgetc"
+cabecera = "stdio.h"
+firma = "int fgetc(FILE *stream)"
+descripcion = "Lee un carácter de un archivo."
+retorno = "El carácter como int, o EOF."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo." }]
+trampas = ["Guardá el resultado en int para poder compararlo con EOF."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "fputc"
+cabecera = "stdio.h"
+firma = "int fputc(int c, FILE *stream)"
+descripcion = "Escribe un carácter en un archivo."
+retorno = "El carácter escrito o EOF."
+parametros = [
+  { tipo = "int", nombre = "c", desc = "Carácter." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo." },
+]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "fflush"
+cabecera = "stdio.h"
+firma = "int fflush(FILE *stream)"
+descripcion = "Vacía el búfer de salida de un archivo."
+retorno = "0 si funciona; EOF si falla."
+parametros = [{ tipo = "FILE *", nombre = "stream", desc = "Archivo de salida (stdout)." }]
+trampas = ["fflush(stdin) es comportamiento indefinido: no sirve para descartar entrada."]
+reglas = []
+
+# ------------------------------------------------------------------ string.h
+
+[[funcion]]
+nombre = "strlen"
+cabecera = "string.h"
+firma = "size_t strlen(const char *s)"
+descripcion = "Cantidad de caracteres antes del '\\0'."
+retorno = "El largo, sin contar el '\\0'."
+parametros = [{ tipo = "const char *", nombre = "s", desc = "String terminado en '\\0'." }]
+trampas = [
+  "Recorre todo el string: no la llames en la condición de un for (O(n²)).",
+  "Reservá strlen(s) + 1 bytes para copiarlo.",
+  "Devuelve size_t: imprimilo con %zu.",
+]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "strcpy"
+cabecera = "string.h"
+firma = "char *strcpy(char *dest, const char *src)"
+descripcion = "Copia src (con su '\\0') en dest."
+retorno = "dest."
+parametros = [
+  { tipo = "char *", nombre = "dest", desc = "Destino: tiene que tener al menos strlen(src) + 1 bytes." },
+  { tipo = "const char *", nombre = "src", desc = "String origen." },
+]
+trampas = ["No controla el tamaño de dest: puede desbordar. Preferí snprintf o una copia con límite.", "dest y src no pueden superponerse."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "strncpy"
+cabecera = "string.h"
+firma = "char *strncpy(char *dest, const char *src, size_t n)"
+descripcion = "Copia como máximo n caracteres de src en dest."
+retorno = "dest."
+parametros = [
+  { tipo = "char *", nombre = "dest", desc = "Destino de al menos n bytes." },
+  { tipo = "const char *", nombre = "src", desc = "Origen." },
+  { tipo = "size_t", nombre = "n", desc = "Máximo de caracteres a copiar." },
+]
+trampas = ["Si src tiene n o más caracteres, dest NO queda terminado en '\\0': agregalo a mano."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "strcat"
+cabecera = "string.h"
+firma = "char *strcat(char *dest, const char *src)"
+descripcion = "Agrega src al final de dest."
+retorno = "dest."
+parametros = [
+  { tipo = "char *", nombre = "dest", desc = "String destino con lugar para strlen(dest) + strlen(src) + 1." },
+  { tipo = "const char *", nombre = "src", desc = "String a agregar." },
+]
+trampas = ["No controla el tamaño: puede desbordar.", "dest tiene que estar inicializado (terminado en '\\0')."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "strncat"
+cabecera = "string.h"
+firma = "char *strncat(char *dest, const char *src, size_t n)"
+descripcion = "Agrega como máximo n caracteres de src a dest y termina en '\\0'."
+retorno = "dest."
+parametros = [
+  { tipo = "char *", nombre = "dest", desc = "Destino." },
+  { tipo = "const char *", nombre = "src", desc = "Origen." },
+  { tipo = "size_t", nombre = "n", desc = "Máximo de caracteres a agregar (no el tamaño de dest)." },
+]
+trampas = ["n es lo que se agrega, no el tamaño total del destino."]
+reglas = ["0x5004h"]
+
+[[funcion]]
+nombre = "strcmp"
+cabecera = "string.h"
+firma = "int strcmp(const char *s1, const char *s2)"
+descripcion = "Compara dos strings en orden lexicográfico."
+retorno = "0 si son iguales; negativo si s1 < s2; positivo si s1 > s2."
+parametros = [
+  { tipo = "const char *", nombre = "s1", desc = "Primer string." },
+  { tipo = "const char *", nombre = "s2", desc = "Segundo string." },
+]
+trampas = ["s1 == s2 compara punteros, no contenido.", "No asumas que devuelve -1 o 1: compará con 0."]
+reglas = []
+
+[[funcion]]
+nombre = "strncmp"
+cabecera = "string.h"
+firma = "int strncmp(const char *s1, const char *s2, size_t n)"
+descripcion = "Compara como máximo n caracteres."
+retorno = "0 si los primeros n son iguales; negativo o positivo según el orden."
+parametros = [
+  { tipo = "const char *", nombre = "s1", desc = "Primer string." },
+  { tipo = "const char *", nombre = "s2", desc = "Segundo string." },
+  { tipo = "size_t", nombre = "n", desc = "Máximo de caracteres a comparar." },
+]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "strchr"
+cabecera = "string.h"
+firma = "char *strchr(const char *s, int c)"
+descripcion = "Primera aparición del carácter c en s."
+retorno = "Puntero al carácter o NULL si no está."
+parametros = [
+  { tipo = "const char *", nombre = "s", desc = "String." },
+  { tipo = "int", nombre = "c", desc = "Carácter buscado." },
+]
+trampas = ["Verificá NULL antes de usar el resultado."]
+reglas = []
+
+[[funcion]]
+nombre = "strrchr"
+cabecera = "string.h"
+firma = "char *strrchr(const char *s, int c)"
+descripcion = "Última aparición del carácter c en s."
+retorno = "Puntero al carácter o NULL."
+parametros = [
+  { tipo = "const char *", nombre = "s", desc = "String." },
+  { tipo = "int", nombre = "c", desc = "Carácter buscado." },
+]
+trampas = ["Verificá NULL antes de usar el resultado."]
+reglas = []
+
+[[funcion]]
+nombre = "strstr"
+cabecera = "string.h"
+firma = "char *strstr(const char *haystack, const char *needle)"
+descripcion = "Primera aparición del substring needle en haystack."
+retorno = "Puntero al comienzo de la coincidencia o NULL."
+parametros = [
+  { tipo = "const char *", nombre = "haystack", desc = "Donde buscar." },
+  { tipo = "const char *", nombre = "needle", desc = "Qué buscar." },
+]
+trampas = ["Verificá NULL antes de usar el resultado."]
+reglas = []
+
+[[funcion]]
+nombre = "strdup"
+cabecera = "string.h"
+firma = "char *strdup(const char *s)"
+descripcion = "Copia s en memoria dinámica nueva (C23 y POSIX)."
+retorno = "Puntero a la copia; NULL si no hay memoria."
+parametros = [{ tipo = "const char *", nombre = "s", desc = "String a copiar." }]
+trampas = ["La copia se libera con free.", "Verificá NULL."]
+reglas = ["0x3001h"]
+
+[[funcion]]
+nombre = "strtok"
+cabecera = "string.h"
+firma = "char *strtok(char *str, const char *delim)"
+descripcion = "Parte un string en tokens separados por delim."
+retorno = "El siguiente token o NULL cuando no quedan."
+parametros = [
+  { tipo = "char *", nombre = "str", desc = "String a partir en la primera llamada; NULL en las siguientes." },
+  { tipo = "const char *", nombre = "delim", desc = "Caracteres separadores." },
+]
+trampas = ["Modifica el string original (escribe '\\0'): no la uses sobre literales.", "Tiene estado interno: no sirve para dos strings intercalados."]
+reglas = []
+
+[[funcion]]
+nombre = "strcspn"
+cabecera = "string.h"
+firma = "size_t strcspn(const char *s, const char *reject)"
+descripcion = "Largo del prefijo de s sin ningún carácter de reject."
+retorno = "Cantidad de caracteres."
+parametros = [
+  { tipo = "const char *", nombre = "s", desc = "String." },
+  { tipo = "const char *", nombre = "reject", desc = "Caracteres que cortan el prefijo." },
+]
+trampas = ["Idioma útil: s[strcspn(s, \"\\n\")] = '\\0'; para sacar el salto de fgets."]
+reglas = []
+
+[[funcion]]
+nombre = "memcpy"
+cabecera = "string.h"
+firma = "void *memcpy(void *dest, const void *src, size_t n)"
+descripcion = "Copia n bytes de src a dest."
+retorno = "dest."
+parametros = [
+  { tipo = "void *", nombre = "dest", desc = "Destino de al menos n bytes." },
+  { tipo = "const void *", nombre = "src", desc = "Origen." },
+  { tipo = "size_t", nombre = "n", desc = "Cantidad de bytes: cantidad * sizeof elemento." },
+]
+trampas = ["Si las zonas se superponen, usá memmove.", "n es en bytes, no en elementos."]
+reglas = ["0x300Bh"]
+
+[[funcion]]
+nombre = "memmove"
+cabecera = "string.h"
+firma = "void *memmove(void *dest, const void *src, size_t n)"
+descripcion = "Copia n bytes aunque las zonas se superpongan."
+retorno = "dest."
+parametros = [
+  { tipo = "void *", nombre = "dest", desc = "Destino." },
+  { tipo = "const void *", nombre = "src", desc = "Origen." },
+  { tipo = "size_t", nombre = "n", desc = "Cantidad de bytes." },
+]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "memset"
+cabecera = "string.h"
+firma = "void *memset(void *s, int c, size_t n)"
+descripcion = "Llena n bytes con el valor c."
+retorno = "s."
+parametros = [
+  { tipo = "void *", nombre = "s", desc = "Zona a llenar." },
+  { tipo = "int", nombre = "c", desc = "Valor de cada byte (se usa como unsigned char)." },
+  { tipo = "size_t", nombre = "n", desc = "Cantidad de bytes." },
+]
+trampas = ["memset(v, 1, n) pone 1 en cada byte, no en cada int."]
+reglas = []
+
+[[funcion]]
+nombre = "memcmp"
+cabecera = "string.h"
+firma = "int memcmp(const void *s1, const void *s2, size_t n)"
+descripcion = "Compara n bytes."
+retorno = "0 si son iguales; negativo o positivo según el primer byte distinto."
+parametros = [
+  { tipo = "const void *", nombre = "s1", desc = "Primera zona." },
+  { tipo = "const void *", nombre = "s2", desc = "Segunda zona." },
+  { tipo = "size_t", nombre = "n", desc = "Cantidad de bytes." },
+]
+trampas = ["No compares structs con memcmp: el relleno (padding) tiene basura."]
+reglas = []
+
+# ------------------------------------------------------------------ ctype.h, math.h, time.h, assert.h
+
+[[funcion]]
+nombre = "isdigit"
+cabecera = "ctype.h"
+firma = "int isdigit(int c)"
+descripcion = "Indica si c es un dígito decimal."
+retorno = "Distinto de 0 si es dígito."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter como unsigned char o EOF." }]
+trampas = ["Con char con signo, convertí: isdigit((unsigned char)c)."]
+reglas = []
+
+[[funcion]]
+nombre = "isalpha"
+cabecera = "ctype.h"
+firma = "int isalpha(int c)"
+descripcion = "Indica si c es una letra."
+retorno = "Distinto de 0 si es letra."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter como unsigned char o EOF." }]
+trampas = ["Las letras acentuadas dependen del locale."]
+reglas = []
+
+[[funcion]]
+nombre = "isspace"
+cabecera = "ctype.h"
+firma = "int isspace(int c)"
+descripcion = "Indica si c es un espacio en blanco (' ', '\\t', '\\n'…)."
+retorno = "Distinto de 0 si es espacio."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter como unsigned char o EOF." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "isupper"
+cabecera = "ctype.h"
+firma = "int isupper(int c)"
+descripcion = "Indica si c es una letra mayúscula."
+retorno = "Distinto de 0 si es mayúscula."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "islower"
+cabecera = "ctype.h"
+firma = "int islower(int c)"
+descripcion = "Indica si c es una letra minúscula."
+retorno = "Distinto de 0 si es minúscula."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "toupper"
+cabecera = "ctype.h"
+firma = "int toupper(int c)"
+descripcion = "Convierte c a mayúscula si es letra."
+retorno = "La mayúscula, o c sin cambios."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter." }]
+trampas = ["Devuelve el resultado: no modifica la variable."]
+reglas = []
+
+[[funcion]]
+nombre = "tolower"
+cabecera = "ctype.h"
+firma = "int tolower(int c)"
+descripcion = "Convierte c a minúscula si es letra."
+retorno = "La minúscula, o c sin cambios."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter." }]
+trampas = ["Devuelve el resultado: no modifica la variable."]
+reglas = []
+
+[[funcion]]
+nombre = "sqrt"
+cabecera = "math.h"
+firma = "double sqrt(double x)"
+descripcion = "Raíz cuadrada."
+retorno = "√x; NaN si x < 0."
+parametros = [{ tipo = "double", nombre = "x", desc = "Valor no negativo." }]
+trampas = ["Al compilar con gcc hace falta -lm."]
+reglas = []
+
+[[funcion]]
+nombre = "pow"
+cabecera = "math.h"
+firma = "double pow(double x, double y)"
+descripcion = "x elevado a y."
+retorno = "x^y."
+parametros = [
+  { tipo = "double", nombre = "x", desc = "Base." },
+  { tipo = "double", nombre = "y", desc = "Exponente." },
+]
+trampas = ["Para potencias enteras chicas, multiplicar es más preciso.", "Hace falta -lm."]
+reglas = []
+
+[[funcion]]
+nombre = "fabs"
+cabecera = "math.h"
+firma = "double fabs(double x)"
+descripcion = "Valor absoluto de un double."
+retorno = "|x|."
+parametros = [{ tipo = "double", nombre = "x", desc = "Valor." }]
+trampas = ["Compará doubles con una tolerancia: fabs(a - b) < 1e-9."]
+reglas = ["0x301Fh"]
+
+[[funcion]]
+nombre = "time"
+cabecera = "time.h"
+firma = "time_t time(time_t *tloc)"
+descripcion = "Hora actual en segundos desde 1970."
+retorno = "La hora actual; (time_t)-1 si falla."
+parametros = [{ tipo = "time_t *", nombre = "tloc", desc = "Si no es NULL, también guarda la hora ahí." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "clock"
+cabecera = "time.h"
+firma = "clock_t clock(void)"
+descripcion = "Tiempo de procesador usado por el programa."
+retorno = "Ticks de reloj; dividí por CLOCKS_PER_SEC para segundos."
+parametros = []
+trampas = ["Convertí a double antes de dividir."]
+reglas = []
+
+[[funcion]]
+nombre = "assert"
+cabecera = "assert.h"
+firma = "void assert(scalar expression)"
+descripcion = "Aborta el programa con un mensaje si la expresión es falsa (salvo con NDEBUG)."
+retorno = "No devuelve nada."
+parametros = [{ tipo = "scalar", nombre = "expression", desc = "Condición que tiene que cumplirse." }]
+trampas = ["No pongas efectos de lado adentro: con NDEBUG no se evalúan.", "No reemplaza el manejo de errores de entrada."]
+reglas = []
+
+[[funcion]]
+nombre = "isalnum"
+cabecera = "ctype.h"
+firma = "int isalnum(int c)"
+descripcion = "Indica si c es una letra o un dígito."
+retorno = "Distinto de 0 si es alfanumérico."
+parametros = [{ tipo = "int", nombre = "c", desc = "Carácter como unsigned char o EOF." }]
+trampas = ["Con char con signo, convertí: isalnum((unsigned char)c)."]
+reglas = []
+
+[[funcion]]
+nombre = "floor"
+cabecera = "math.h"
+firma = "double floor(double x)"
+descripcion = "Mayor entero menor o igual que x."
+retorno = "⌊x⌋ como double."
+parametros = [{ tipo = "double", nombre = "x", desc = "Valor." }]
+trampas = ["Hace falta -lm.", "Para negativos no es lo mismo que convertir a int (que trunca)."]
+reglas = []
+
+[[funcion]]
+nombre = "ceil"
+cabecera = "math.h"
+firma = "double ceil(double x)"
+descripcion = "Menor entero mayor o igual que x."
+retorno = "⌈x⌉ como double."
+parametros = [{ tipo = "double", nombre = "x", desc = "Valor." }]
+trampas = ["Hace falta -lm."]
+reglas = []
+
+[[funcion]]
+nombre = "getline"
+cabecera = "stdio.h (POSIX)"
+firma = "ssize_t getline(char **lineptr, size_t *n, FILE *stream)"
+descripcion = "Lee una línea completa, agrandando el búfer dinámico si hace falta."
+retorno = "Caracteres leídos (con el '\\n'); -1 al final del archivo o ante un error."
+parametros = [
+  { tipo = "char **", nombre = "lineptr", desc = "Dirección del búfer (puede empezar en NULL)." },
+  { tipo = "size_t *", nombre = "n", desc = "Dirección del tamaño del búfer (0 si empieza en NULL)." },
+  { tipo = "FILE *", nombre = "stream", desc = "Archivo o stdin." },
+]
+trampas = ["El búfer se libera con free aunque getline haya devuelto -1.", "No es parte de C estándar: en Windows no está."]
+reglas = ["0x3001h", "0x4002h"]
+
+# ------------------------------------------------------------------ POSIX
+
+[[funcion]]
+nombre = "fork"
+cabecera = "unistd.h"
+firma = "pid_t fork(void)"
+descripcion = "Crea un proceso hijo, copia del padre."
+retorno = "0 en el hijo; el PID del hijo en el padre; -1 si falla."
+parametros = []
+trampas = ["Distinguí los tres casos del retorno.", "El padre tiene que esperar al hijo (waitpid) para no dejar zombis."]
+reglas = []
+
+[[funcion]]
+nombre = "pipe"
+cabecera = "unistd.h"
+firma = "int pipe(int pipefd[2])"
+descripcion = "Crea un canal: pipefd[0] para leer y pipefd[1] para escribir."
+retorno = "0 si funciona; -1 si falla."
+parametros = [{ tipo = "int[2]", nombre = "pipefd", desc = "Recibe los dos descriptores." }]
+trampas = ["Cerrá en cada proceso el extremo que no usa: si no, read nunca ve el fin."]
+reglas = []
+
+[[funcion]]
+nombre = "read"
+cabecera = "unistd.h"
+firma = "ssize_t read(int fd, void *buf, size_t count)"
+descripcion = "Lee hasta count bytes de un descriptor."
+retorno = "Bytes leídos (puede ser menos que count); 0 al final; -1 si falla."
+parametros = [
+  { tipo = "int", nombre = "fd", desc = "Descriptor de archivo." },
+  { tipo = "void *", nombre = "buf", desc = "Destino." },
+  { tipo = "size_t", nombre = "count", desc = "Máximo de bytes." },
+]
+trampas = ["Una lectura corta no es un error: repetí hasta completar.", "No agrega '\\0'."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "write"
+cabecera = "unistd.h"
+firma = "ssize_t write(int fd, const void *buf, size_t count)"
+descripcion = "Escribe hasta count bytes en un descriptor."
+retorno = "Bytes escritos (puede ser menos que count); -1 si falla."
+parametros = [
+  { tipo = "int", nombre = "fd", desc = "Descriptor de archivo." },
+  { tipo = "const void *", nombre = "buf", desc = "Origen." },
+  { tipo = "size_t", nombre = "count", desc = "Bytes a escribir." },
+]
+trampas = ["Una escritura corta no es un error: repetí con el resto."]
+reglas = ["0x4002h"]
+
+[[funcion]]
+nombre = "close"
+cabecera = "unistd.h"
+firma = "int close(int fd)"
+descripcion = "Cierra un descriptor de archivo."
+retorno = "0 si funciona; -1 si falla."
+parametros = [{ tipo = "int", nombre = "fd", desc = "Descriptor." }]
+trampas = []
+reglas = []
+
+[[funcion]]
+nombre = "waitpid"
+cabecera = "sys/wait.h"
+firma = "pid_t waitpid(pid_t pid, int *wstatus, int options)"
+descripcion = "Espera a que un proceso hijo cambie de estado."
+retorno = "PID del hijo; 0 con WNOHANG si no terminó; -1 si falla."
+parametros = [
+  { tipo = "pid_t", nombre = "pid", desc = "PID del hijo, o -1 para cualquiera." },
+  { tipo = "int *", nombre = "wstatus", desc = "Recibe el estado: usá WIFEXITED y WEXITSTATUS." },
+  { tipo = "int", nombre = "options", desc = "0, o WNOHANG para no bloquear." },
+]
+trampas = ["WEXITSTATUS solo vale si WIFEXITED es verdadero."]
+reglas = []
+
+[[funcion]]
+nombre = "execvp"
+cabecera = "unistd.h"
+firma = "int execvp(const char *file, char *const argv[])"
+descripcion = "Reemplaza el proceso actual por otro programa (busca en PATH)."
+retorno = "Solo vuelve si falla: -1."
+parametros = [
+  { tipo = "const char *", nombre = "file", desc = "Programa a ejecutar." },
+  { tipo = "char *const []", nombre = "argv", desc = "Argumentos; argv[0] es el nombre y el último es NULL." },
+]
+trampas = ["Si vuelve, falló: informá el error y terminá el hijo."]
+reglas = []
+
+[[funcion]]
+nombre = "dup2"
+cabecera = "unistd.h"
+firma = "int dup2(int oldfd, int newfd)"
+descripcion = "Hace que newfd apunte al mismo archivo que oldfd (redirecciones)."
+retorno = "newfd; -1 si falla."
+parametros = [
+  { tipo = "int", nombre = "oldfd", desc = "Descriptor existente." },
+  { tipo = "int", nombre = "newfd", desc = "Descriptor a redirigir (por ejemplo STDOUT_FILENO)." },
+]
+trampas = ["Después cerrá oldfd si ya no lo usás."]
+reglas = []
+
+[[funcion]]
+nombre = "getpid"
+cabecera = "unistd.h"
+firma = "pid_t getpid(void)"
+descripcion = "PID del proceso actual."
+retorno = "El PID."
+parametros = []
+trampas = []
+reglas = []
+
+# ------------------------------------------------------------------ tipos
+
+[[tipo]]
+nombre = "size_t"
+cabecera = "stddef.h"
+descripcion = "Entero sin signo para tamaños y cantidades (lo que devuelve sizeof)."
+trampas = ["Se imprime con %zu.", "Al ser sin signo, i >= 0 siempre es verdadero: cuidado al recorrer hacia atrás."]
+
+[[tipo]]
+nombre = "FILE"
+cabecera = "stdio.h"
+descripcion = "Tipo opaco de un archivo abierto: se usa siempre como FILE *."
+trampas = ["Todo FILE * de fopen se cierra con fclose."]
+
+[[tipo]]
+nombre = "bool"
+cabecera = "stdbool.h"
+descripcion = "Tipo booleano (true/false) de C99."
+trampas = ["Hace falta #include <stdbool.h> (hasta C23)."]
+
+[[tipo]]
+nombre = "NULL"
+cabecera = "stddef.h"
+descripcion = "Puntero nulo: no apunta a ningún objeto."
+trampas = ["Desreferenciar NULL es comportamiento indefinido (segmentation fault en la práctica)."]
+
+[[tipo]]
+nombre = "nodo_t"
+cabecera = "(cátedra)"
+descripcion = "Nodo de una estructura enlazada: dato y puntero al siguiente (y al anterior en las doblemente enlazadas)."
+trampas = ["Inicializá el puntero siguiente en NULL al crear el nodo.", "Guardá el siguiente antes de liberar el actual."]
+
+[[tipo]]
+nombre = "lista_t"
+cabecera = "(cátedra)"
+descripcion = "TDA lista de la cátedra: puntero opaco; se maneja solo con sus primitivas (crear, insertar, destruir…)."
+trampas = ["No accedas a los campos internos desde el cliente: el TDA es opaco.", "Toda lista creada se destruye."]
+
+[[tipo]]
+nombre = "pid_t"
+cabecera = "sys/types.h"
+descripcion = "Identificador de proceso."
+trampas = []
+
+[[tipo]]
+nombre = "ssize_t"
+cabecera = "sys/types.h"
+descripcion = "Tamaño con signo: permite devolver -1 como error."
+trampas = ["Se imprime con %zd."]

@@ -1,0 +1,10 @@
+[package]
+name = "jonesy-doc"
+description = "quick-doc de jonesy: base offline de libc/POSIX/cátedra y lexer de contexto de llamada."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+toml.workspace = true
