@@ -394,7 +394,9 @@ dependencies = [
 name = "jonesy-terminal"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "portable-pty",
+ "tempfile",
  "vt100",
 ]
 
