@@ -1,0 +1,198 @@
+//! Diagnósticos: los del compilador (GCC/Clang) y los pedagógicos de `ripley`.
+
+use std::path::{Path, PathBuf};
+
+use serde::Deserialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Severidad {
+    Error,
+    Advertencia,
+    Nota,
+    Estilo,
+}
+
+impl Severidad {
+    pub fn etiqueta(self) -> &'static str {
+        match self {
+            Severidad::Error => "error",
+            Severidad::Advertencia => "advertencia",
+            Severidad::Nota => "nota",
+            Severidad::Estilo => "estilo",
+        }
+    }
+
+    fn de_texto(s: &str) -> Severidad {
+        match s.to_ascii_lowercase().as_str() {
+            "error" | "fatal error" | "critico" | "crítico" => Severidad::Error,
+            "warning" | "advertencia" => Severidad::Advertencia,
+            "note" | "nota" | "info" => Severidad::Nota,
+            _ => Severidad::Estilo,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Diagnostico {
+    pub archivo: Option<PathBuf>,
+    /// 1-based, como los imprime el compilador.
+    pub linea: usize,
+    pub columna: usize,
+    pub severidad: Severidad,
+    pub mensaje: String,
+    /// Código de regla de cátedra (`0x3001h`) en los de ripley.
+    pub codigo: Option<String>,
+    pub sugerencia: Option<String>,
+    pub origen: Origen,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Origen {
+    Compilador,
+    Ripley,
+}
+
+/// Interpreta la salida de GCC/Clang: líneas `archivo:línea:col: severidad: mensaje`.
+/// Las rutas relativas se resuelven contra `dir`.
+pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
+    let mut diags = Vec::new();
+    for linea in salida.lines() {
+        if let Some(d) = parsear_linea_gcc(linea, dir) {
+            diags.push(d);
+        }
+    }
+    diags
+}
+
+fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
+    // archivo:L:C: tipo: mensaje   o   archivo:L: tipo: mensaje
+    let mut partes = linea.splitn(5, ':');
+    let archivo = partes.next()?.trim();
+    if archivo.is_empty() || archivo.contains(' ') && !archivo.ends_with(".c") && !archivo.ends_with(".h") {
+        return None;
+    }
+    let l: usize = partes.next()?.trim().parse().ok()?;
+    let tercero = partes.next()?;
+    let (columna, tipo, resto) = match tercero.trim().parse::<usize>() {
+        Ok(c) => (c, partes.next()?.trim().to_string(), partes.next().unwrap_or("").to_string()),
+        Err(_) => {
+            let resto: Vec<&str> = partes.collect();
+            (1, tercero.trim().to_string(), resto.join(":"))
+        }
+    };
+    let tipo_l = tipo.to_ascii_lowercase();
+    if !["error", "warning", "note", "fatal error"].contains(&tipo_l.as_str()) {
+        return None;
+    }
+    let ruta = PathBuf::from(archivo);
+    let ruta = if ruta.is_absolute() { ruta } else { dir.join(ruta) };
+    Some(Diagnostico {
+        archivo: Some(ruta),
+        linea: l,
+        columna,
+        severidad: Severidad::de_texto(&tipo_l),
+        mensaje: resto.trim().to_string(),
+        codigo: None,
+        sugerencia: None,
+        origen: Origen::Compilador,
+    })
+}
+
+#[derive(Deserialize)]
+struct SalidaRipley {
+    #[serde(default)]
+    ast_findings: Vec<HallazgoRipley>,
+}
+
+#[derive(Deserialize)]
+struct HallazgoRipley {
+    #[serde(default, alias = "archivo")]
+    file: Option<String>,
+    #[serde(default, alias = "linea")]
+    line: Option<usize>,
+    #[serde(default, alias = "columna")]
+    column: Option<usize>,
+    #[serde(default, alias = "severidad")]
+    severity: Option<String>,
+    #[serde(default, alias = "mensaje")]
+    message: Option<String>,
+    #[serde(default, alias = "sugerencia")]
+    suggestion: Option<String>,
+    #[serde(default, alias = "codigo")]
+    rule_code: Option<String>,
+}
+
+/// Interpreta `ripley check --format json`. Las rutas se resuelven contra `dir`.
+pub fn parsear_ripley(json: &str, dir: &Path) -> Result<Vec<Diagnostico>, String> {
+    // ripley puede imprimir avisos antes del JSON: se toma desde la primera llave.
+    let inicio = json.find('{').ok_or("ripley no devolvió JSON")?;
+    let salida: SalidaRipley = serde_json::from_str(&json[inicio..]).map_err(|e| e.to_string())?;
+    Ok(salida
+        .ast_findings
+        .into_iter()
+        .map(|h| Diagnostico {
+            archivo: h.file.map(|f| {
+                let p = PathBuf::from(f);
+                if p.is_absolute() { p } else { dir.join(p) }
+            }),
+            linea: h.line.unwrap_or(1).max(1),
+            columna: h.column.unwrap_or(1).max(1),
+            severidad: Severidad::de_texto(h.severity.as_deref().unwrap_or("estilo")),
+            mensaje: h.message.unwrap_or_default(),
+            codigo: h.rule_code,
+            sugerencia: h.suggestion.filter(|s| !s.is_empty()),
+            origen: Origen::Ripley,
+        })
+        .collect())
+}
+
+/// Categoría del panel de reglas (RF-3.4) según el código de cátedra.
+pub fn categoria_regla(codigo: &str) -> &'static str {
+    let c = codigo.trim_start_matches("0x").to_ascii_uppercase();
+    match c.chars().next() {
+        Some('0') => "Estilo y formato",
+        Some('1') => "Control de flujo",
+        Some('2') => "Funciones",
+        Some('3') => "Memoria",
+        Some('4') => "Archivos",
+        Some('5') => "Preprocesador y seguridad",
+        Some('6') => "Proceso",
+        Some('7') => "Robustez",
+        Some('8') => "Verificación y pruebas",
+        _ => "Otras",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn interpreta_gcc() {
+        let salida = "lista.c: In function 'main':\n\
+                      lista.c:12:5: error: 'x' undeclared (first use in this function)\n\
+                      lista.c:20:10: warning: unused variable 'y' [-Wunused-variable]\n\
+                      /usr/include/stdio.h:3:1: note: declared here\n\
+                      collect2: error: ld returned 1 exit status\n\
+                      Makefile:3: recipe for target 'x' failed\n";
+        let d = parsear_gcc(salida, Path::new("/tp"));
+        assert_eq!(d.len(), 3);
+        assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/lista.c")));
+        assert_eq!((d[0].linea, d[0].columna, d[0].severidad), (12, 5, Severidad::Error));
+        assert_eq!(d[1].severidad, Severidad::Advertencia);
+        assert_eq!(d[2].archivo.as_deref(), Some(Path::new("/usr/include/stdio.h")));
+    }
+
+    #[test]
+    fn interpreta_ripley() {
+        let json = r#"aviso previo
+        {"version":"1.2.2","ast_findings":[{"rule_code":"0x3001h","severity":"ERROR","file":"a.c","line":3,"column":21,
+        "message":"Asignación sin verificación","suggestion":"Verificá NULL"}]}"#;
+        let d = parsear_ripley(json, Path::new("/tp")).unwrap();
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].codigo.as_deref(), Some("0x3001h"));
+        assert_eq!(d[0].severidad, Severidad::Error);
+        assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/a.c")));
+        assert_eq!(categoria_regla("0x3001h"), "Memoria");
+    }
+}

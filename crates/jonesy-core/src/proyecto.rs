@@ -1,0 +1,301 @@
+//! Proyecto abierto: raíz, configuración `.jonesy.toml` y tareas de compilación/ejecución.
+
+use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+pub const ARCHIVO_CONFIG: &str = ".jonesy.toml";
+pub const DIR_ESTADO: &str = ".jonesy";
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Config {
+    pub compilar: Tarea,
+    pub ejecutar: Tarea,
+    pub depurar: Depurar,
+    pub examen: Examen,
+    pub interfaz: Interfaz,
+    pub ripley: Ripley,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Tarea {
+    /// Comando de shell; vacío = el predeterminado según el proyecto.
+    pub comando: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Depurar {
+    /// Comando que compila con símbolos de depuración (vacío = el predeterminado).
+    pub compilar: String,
+    /// Ejecutable a depurar (vacío = el predeterminado).
+    pub programa: String,
+    /// Argumentos del programa.
+    pub argumentos: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Examen {
+    /// Enunciado de solo lectura (Markdown).
+    pub consigna: String,
+    /// Duración total en minutos (0 = sin cronómetro).
+    pub duracion_min: u64,
+    /// Comando que verifica la entrega (vacío = `make test` si el Makefile lo define).
+    pub verificar: String,
+    /// SHA-256 de los plugins Python que la cátedra autoriza en modo examen.
+    pub plugins_permitidos: Vec<String>,
+    /// Archivos que forman la entrega (globs simples `*.c`); vacío = *.c, *.h, *.md, Makefile.
+    pub archivos: Vec<String>,
+}
+
+impl Default for Examen {
+    fn default() -> Self {
+        Examen {
+            consigna: String::new(),
+            duracion_min: 0,
+            verificar: String::new(),
+            plugins_permitidos: Vec::new(),
+            archivos: Vec::new(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum PosicionDoc {
+    #[default]
+    Derecha,
+    Inferior,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Interfaz {
+    pub quickdoc: PosicionDoc,
+    /// Emitir OSC 52 al copiar (portapapeles del sistema en sesiones remotas).
+    pub osc52: bool,
+    /// Forzar caracteres ASCII en lugar de los de caja.
+    pub ascii: bool,
+    /// Shell de la terminal interna (vacío = $SHELL o bash).
+    pub shell: String,
+}
+
+impl Default for Interfaz {
+    fn default() -> Self {
+        Interfaz { quickdoc: PosicionDoc::Derecha, osc52: true, ascii: false, shell: String::new() }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Ripley {
+    /// Correr `ripley check` al guardar archivos C.
+    pub activo: bool,
+    pub comando: String,
+}
+
+impl Default for Ripley {
+    fn default() -> Self {
+        Ripley { activo: true, comando: "ripley".into() }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Proyecto {
+    pub raiz: PathBuf,
+    pub config: Config,
+    /// Error al leer `.jonesy.toml`, para mostrarlo en la barra de estado.
+    pub error_config: Option<String>,
+}
+
+impl Proyecto {
+    /// Abre el proyecto en `raiz` (un directorio). Si `.jonesy.toml` no existe, usa los valores por defecto.
+    pub fn abrir(raiz: impl Into<PathBuf>) -> Proyecto {
+        let raiz = raiz.into();
+        let raiz = raiz.canonicalize().unwrap_or(raiz);
+        let (config, error_config) = match std::fs::read_to_string(raiz.join(ARCHIVO_CONFIG)) {
+            Ok(texto) => match toml::from_str::<Config>(&texto) {
+                Ok(c) => (c, None),
+                Err(e) => (Config::default(), Some(format!("{ARCHIVO_CONFIG}: {e}"))),
+            },
+            Err(_) => (Config::default(), None),
+        };
+        Proyecto { raiz, config, error_config }
+    }
+
+    pub fn dir_estado(&self) -> PathBuf {
+        self.raiz.join(DIR_ESTADO)
+    }
+
+    pub fn makefile(&self) -> Option<PathBuf> {
+        ["Makefile", "makefile", "GNUmakefile"].iter().map(|n| self.raiz.join(n)).find(|p| p.is_file())
+    }
+
+    /// Objetivos declarados en el Makefile (líneas `objetivo:` sin sangría).
+    pub fn objetivos_make(&self) -> Vec<String> {
+        let Some(ruta) = self.makefile() else { return Vec::new() };
+        let Ok(texto) = std::fs::read_to_string(ruta) else { return Vec::new() };
+        texto
+            .lines()
+            .filter(|l| !l.starts_with(['\t', ' ', '#', '.']))
+            .filter_map(|l| {
+                let (antes, despues) = l.split_once(':')?;
+                (!despues.starts_with('=') && !antes.contains('=') && !antes.contains('$'))
+                    .then(|| antes.split_whitespace().map(String::from).collect::<Vec<_>>())
+            })
+            .flatten()
+            .collect()
+    }
+
+    /// Comando de compilación (F6) para el archivo activo.
+    pub fn comando_compilar(&self, activo: Option<&Path>) -> Option<String> {
+        if !self.config.compilar.comando.trim().is_empty() {
+            return Some(self.config.compilar.comando.clone());
+        }
+        if self.makefile().is_some() {
+            return Some("make".into());
+        }
+        let archivo = activo.filter(|p| p.extension().is_some_and(|e| e == "c"))?;
+        let rel = self.relativa(archivo);
+        let stem = archivo.file_stem()?.to_string_lossy().into_owned();
+        Some(format!("gcc -std=c11 -Wall -Wextra -g -O0 -o {} {}", shell_quote(&stem), shell_quote(&rel)))
+    }
+
+    /// Comando de ejecución (Ctrl+F5): compilar y correr.
+    pub fn comando_ejecutar(&self, activo: Option<&Path>) -> Option<String> {
+        if !self.config.ejecutar.comando.trim().is_empty() {
+            return Some(self.config.ejecutar.comando.clone());
+        }
+        let compilar = self.comando_compilar(activo)?;
+        if self.makefile().is_some() {
+            if self.objetivos_make().iter().any(|o| o == "run") {
+                return Some("make run".into());
+            }
+            return Some(compilar);
+        }
+        let stem = activo?.file_stem()?.to_string_lossy().into_owned();
+        Some(format!("{compilar} && ./{}", shell_quote(&stem)))
+    }
+
+    /// Comando que verifica la entrega del examen.
+    pub fn comando_verificar(&self) -> Option<String> {
+        if !self.config.examen.verificar.trim().is_empty() {
+            return Some(self.config.examen.verificar.clone());
+        }
+        self.objetivos_make().iter().any(|o| o == "test").then(|| "make test".into())
+    }
+
+    /// Consigna del examen: la configurada o `consigna.md` / `enunciado.md` en la raíz.
+    pub fn consigna(&self) -> Option<PathBuf> {
+        if !self.config.examen.consigna.is_empty() {
+            return Some(self.raiz.join(&self.config.examen.consigna));
+        }
+        ["consigna.md", "enunciado.md", "CONSIGNA.md"].iter().map(|n| self.raiz.join(n)).find(|p| p.is_file())
+    }
+
+    pub fn relativa(&self, ruta: &Path) -> String {
+        ruta.strip_prefix(&self.raiz).unwrap_or(ruta).to_string_lossy().into_owned()
+    }
+
+    /// Archivos del proyecto (para abrir con Ctrl+O), sin directorios ocultos ni binarios conocidos.
+    pub fn archivos(&self, limite: usize) -> Vec<PathBuf> {
+        let mut salida = Vec::new();
+        let mut pila = vec![self.raiz.clone()];
+        while let Some(dir) = pila.pop() {
+            let Ok(entradas) = std::fs::read_dir(&dir) else { continue };
+            let mut entradas: Vec<_> = entradas.flatten().collect();
+            entradas.sort_by_key(|e| e.file_name());
+            for e in entradas {
+                let nombre = e.file_name().to_string_lossy().into_owned();
+                if nombre.starts_with('.') || nombre == "target" || nombre == "build" {
+                    continue;
+                }
+                let ruta = e.path();
+                if ruta.is_dir() {
+                    pila.push(ruta);
+                } else if es_editable(&ruta) {
+                    salida.push(ruta);
+                    if salida.len() >= limite {
+                        return salida;
+                    }
+                }
+            }
+        }
+        salida.sort();
+        salida
+    }
+}
+
+pub fn es_editable(ruta: &Path) -> bool {
+    let nombre = ruta.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if nombre == "makefile" || nombre == "gnumakefile" {
+        return true;
+    }
+    matches!(
+        ruta.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref(),
+        Some("c" | "h" | "md" | "txt" | "toml" | "yaml" | "yml" | "in" | "out" | "json" | "py" | "sh" | "gift")
+    )
+}
+
+/// Comillas simples para `sh -c`.
+pub fn shell_quote(s: &str) -> String {
+    if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "._-/+".contains(c)) {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn compilar_sin_makefile_usa_gcc_con_el_archivo_activo() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = Proyecto::abrir(dir.path());
+        let a = p.raiz.join("lista.c");
+        assert_eq!(p.comando_compilar(Some(&a)).unwrap(), "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c");
+        assert_eq!(p.comando_ejecutar(Some(&a)).unwrap(), "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c && ./lista");
+        assert!(p.comando_compilar(Some(&p.raiz.join("notas.md"))).is_none());
+    }
+
+    #[test]
+    fn makefile_y_config() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("Makefile"), "CC=gcc\nall: prog\nrun: all\n\t./prog\ntest:\n\t./t\n").unwrap();
+        let p = Proyecto::abrir(dir.path());
+        assert_eq!(p.objetivos_make(), vec!["all", "run", "test"]);
+        assert_eq!(p.comando_compilar(None).unwrap(), "make");
+        assert_eq!(p.comando_ejecutar(None).unwrap(), "make run");
+        assert_eq!(p.comando_verificar().unwrap(), "make test");
+
+        std::fs::write(
+            dir.path().join(ARCHIVO_CONFIG),
+            "[compilar]\ncomando = \"make -j2\"\n[examen]\nconsigna = \"enunciado.md\"\nduracion_min = 90\n[interfaz]\nquickdoc = \"inferior\"\n",
+        )
+        .unwrap();
+        let p = Proyecto::abrir(dir.path());
+        assert!(p.error_config.is_none());
+        assert_eq!(p.comando_compilar(None).unwrap(), "make -j2");
+        assert_eq!(p.config.examen.duracion_min, 90);
+        assert_eq!(p.config.interfaz.quickdoc, PosicionDoc::Inferior);
+        assert_eq!(p.consigna().unwrap(), p.raiz.join("enunciado.md"));
+    }
+
+    #[test]
+    fn config_invalida_se_informa() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(ARCHIVO_CONFIG), "[compilar\n").unwrap();
+        assert!(Proyecto::abrir(dir.path()).error_config.is_some());
+    }
+
+    #[test]
+    fn comillas() {
+        assert_eq!(shell_quote("a.c"), "a.c");
+        assert_eq!(shell_quote("mi tp.c"), "'mi tp.c'");
+    }
+}
