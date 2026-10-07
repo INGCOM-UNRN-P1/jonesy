@@ -5,6 +5,7 @@
 
 pub mod buffer;
 pub mod diagnostico;
+pub mod gdb;
 pub mod proceso;
 pub mod proyecto;
 pub mod sesion;
