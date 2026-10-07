@@ -10,3 +10,17 @@ ratatui.workspace = true
 crossterm.workspace = true
 pulldown-cmark.workspace = true
 unicode-width.workspace = true
+base64.workspace = true
+signal-hook.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+jonesy-core = { path = "../jonesy-core" }
+jonesy-doc = { path = "../jonesy-doc" }
+jonesy-git = { path = "../jonesy-git" }
+jonesy-plugins = { path = "../jonesy-plugins" }
+jonesy-telemetry = { path = "../jonesy-telemetry" }
+jonesy-terminal = { path = "../jonesy-terminal" }
+
+[dev-dependencies]
+tempfile.workspace = true
