@@ -1,0 +1,11 @@
+[package]
+name = "jonesy-git"
+description = "Git ligero para jonesy: invoca el binario git del entorno y parsea --porcelain=v2."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+tempfile.workspace = true
