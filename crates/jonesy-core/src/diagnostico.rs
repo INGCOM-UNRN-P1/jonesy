@@ -50,6 +50,8 @@ pub struct Diagnostico {
 pub enum Origen {
     Compilador,
     Ripley,
+    /// Extensiones (nativas o del worker Python).
+    Plugin,
 }
 
 /// Interpreta la salida de GCC/Clang: líneas `archivo:línea:col: severidad: mensaje`.
