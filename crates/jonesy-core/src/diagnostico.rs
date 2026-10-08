@@ -58,12 +58,45 @@ pub enum Origen {
 /// Las rutas relativas se resuelven contra `dir`.
 pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
     let mut diags = Vec::new();
+    // `make -C sub` imprime «Entering directory '…'»: las rutas de gcc que siguen son
+    // relativas a ese directorio, no a la raíz.
+    let mut pila: Vec<PathBuf> = vec![dir.to_path_buf()];
     for linea in salida.lines() {
-        if let Some(d) = parsear_linea_gcc(linea, dir) {
+        if let Some(d) = directorio_de_make(linea, "Entering directory")
+            .or_else(|| directorio_de_make(linea, "Se entra en el directorio"))
+        {
+            pila.push(d);
+            continue;
+        }
+        if directorio_de_make(linea, "Leaving directory")
+            .or_else(|| directorio_de_make(linea, "Se sale del directorio"))
+            .is_some()
+        {
+            if pila.len() > 1 {
+                pila.pop();
+            }
+            continue;
+        }
+        if let Some(d) = parsear_linea_gcc(linea, pila.last().unwrap()) {
             diags.push(d);
         }
     }
     diags
+}
+
+/// Directorio de una línea `make[1]: Entering directory '/ruta'` (comillas ' ` « o ").
+fn directorio_de_make(linea: &str, frase: &str) -> Option<PathBuf> {
+    if !linea.starts_with("make") {
+        return None;
+    }
+    let resto = &linea[linea.find(frase)? + frase.len()..];
+    let resto = resto
+        .trim()
+        .trim_start_matches(['\'', '`', '«', '"', '‘', '“']);
+    let fin = resto
+        .rfind(['\'', '»', '"', '’', '”'])
+        .unwrap_or(resto.len());
+    Some(PathBuf::from(&resto[..fin]))
 }
 
 fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
@@ -216,6 +249,22 @@ mod tests {
         assert_eq!((d[0].linea, d[0].columna), (4, 10));
         assert_eq!(d[0].severidad, Severidad::Error);
         assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/main.c")));
+    }
+
+    #[test]
+    fn rutas_relativas_al_directorio_de_make() {
+        let salida = "make: Entering directory '/tp/ejercicios/ej1'\n\
+                      main.c:3:5: error: 'x' undeclared\n\
+                      make: Leaving directory '/tp/ejercicios/ej1'\n\
+                      lista.c:1:1: warning: algo\n";
+        let d = parsear_gcc(salida, Path::new("/tp"));
+        assert_eq!(
+            d[0].archivo.as_deref(),
+            Some(Path::new("/tp/ejercicios/ej1/main.c"))
+        );
+        assert_eq!(d[1].archivo.as_deref(), Some(Path::new("/tp/lista.c")));
+        let es = parsear_gcc("make[1]: se entra en el directorio «/tp/libs/a»\nmake[1]: Se entra en el directorio «/tp/libs/a»\na.c:2:1: error: x\n", Path::new("/tp"));
+        assert_eq!(es[0].archivo.as_deref(), Some(Path::new("/tp/libs/a/a.c")));
     }
 
     #[test]
