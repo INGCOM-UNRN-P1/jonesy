@@ -49,6 +49,12 @@ dock = 4         # filas del quick-doc en el dock inferior
 lateral = 30     # % del panel derecho (git, reglas, variables)
 inferior = 10    # filas del panel inferior (problemas, terminal, depurador)
 
+[formato]
+# Editar → Autoformato (Alt+Shift+F). {archivo} es la ruta del archivo a formatear
+# en el lugar. Vacío = "gaff format {archivo}" si gaff está instalado, si no
+# "clang-format -i {archivo}".
+comando = ""
+
 [ripley]
 # Correr "ripley check <archivo> --format json" al guardar archivos C.
 activo = true

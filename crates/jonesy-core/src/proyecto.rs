@@ -18,6 +18,15 @@ pub struct Config {
     pub ripley: Ripley,
     /// Descripciones o módulos extra para la vista de estructura (`[[modulo]]`).
     pub modulo: Vec<crate::estructura::ModuloConfig>,
+    pub formato: Formato,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Formato {
+    /// Comando que formatea en el lugar el archivo `{archivo}` (vacío = `gaff format` si
+    /// está instalado, si no `clang-format -i`).
+    pub comando: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -298,6 +307,26 @@ impl Proyecto {
             .or(Some(dir.join(stem)))
     }
 
+    /// Comando de autoformato para el archivo `archivo` (relativo a la raíz, se formatea
+    /// en el lugar). None si no hay formateador.
+    pub fn comando_formato(&self, archivo: &str) -> Option<String> {
+        let plantilla = if !self.config.formato.comando.trim().is_empty() {
+            self.config.formato.comando.clone()
+        } else if en_path("gaff") {
+            "gaff format {archivo}".to_string()
+        } else if en_path("clang-format") {
+            "clang-format -i {archivo}".to_string()
+        } else {
+            return None;
+        };
+        let q = shell_quote(archivo);
+        Some(if plantilla.contains("{archivo}") {
+            plantilla.replace("{archivo}", &q)
+        } else {
+            format!("{plantilla} {q}")
+        })
+    }
+
     /// Comando que verifica la entrega del examen.
     pub fn comando_verificar(&self) -> Option<String> {
         if !self.config.examen.verificar.trim().is_empty() {
@@ -388,6 +417,16 @@ pub fn es_editable(ruta: &Path) -> bool {
     )
 }
 
+/// true si `programa` está en el PATH (también `programa.exe` en Windows).
+pub fn en_path(programa: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else {
+        return false;
+    };
+    std::env::split_paths(&path).any(|d| {
+        d.join(programa).is_file() || (cfg!(windows) && d.join(format!("{programa}.exe")).is_file())
+    })
+}
+
 /// Comillas simples para `sh -c`.
 pub fn shell_quote(s: &str) -> String {
     if !s.is_empty()
@@ -403,6 +442,23 @@ pub fn shell_quote(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn comando_de_formato() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join(".jonesy.toml"),
+            "[formato]\ncomando = \"astyle --style=allman {archivo}\"\n",
+        )
+        .unwrap();
+        let p = Proyecto::abrir(dir.path());
+        assert_eq!(
+            p.comando_formato("src/a b.c").unwrap(),
+            "astyle --style=allman 'src/a b.c'"
+        );
+        assert!(en_path("sh"));
+        assert!(!en_path("no-existe-este-programa-jonesy"));
+    }
 
     #[test]
     fn compilar_y_ejecutar_por_modulo() {

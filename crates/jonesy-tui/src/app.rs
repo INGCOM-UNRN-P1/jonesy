@@ -319,6 +319,12 @@ enum Tarea {
     Objetivo {
         comando: String,
     },
+    /// Autoformato sobre una copia temporal del buffer.
+    Formatear {
+        archivo: PathBuf,
+        temporal: PathBuf,
+        version: u64,
+    },
 }
 
 pub struct BufferAbierto {
@@ -1045,6 +1051,7 @@ impl App {
                 Tarea::Explicar { .. } => "ripley explain",
                 Tarea::MemTrace { .. } => "mem-trace",
                 Tarea::Objetivo { .. } => "make",
+                Tarea::Formatear { .. } => "formateando",
             })
             .collect();
         v.sort();
@@ -2005,6 +2012,13 @@ impl App {
                     desplazamiento: 0,
                 });
             }
+            Tarea::Formatear {
+                archivo,
+                temporal,
+                version,
+            } => {
+                self.fin_formateo(archivo, temporal, version, codigo, salida);
+            }
             Tarea::Objetivo { comando } => {
                 self.tel(TelemetryEvent::CommandExec {
                     command: comando.clone(),
@@ -2162,6 +2176,123 @@ impl App {
             format!("Proyecto {} abierto.", raiz.display())
         };
         self.avisar(aviso, Nivel::Ok);
+    }
+
+    /// Autoformato del buffer activo: se escribe una copia junto al archivo (para que el
+    /// formateador encuentre su .clang-format), se formatea en segundo plano y el resultado
+    /// se aplica como una edición (se puede deshacer con Ctrl+Z).
+    fn formatear(&mut self) {
+        let b = &self.buf().buf;
+        let Some(ruta) = b.ruta.clone() else {
+            self.avisar("Guardá el archivo antes de formatearlo.", Nivel::Aviso);
+            return;
+        };
+        if b.solo_lectura {
+            self.avisar("Archivo de solo lectura.", Nivel::Aviso);
+            return;
+        }
+        let configurado = !self.proyecto.config.formato.comando.trim().is_empty();
+        if b.lenguaje != Lenguaje::C && !configurado {
+            self.avisar(
+                "El autoformato es para archivos .c y .h (o configurá [formato] comando).",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        if self
+            .procesos
+            .values()
+            .any(|t| matches!(t, Tarea::Formatear { .. }))
+        {
+            return;
+        }
+        let nombre = ruta
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let temporal = ruta.with_file_name(format!(".jonesy-fmt-{nombre}"));
+        if let Err(e) = std::fs::write(&temporal, b.contenido()) {
+            self.avisar(
+                format!("No se pudo preparar el formateo: {e}"),
+                Nivel::Error,
+            );
+            return;
+        }
+        let version = b.version;
+        let Some(cmd) = self
+            .proyecto
+            .comando_formato(&self.proyecto.relativa(&temporal))
+        else {
+            let _ = std::fs::remove_file(&temporal);
+            self.avisar(
+                "No encontré gaff ni clang-format: instalalos o configurá [formato] comando.",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        self.lanzar(
+            &cmd,
+            Tarea::Formatear {
+                archivo: ruta,
+                temporal,
+                version,
+            },
+        );
+    }
+
+    fn fin_formateo(
+        &mut self,
+        archivo: PathBuf,
+        temporal: PathBuf,
+        version: u64,
+        codigo: Option<i32>,
+        salida: String,
+    ) {
+        let formateado = std::fs::read_to_string(&temporal);
+        let _ = std::fs::remove_file(&temporal);
+        if codigo != Some(0) {
+            let detalle = salida
+                .lines()
+                .find(|l| !l.trim().is_empty())
+                .unwrap_or("")
+                .to_string();
+            self.avisar(format!("El formateador falló: {detalle}"), Nivel::Error);
+            return;
+        }
+        let Ok(nuevo) = formateado else { return };
+        let Some(i) = self
+            .buffers
+            .iter()
+            .position(|b| b.buf.ruta.as_deref() == Some(archivo.as_path()))
+        else {
+            return;
+        };
+        if self.buffers[i].buf.version != version {
+            self.avisar(
+                "El archivo cambió mientras se formateaba: probá de nuevo.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        if self.buffers[i].buf.contenido() == nuevo {
+            self.avisar("El archivo ya estaba formateado.", Nivel::Info);
+            return;
+        }
+        let anterior = self.activo;
+        self.activo = i;
+        let (l, c) = self.buf().buf.linea_columna();
+        self.tel(TelemetryEvent::CommandExec {
+            command: "autoformato".into(),
+            exit_code: Some(0),
+        });
+        self.editar(|b| {
+            let d = b.reemplazar_todo(&nuevo);
+            let pos = b.linea_columna_a_pos(l, c);
+            b.mover_a(pos, false);
+            d
+        });
+        self.activo = anterior;
+        self.avisar("Archivo formateado (Ctrl+Z lo deshace).", Nivel::Ok);
     }
 
     /// `git clone` en el deck (para que funcionen credenciales y SSH); al terminar se
@@ -2748,6 +2879,7 @@ impl App {
             Accion::Paleta => self.abrir_paleta(),
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
+            Accion::Formatear => self.formatear(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -3174,6 +3306,9 @@ impl App {
             (KeyCode::Char('e'), false, true, _) => Some(Accion::Explorador),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
+            (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
+                Some(Accion::Formatear)
+            }
             (KeyCode::Char('r'), false, true, _) => Some(Accion::PanelReglas),
             (KeyCode::Char('p'), false, true, _) => Some(Accion::Problemas),
             (KeyCode::Char('o'), false, true, _) => Some(Accion::SalidaCompilacion),

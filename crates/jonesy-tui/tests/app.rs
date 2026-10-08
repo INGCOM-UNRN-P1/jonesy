@@ -570,3 +570,58 @@ fn clonar_un_repositorio_y_abrirlo() {
     );
     assert_eq!(a.buf().buf.nombre(), "main.c");
 }
+
+#[test]
+fn autoformato_aplica_y_se_deshace() {
+    let dir = proyecto(&[
+        ("main.c", "int x=1;\nint y=2;\n"),
+        (".jonesy.toml", "[formato]\ncomando = \"printf 'int x = 1;\\\\nint y = 2;\\\\n' > {archivo}\"\n[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    let pos = a.buf().buf.linea_columna_a_pos(1, 3);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(
+        &mut a,
+        KeyCode::Char('F'),
+        KeyModifiers::ALT | KeyModifiers::SHIFT,
+    );
+    esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
+    assert_eq!(a.buf().buf.contenido(), "int x = 1;\nint y = 2;\n");
+    assert_eq!(
+        a.buf().buf.linea_columna(),
+        (1, 3),
+        "el cursor queda en la misma línea y columna"
+    );
+    assert!(
+        a.buf().buf.modificado(),
+        "formatear no guarda: queda como una edición más"
+    );
+    assert!(
+        !dir.path().join(".jonesy-fmt-main.c").exists(),
+        "se borra la copia temporal"
+    );
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
+    assert_eq!(a.buf().buf.contenido(), "int x=1;\nint y=2;\n");
+}
+
+#[test]
+fn autoformato_con_clang_format() {
+    if std::process::Command::new("clang-format")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let dir = proyecto(&[
+        ("main.c", "int main(void){return 0;}\n"),
+        (
+            ".jonesy.toml",
+            "[formato]\ncomando = \"clang-format -i {archivo}\"\n[ripley]\nactivo = false\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::Formatear);
+    esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
+    assert_eq!(a.buf().buf.contenido(), "int main(void) { return 0; }\n");
+}

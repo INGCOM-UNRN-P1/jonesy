@@ -61,6 +61,7 @@ pub enum Accion {
     NuevoArchivo,
     AbrirProyecto,
     GitClonar,
+    Formatear,
 }
 
 pub struct Info {
@@ -124,6 +125,7 @@ impl Accion {
             NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),
             AbrirProyecto => ("Abrir proyecto o directorio…", ""),
             GitClonar => ("Git: clonar un repositorio…", ""),
+            Formatear => ("Autoformato del archivo", "Alt+Shift+F"),
         };
         Info { titulo, atajo }
     }
@@ -173,6 +175,7 @@ impl Accion {
             GitCommit,
             GitLog,
             GitClonar,
+            Formatear,
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
@@ -217,6 +220,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
                 Buscar,
                 BuscarSiguiente,
                 IrALinea,
+                Formatear,
             ],
         ),
         (
@@ -282,6 +286,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Ir a línea | Ctrl+G |
+| Autoformato (gaff o clang-format) | Alt+Shift+F |
 | Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
 | Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
