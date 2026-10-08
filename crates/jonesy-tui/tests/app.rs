@@ -307,3 +307,56 @@ fn ripley_al_guardar() {
         "texto virtual de ripley: {p}"
     );
 }
+
+#[test]
+fn pestanas_abrir_varios_cerrar_y_atajos() {
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    let dir = proyecto(&[
+        ("a.c", "int a;\n"),
+        ("b.c", "int b;\n"),
+        ("c.c", "int c;\n"),
+        ("src/a.c", "int sa;\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    // Ctrl+O, marcar tres con Tab y abrirlos juntos.
+    tecla(&mut a, KeyCode::Char('o'), KeyModifiers::CONTROL);
+    for _ in 0..3 {
+        tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    }
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let nombres: Vec<String> = a.buffers.iter().map(|b| b.buf.nombre()).collect();
+    assert_eq!(a.buffers.len(), 3, "{nombres:?}");
+    a.abrir_archivo(&dir.path().join("src/a.c"), true);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("a.c (src)") && p.contains("a.c (.)"),
+        "nombres repetidos con directorio: {p}"
+    );
+    // Alt+1 va a la primera pestaña.
+    tecla(&mut a, KeyCode::Char('1'), KeyModifiers::ALT);
+    assert_eq!(a.activo, 0);
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::CONTROL);
+    assert_eq!(a.activo, 1);
+    // Clic en la × de la primera pestaña la cierra.
+    pantalla(&mut a, 120, 30);
+    let (r, _) = a.zonas.cierres_buffers[0];
+    a.evento(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: r.x,
+        row: r.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(a.buffers.len(), 3);
+    // Con muchas pestañas en poco ancho aparece el desborde y la activa queda visible.
+    for i in 0..12 {
+        let n = format!("archivo_largo_{i}.c");
+        std::fs::write(dir.path().join(&n), "").unwrap();
+        a.abrir_archivo(&dir.path().join(&n), true);
+    }
+    let p = pantalla(&mut a, 80, 24);
+    assert!(p.contains("‹"), "{p}");
+    assert!(
+        p.contains("archivo_largo_11.c"),
+        "la activa a la vista: {p}"
+    );
+}

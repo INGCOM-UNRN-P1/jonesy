@@ -69,9 +69,9 @@ impl Accion {
             Abrir => ("Abrir archivo…", "Ctrl+O"),
             Guardar => ("Guardar", "Ctrl+S / F2"),
             GuardarTodo => ("Guardar todo", "Ctrl+Shift+S"),
-            CerrarBuffer => ("Cerrar archivo", "Ctrl+W"),
-            SiguienteBuffer => ("Archivo siguiente", "Ctrl+RePág"),
-            AnteriorBuffer => ("Archivo anterior", "Ctrl+AvPág"),
+            CerrarBuffer => ("Cerrar pestaña", "Ctrl+W"),
+            SiguienteBuffer => ("Pestaña siguiente", "Ctrl+Tab"),
+            AnteriorBuffer => ("Pestaña anterior", "Ctrl+Shift+Tab"),
             Salir => ("Salir", "Ctrl+Q"),
             Deshacer => ("Deshacer", "Ctrl+Z"),
             Rehacer => ("Rehacer", "Ctrl+Y"),
@@ -251,7 +251,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Ir a línea | Ctrl+G |
-| Abrir archivo | Ctrl+O |
+| Abrir archivo (Tab marca varios) | Ctrl+O |
+| Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
 | Paleta de comandos | Ctrl+K, F1 |
 | Explicar regla (sobre un diagnóstico) | F1 |
 | Quick-doc | F4, Alt+D (Shift+F4 cambia la orientación) |

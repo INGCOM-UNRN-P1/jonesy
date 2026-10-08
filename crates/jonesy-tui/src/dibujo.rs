@@ -265,35 +265,80 @@ fn dibujar_area_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u1
     }
 }
 
+/// Título de cada pestaña; con nombres repetidos se agrega el directorio.
+fn titulos_pestanas(app: &App) -> Vec<String> {
+    let nombres: Vec<String> = app.buffers.iter().map(|b| b.buf.nombre()).collect();
+    app.buffers
+        .iter()
+        .zip(&nombres)
+        .map(|(b, n)| {
+            let repetido = nombres.iter().filter(|m| *m == n).count() > 1;
+            match (&b.buf.ruta, repetido) {
+                (Some(r), true) => {
+                    let dir = r
+                        .parent()
+                        .map(|d| app.proyecto.relativa(d))
+                        .filter(|d| !d.is_empty())
+                        .unwrap_or_else(|| ".".into());
+                    format!("{n} ({dir})")
+                }
+                _ => n.clone(),
+            }
+        })
+        .collect()
+}
+
 fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
     f.render_widget(
         Block::default().style(Style::default().bg(tema::FONDO_LINEA)),
         r,
     );
+    let ascii = app.sim.ascii;
+    let titulos = titulos_pestanas(app);
+    let textos: Vec<String> = app
+        .buffers
+        .iter()
+        .zip(&titulos)
+        .map(|(b, t)| {
+            let marca = match (b.buf.modificado(), b.buf.solo_lectura, ascii) {
+                (true, _, false) => " ●",
+                (true, _, true) => " *",
+                (false, true, false) => " 🔒",
+                (false, true, true) => " RO",
+                _ => "",
+            };
+            format!(" {t}{marca} ")
+        })
+        .collect();
+    let cierre = if ascii { "x " } else { "× " };
+    let ancho = |i: usize| UnicodeWidthStr::width(textos[i].as_str()) as u16 + 2 + 1;
+    // La pestaña activa siempre a la vista: se corre la primera visible si hace falta.
+    let disponible = r.width.saturating_sub(4);
+    app.primera_pestana = app.primera_pestana.min(app.activo);
+    while app.primera_pestana < app.activo
+        && (app.primera_pestana..=app.activo).map(ancho).sum::<u16>() > disponible
+    {
+        app.primera_pestana += 1;
+    }
     let mut x = r.x;
-    for (i, b) in app.buffers.iter().enumerate() {
-        let marca = if b.buf.modificado() {
-            " ●"
-        } else if b.buf.solo_lectura {
-            " 🔒"
-        } else {
-            ""
-        };
-        let marca = if app.sim.ascii && !marca.is_empty() {
-            if b.buf.modificado() {
-                " *"
-            } else {
-                " RO"
-            }
-        } else {
-            marca
-        };
-        let texto = format!(" {}{} ", b.buf.nombre(), marca);
-        let w = UnicodeWidthStr::width(texto.as_str()) as u16;
-        if x + w > r.x + r.width {
+    if app.primera_pestana > 0 {
+        let zona = Rect::new(x, r.y, 2, 1);
+        f.render_widget(
+            Paragraph::new(if ascii { "<" } else { "‹" }).style(Style::default().fg(tema::ACENTO)),
+            zona,
+        );
+        app.zonas.desborde_pestanas.push((zona, -1));
+        x += 2;
+    }
+    let mut ultima = app.primera_pestana;
+    #[allow(clippy::needless_range_loop)] // `i` también indexa app.buffers y las zonas
+    for i in app.primera_pestana..app.buffers.len() {
+        let w = ancho(i);
+        if x + w > r.x + r.width.saturating_sub(2) && i > app.primera_pestana {
             break;
         }
-        let estilo = if i == app.activo {
+        let activa = i == app.activo;
+        let estilo = if activa {
             Style::default()
                 .bg(tema::FONDO_SELECCION)
                 .fg(Color::White)
@@ -301,10 +346,30 @@ fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
         } else {
             Style::default().bg(tema::FONDO_LINEA).fg(tema::ATENUADO)
         };
-        let zona = Rect::new(x, r.y, w, 1);
-        f.render_widget(Paragraph::new(texto).style(estilo), zona);
+        let ancho_texto = w - 3;
+        let zona = Rect::new(x, r.y, ancho_texto, 1);
+        f.render_widget(Paragraph::new(textos[i].clone()).style(estilo), zona);
+        let zona_cierre = Rect::new(x + ancho_texto, r.y, 2, 1);
+        f.render_widget(
+            Paragraph::new(cierre).style(estilo.remove_modifier(Modifier::BOLD).fg(if activa {
+                tema::ERROR
+            } else {
+                tema::ATENUADO
+            })),
+            zona_cierre,
+        );
         app.zonas.pestanas_buffers.push((zona, i));
-        x += w + 1;
+        app.zonas.cierres_buffers.push((zona_cierre, i));
+        x += w;
+        ultima = i;
+    }
+    if ultima + 1 < app.buffers.len() {
+        let zona = Rect::new(r.x + r.width - 2, r.y, 2, 1);
+        f.render_widget(
+            Paragraph::new(if ascii { ">" } else { "›" }).style(Style::default().fg(tema::ACENTO)),
+            zona,
+        );
+        app.zonas.desborde_pestanas.push((zona, 1));
     }
 }
 
@@ -1524,17 +1589,25 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             filtro,
             sel,
             archivos,
+            marcados,
         } => {
             let filtrados = paleta::filtrar(filtro, archivos);
             let items: Vec<(String, String)> = filtrados
                 .iter()
-                .map(|&i| (archivos[i].clone(), String::new()))
+                .map(|&i| {
+                    let marca = if marcados.contains(&i) {
+                        "● marcado"
+                    } else {
+                        ""
+                    };
+                    (archivos[i].clone(), marca.to_string())
+                })
                 .collect();
             let (filtro, sel) = (filtro.clone(), *sel);
             let titulo = if items.is_empty() && !filtro.is_empty() {
                 " Abrir (Enter crea el archivo) "
             } else {
-                " Abrir archivo "
+                " Abrir archivo (Tab marca varios) "
             };
             lista_modal(f, app, area, titulo, &filtro, &items, sel)
         }

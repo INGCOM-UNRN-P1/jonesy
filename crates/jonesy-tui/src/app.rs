@@ -141,6 +141,8 @@ pub enum Modal {
         filtro: String,
         sel: usize,
         archivos: Vec<String>,
+        /// Índices (en `archivos`) marcados con Tab para abrir varios a la vez.
+        marcados: BTreeSet<usize>,
     },
     Buscar {
         texto: String,
@@ -255,6 +257,10 @@ pub struct Zonas {
     pub menu: Vec<(Rect, usize)>,
     pub botones: Vec<(Rect, Accion)>,
     pub pestanas_buffers: Vec<(Rect, usize)>,
+    /// Botón × de cada pestaña.
+    pub cierres_buffers: Vec<(Rect, usize)>,
+    /// Flechas ‹ › de desborde de la barra de pestañas (desplazamiento −1 / +1).
+    pub desborde_pestanas: Vec<(Rect, isize)>,
     pub pestanas_inferior: Vec<(Rect, Pestana)>,
     pub editor: Option<ZonaEditor>,
     pub preview: Option<Rect>,
@@ -338,6 +344,8 @@ pub struct App {
     esc_pendiente: Option<Instant>,
     /// La rueda del mouse movió la vista: no forzar el cursor a la vista hasta la próxima tecla.
     pub desplazado_por_mouse: bool,
+    /// Primera pestaña visible cuando no entran todas.
+    pub primera_pestana: usize,
     /// Funciones declaradas en el buffer activo (quick-doc): (buffer, versión, funciones).
     pub funciones_usuario: Option<(usize, u64, Vec<jonesy_doc::Funcion>)>,
     pub salir: bool,
@@ -467,6 +475,7 @@ impl App {
             ultimo_clic: None,
             esc_pendiente: None,
             desplazado_por_mouse: false,
+            primera_pestana: 0,
             funciones_usuario: None,
             salir: false,
             inicio: Instant::now(),
@@ -874,6 +883,14 @@ impl App {
         v.sort();
         v.dedup();
         v
+    }
+
+    /// Cierra la pestaña `i` (pidiendo confirmación si tiene cambios).
+    pub fn cerrar_pestana(&mut self, i: usize) {
+        if i < self.buffers.len() {
+            self.activo = i;
+            self.cerrar_buffer(false);
+        }
     }
 
     fn cerrar_buffer(&mut self, forzar: bool) {
@@ -1959,6 +1976,7 @@ impl App {
             filtro: String::new(),
             sel: 0,
             archivos,
+            marcados: BTreeSet::new(),
         });
     }
 
@@ -2453,6 +2471,28 @@ impl App {
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         let shift = k.modifiers.contains(KeyModifiers::SHIFT);
 
+        // Pestañas: Ctrl+Tab / Ctrl+Shift+Tab y Alt+1…9 (Alt+0 la última).
+        match (k.code, ctrl, alt) {
+            (KeyCode::Tab, true, _) => {
+                self.accion(Accion::SiguienteBuffer);
+                return;
+            }
+            (KeyCode::BackTab, true, _) => {
+                self.accion(Accion::AnteriorBuffer);
+                return;
+            }
+            (KeyCode::Char(c @ '0'..='9'), false, true) => {
+                let n = self.buffers.len();
+                let i = if c == '0' {
+                    n - 1
+                } else {
+                    (c as usize - '1' as usize).min(n - 1)
+                };
+                self.cambiar_buffer(i);
+                return;
+            }
+            _ => {}
+        }
         // Teclas que siempre son globales (también con el foco en la terminal).
         let global = match (k.code, ctrl, alt, shift) {
             (KeyCode::Char('t'), false, true, _) => Some(Accion::Terminal),
@@ -2849,6 +2889,7 @@ impl App {
                 mut filtro,
                 mut sel,
                 archivos,
+                mut marcados,
             } => {
                 if cerrar {
                     return;
@@ -2856,21 +2897,35 @@ impl App {
                 let filtrados = paleta::filtrar(&filtro, &archivos);
                 match k.code {
                     KeyCode::Enter => {
-                        let rel = filtrados
-                            .get(sel)
-                            .map(|&i| archivos[i].clone())
-                            .unwrap_or_else(|| filtro.clone());
-                        if !rel.trim().is_empty() {
-                            let ruta = self.proyecto.raiz.join(rel.trim());
-                            if self.examen.is_some()
-                                && !ruta.exists()
-                                && !ruta.starts_with(&self.proyecto.raiz)
-                            {
-                                return;
+                        // Con archivos marcados se abren todos (una pestaña cada uno).
+                        let rels: Vec<String> = if marcados.is_empty() {
+                            vec![filtrados
+                                .get(sel)
+                                .map(|&i| archivos[i].clone())
+                                .unwrap_or_else(|| filtro.clone())]
+                        } else {
+                            marcados.iter().map(|&i| archivos[i].clone()).collect()
+                        };
+                        for rel in rels {
+                            let rel = rel.trim();
+                            if rel.is_empty() {
+                                continue;
+                            }
+                            let ruta = self.proyecto.raiz.join(rel);
+                            if self.examen.is_some() && !ruta.starts_with(&self.proyecto.raiz) {
+                                continue;
                             }
                             self.abrir_archivo(&ruta, true);
                         }
                         return;
+                    }
+                    KeyCode::Tab => {
+                        if let Some(&i) = filtrados.get(sel) {
+                            if !marcados.remove(&i) {
+                                marcados.insert(i);
+                            }
+                            sel = (sel + 1).min(filtrados.len().saturating_sub(1));
+                        }
                     }
                     KeyCode::Up => sel = sel.saturating_sub(1),
                     KeyCode::Down => sel = (sel + 1).min(filtrados.len().saturating_sub(1)),
@@ -2884,6 +2939,7 @@ impl App {
                     filtro,
                     sel,
                     archivos,
+                    marcados,
                 });
             }
             Modal::Buscar { mut texto } => {
@@ -3130,6 +3186,18 @@ impl App {
                 }
                 None => {}
             },
+            MouseEventKind::Down(MouseButton::Middle) => {
+                // Clic del medio sobre una pestaña la cierra, como en los navegadores.
+                let pestana = self
+                    .zonas
+                    .pestanas_buffers
+                    .iter()
+                    .find(|(r, _)| dentro(*r))
+                    .map(|(_, i)| *i);
+                if let Some(i) = pestana {
+                    self.cerrar_pestana(i);
+                }
+            }
             MouseEventKind::Up(_) => self.arrastre = None,
             _ => {}
         }
@@ -3192,6 +3260,28 @@ impl App {
             .copied()
         {
             self.accion(a);
+            return;
+        }
+        if let Some((_, i)) = self
+            .zonas
+            .cierres_buffers
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
+            self.cerrar_pestana(i);
+            return;
+        }
+        if let Some((_, d)) = self
+            .zonas
+            .desborde_pestanas
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
+            let n = self.buffers.len().saturating_sub(1);
+            self.primera_pestana =
+                (self.primera_pestana as isize + d).clamp(0, n as isize) as usize;
             return;
         }
         if let Some((_, i)) = self
