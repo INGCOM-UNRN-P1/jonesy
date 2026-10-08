@@ -6,18 +6,22 @@ los pedidos posteriores. Cada ítem dice su estado y, si aplica, el requisito.
 Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 **en curso**, **hecho** (se deja unos días para referencia y después se borra).
 
-## Pedidos en curso
+## Pedidos recientes
 
 | Ítem | Estado | Notas |
 |---|---|---|
-| Paneles redimensionables con mouse y desde opciones | en curso | todos los separadores; tamaños en `.jonesy.toml` y en la sesión |
-| Archivo → Nuevo archivo, Abrir proyecto/directorio | en curso | |
-| Git → Clonar repositorio | en curso | corre en el deck para que funcione la autenticación interactiva |
-| Explorador de directorios | en curso | |
-| Editar → Autoformato | en curso | `gaff format` o `clang-format`, configurable |
-| Pestañas para varios archivos | en curso | cierre con ×, desborde, Ctrl+Tab, abrir varios a la vez |
-| Soporte de Windows | en curso | ver sección Windows |
-| Más verificaciones en la CI | en curso | matriz de SO, MSRV, docs, shellcheck, artefactos |
+| Paneles redimensionables con mouse y desde opciones | hecho | todos los separadores; `[interfaz.paneles]` y sesión |
+| Archivo → Nuevo archivo, Abrir proyecto/directorio | hecho | con proyectos recientes |
+| Git → Clonar repositorio | hecho | corre en el deck para la autenticación interactiva |
+| Explorador de directorios | hecho | barra izquierda, pestaña Archivos |
+| Editar → Autoformato | hecho | `gaff format` o `clang-format`, configurable |
+| Pestañas para varios archivos | hecho | ×, clic del medio, desborde, Ctrl+Tab, Alt+1…9, abrir varios |
+| Estructura del proyecto (Makefiles, library.json, tp.sh) | hecho | pestaña Proyecto; F6/Ctrl+F5/F5 por módulo |
+| Soporte de Windows | flojo | ver sección Windows |
+| Más verificaciones en la CI | hecho | matriz Linux/Windows/macOS, MSRV, docs, shellcheck, worker, audit, binarios |
+| Explorador: renombrar y borrar archivos | falta | hoy sólo crea archivos y carpetas |
+| Estructura: dependencias entre bibliotecas | falta | F6 compila las bibliotecas de `LIB_NAME` de un ejercicio, pero no las dependencias de una biblioteca con otra |
+| Descripciones de objetivos en la barra | flojo | con 28 columnas se cortan; el pie muestra la completa. Se puede ensanchar la barra |
 
 ## Requisitos de la especificación
 
@@ -25,7 +29,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 |---|---|---|
 | §10 / RNF-A.3 tráfico en reposo 0 B/s | falta | en reposo redibuja cada 2 s (sondeo de git) y ratatui reescribe el cursor: 32 B cada 2 s. Redibujar sólo si cambió algo. |
 | RF-8.3 enlaces con Enter | flojo | sólo se abren con clic; falta navegarlos con teclado y abrirlos en el panel adyacente en vez de reemplazar el editor. |
-| RF-11.5 botón `[ Abrir en Terminal ]` en git | falta | Alt+T funciona; el botón en el panel no está. |
+| RF-11.5 botón `[ Abrir en Terminal ]` en git | hecho | botones [Commit] [Log] [Clonar] [Abrir en Terminal]. |
 | RF-4.3 accesos inválidos en cat-scan | flojo | marca punteros colgantes; no muestra `events` ni `meta.warnings` de mem-trace (accesos tras `free`, fugas al final). |
 | RF-4.3 cat-scan con Makefile | flojo | mem-trace sólo se lanza para programas de un archivo sin Makefile. |
 | RF-6.3 recuperación | flojo | las copias de `.jonesy/recuperacion/` se escriben ante SIGHUP fuera del examen, pero al reabrir no se ofrece restaurarlas. |
@@ -50,7 +54,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 
 | Ítem | Estado | Detalle |
 |---|---|---|
-| Compilación | en curso | señales, PTY del inferior de GDB y `libc` quedan detrás de `cfg(unix)`. |
+| Compilación | flojo | señales, PTY del inferior de GDB y `libc` quedan detrás de `cfg(unix)`; la CI compila y prueba en Windows, pero no se corrió todavía. |
 | Verificación local | falta | no hay target de Windows en esta máquina; se verifica sólo en la CI. Para chequear localmente: `sudo dnf install rust-std-static-x86_64-pc-windows-gnu` y `cargo check --target x86_64-pc-windows-gnu`. |
 | E/S del programa depurado | flojo | sin PTY separado en Windows: la salida del programa se mezcla con la consola de GDB. |
 | Shell y comandos | flojo | se usa `sh` si está en el `PATH` (UCRT64/MSYS2, Git Bash) y si no `cmd /C`; los comandos por defecto (`make`, `./programa`) suponen el entorno UCRT64 de `entorno`. |

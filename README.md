@@ -17,7 +17,16 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
 - **quick-doc**: firma, retorno, parámetros, trampas y reglas de cátedra de la
   función bajo el cursor (82 funciones de libc/POSIX embebidas, sin red),
   resaltando el parámetro que se está escribiendo.
-- **Git** desde el panel lateral: stage, diff, commit y log.
+- **Proyecto**: al abrir un TP lee sus Makefiles (raíz, `libs/*`,
+  `ejercicios/*`), `library.json` y `tp.sh`, y muestra bibliotecas, ejercicios
+  y qué hace cada objetivo de make, listos para correr. F6, Ctrl+F5 y F5
+  actúan sobre el módulo del archivo activo (compilando antes las
+  bibliotecas que usa).
+- **Explorador de archivos**, pestañas con cierre y desborde, paneles que se
+  redimensionan con el mouse o desde las opciones, archivo nuevo, abrir otro
+  proyecto (con recientes) y autoformato con `gaff` o `clang-format`.
+- **Git** desde el panel lateral: stage, diff, commit, log y clonar
+  repositorios.
 - **Modo examen**: consigna de solo lectura, cronómetro, autoguardado,
   telemetría forense encadenada con SHA-256 y entrega asistida con paquete y
   hash; `jonesy replay` para auditar la sesión.
@@ -60,7 +69,10 @@ jonesy verificar .jonesy/telemetry.log         # código 1 si la cadena está ro
 |---|---|
 | Guardar · deshacer · rehacer | Ctrl+S / F2 · Ctrl+Z · Ctrl+Y |
 | Copiar · cortar · pegar | Ctrl+C · Ctrl+X · Ctrl+V (OSC 52 al copiar) |
-| Buscar · ir a línea · abrir | F3 / Ctrl+F · Ctrl+G · Ctrl+O |
+| Buscar · ir a línea · abrir | F3 / Ctrl+F · Ctrl+G · Ctrl+O (Tab marca varios) |
+| Nuevo archivo · autoformato | Ctrl+N · Alt+Shift+F |
+| Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+W; clic del medio o × cierra |
+| Explorador · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna dentro de la barra) |
 | Paleta de comandos | Ctrl+K o F1 (F1 sobre un diagnóstico explica la regla) |
 | Menú | F10 (fuera de la depuración), Alt+letra o clic |
 | Compilar · ejecutar | F6 · Ctrl+F5 |
@@ -84,16 +96,38 @@ En la terminal interna, `Alt+T` o `Esc Esc` devuelven el foco al editor y
 | 90–119 col. | estándar | consigna 35 % · editor 65 %; quick-doc en dock o flotante |
 | ≤ 89 col. o ≤ 24 filas | compacto | una vista a pantalla completa (F7/F8/F9/F4) |
 
-Los separadores se arrastran con el mouse. La sesión (archivos, cursores,
-paneles, breakpoints) se guarda en `.jonesy/session.json`.
+La barra izquierda (archivos y proyecto) se abre con Alt+E / Alt+Y. Todos los
+bordes entre paneles se arrastran con el mouse, y *Ver → Tamaños de paneles*
+permite ajustarlos con el teclado; los valores iniciales salen de
+`[interfaz.paneles]` en `.jonesy.toml`. La sesión (archivos, cursores,
+paneles y sus tamaños, carpetas desplegadas, breakpoints) se guarda en
+`.jonesy/session.json`.
+
+### Proyectos de la cátedra
+
+jonesy no necesita configuración para un TP armado con plantilla-TP: lee el
+Makefile de la raíz y el de cada subdirectorio (hasta dos niveles), clasifica
+bibliotecas (`libs/`, `library.json`) y ejercicios (`ejercicios/`, `main.c`) y
+toma la descripción de cada objetivo del comentario que lo precede en el
+Makefile (`# Ejecutar las pruebas` sobre `test:`) o de un `## descripción` en
+la misma línea. De `tp.sh` lee sus comandos desde la ayuda.
+
+En la pestaña **Proyecto** (Alt+Y), Enter corre el objetivo elegido: `run` en
+la terminal interna (es interactivo) y el resto con la salida en el panel y
+los errores de gcc y del enlazador en Problemas. Los comandos de `tp.sh` que
+piden argumentos (`add-lib`, `add-ex`) los preguntan antes. La paleta
+(Ctrl+K) también lista todos los objetivos. `[[modulo]]` en `.jonesy.toml`
+agrega descripciones o módulos que no se detectan solos.
 
 ## Configuración
 
 Opcional, en `.jonesy.toml` en la raíz del proyecto. Ver
 [`docs/ejemplo.jonesy.toml`](docs/ejemplo.jonesy.toml). Sin configuración:
-F6 corre `make` (o `gcc -std=c11 -Wall -Wextra -g -O0` sobre el `.c` activo),
-Ctrl+F5 corre `make run` (o compila y ejecuta) y la entrega verifica con
-`make test`.
+F6 corre `make -C <módulo>` para el ejercicio o biblioteca del archivo activo
+(antes `make -C` de cada biblioteca de su `LIB_NAME`), `make` en la raíz o
+`gcc -std=c11 -Wall -Wextra -g -O0` sobre el `.c` activo; Ctrl+F5 corre el
+objetivo `run` del módulo (o compila y ejecuta); F5 depura su `PROG_TARGET`;
+la entrega verifica con `make test`.
 
 ## Modo examen
 
@@ -195,6 +229,15 @@ pesado la shell del deck domina la cifra; `SHELL=/bin/sh` aísla la del IDE.
   servidor; la sesión se restaura de `.jonesy/session.json` al arrancar.
 - La telemetría está activa siempre en examen y, fuera de él, sólo con
   `--telemetria`.
+
+## Plataformas
+
+Linux es la plataforma principal. macOS y Windows compilan y pasan las
+pruebas en la CI; en Windows los comandos usan `sh` si está en el `PATH`
+(UCRT64/MSYS2 del entorno de la cátedra, Git Bash) o `cmd`, el deck abre
+bash o `%COMSPEC%`, y el programa depurado comparte la consola con GDB (no
+hay PTY separado). Ver [PENDIENTES.md](PENDIENTES.md) para lo que falta
+probar a mano.
 
 ## Licencia
 
