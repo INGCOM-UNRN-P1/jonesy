@@ -1208,3 +1208,58 @@ fn diff_entre_commits_renombres_binarios_y_lineas_largas() {
         a.mensaje
     );
 }
+
+#[test]
+fn deshacer_el_ultimo_commit() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=p",
+                "-c",
+                "user.email=p@x",
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap()
+    };
+    if git(&["init", "-q"]).status.code() != Some(0) {
+        return;
+    }
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "uno"]);
+    std::fs::write(dir.path().join("main.c"), "int main(void) { return 1; }\n").unwrap();
+    git(&["commit", "-qam", "dos"]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.refrescar_git();
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 30);
+    assert!(p.contains("«dos»"), "{p}");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    let log = String::from_utf8(git(&["log", "--oneline"]).stdout).unwrap();
+    assert_eq!(log.lines().count(), 1, "{log}");
+    assert!(a
+        .git_estado
+        .as_ref()
+        .unwrap()
+        .entradas
+        .iter()
+        .any(|e| e.en_stage()));
+    // El primer commit no tiene anterior: se avisa.
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    assert!(
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("primer commit")),
+        "{:?}",
+        a.mensaje
+    );
+}

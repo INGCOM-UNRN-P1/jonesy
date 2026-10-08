@@ -71,6 +71,8 @@ pub struct Estado {
     pub commit: Option<String>,
     pub adelante: u32,
     pub atras: u32,
+    /// Rama remota que sigue (`origin/main`), si tiene.
+    pub upstream: Option<String>,
     pub entradas: Vec<Entrada>,
 }
 
@@ -123,6 +125,7 @@ pub fn parsear_estado(salida: &str) -> Estado {
             match clave {
                 "branch.head" => estado.rama = (valor != "(detached)").then(|| valor.to_string()),
                 "branch.oid" => estado.commit = (valor != "(initial)").then(|| valor.to_string()),
+                "branch.upstream" => estado.upstream = Some(valor.to_string()),
                 "branch.ab" => {
                     for parte in valor.split_whitespace() {
                         if let Some(n) = parte.strip_prefix('+') {
@@ -343,6 +346,11 @@ impl Repo {
     /// Diff entre dos commits (de `desde` a `hasta`), con detección de renombres.
     pub fn diff_commits(&self, desde: &str, hasta: &str) -> Result<String, ErrorGit> {
         self.ejecutar(&["diff", "--no-color", "-M", desde, hasta])
+    }
+
+    /// Deshace el último commit dejando sus cambios en el stage (`reset --soft HEAD~1`).
+    pub fn deshacer_ultimo_commit(&self) -> Result<String, ErrorGit> {
+        self.ejecutar(&["reset", "--soft", "HEAD~1"])
     }
 
     pub fn mostrar(&self, hash: &str) -> Result<String, ErrorGit> {

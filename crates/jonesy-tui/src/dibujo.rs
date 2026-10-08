@@ -1622,7 +1622,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         ),
     ])];
     let ayuda = if app.git.log.is_some() {
-        "Enter ver commit · m marca otro para comparar · l volver"
+        "Enter ver commit · m marca otro para comparar · z deshace el último · l volver"
     } else {
         "Espacio stage · a/u todo · c commit · l log · Enter diff"
     };

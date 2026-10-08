@@ -229,6 +229,8 @@ pub enum Confirmacion {
     Recuperar,
     /// Borrar el archivo o la carpeta de `App::borrar_pendiente`.
     Borrar,
+    /// git reset --soft HEAD~1.
+    DeshacerCommit,
 }
 
 pub enum Modal {
@@ -1759,6 +1761,67 @@ impl App {
             desplazamiento_h: 0,
             lenguaje,
         });
+    }
+
+    /// Confirma deshacer el último commit; se niega si ya está en el remoto (push).
+    fn pedir_deshacer_commit(&mut self) {
+        let Some(e) = self.git_estado.clone() else {
+            self.avisar("El proyecto no está en un repositorio git.", Nivel::Aviso);
+            return;
+        };
+        if e.commit.is_none() {
+            self.avisar("Todavía no hay commits.", Nivel::Aviso);
+            return;
+        }
+        if e.upstream.is_some() && e.adelante == 0 {
+            self.avisar(
+                "El último commit ya está en el remoto (push): deshacerlo reescribiría la historia publicada. Hacé un commit nuevo con la corrección.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let resumen = self
+            .repo
+            .as_ref()
+            .and_then(|r| r.log(1).ok())
+            .and_then(|l| l.into_iter().next())
+            .map(|c| format!("«{}» ({})", c.resumen, c.hash))
+            .unwrap_or_default();
+        self.modal = Some(Modal::Confirmar {
+            titulo: "Deshacer el último commit".into(),
+            mensaje: format!("¿Deshacer el commit {resumen}? Sus cambios quedan en el stage, listos para otro commit. (s/n)"),
+            que: Confirmacion::DeshacerCommit,
+        });
+    }
+
+    fn deshacer_commit(&mut self) {
+        let Some(repo) = self.repo.clone() else {
+            return;
+        };
+        match repo.deshacer_ultimo_commit() {
+            Ok(_) => {
+                self.tel(TelemetryEvent::CommandExec {
+                    command: "git reset --soft HEAD~1".into(),
+                    exit_code: Some(0),
+                });
+                self.avisar(
+                    "Commit deshecho: los cambios quedaron en el stage.",
+                    Nivel::Ok,
+                );
+            }
+            Err(e) => {
+                let m = e.to_string();
+                let m = if m.contains("HEAD~1") || m.contains("unknown revision") {
+                    "Es el primer commit del repositorio: no hay uno anterior al cual volver."
+                        .to_string()
+                } else {
+                    m
+                };
+                self.avisar(m, Nivel::Error);
+            }
+        }
+        self.git.log = None;
+        self.refrescar_git();
     }
 
     fn git_commit(&mut self, mensaje: &str) {
@@ -3696,6 +3759,7 @@ impl App {
                     self.avisar("La traza de mem-trace todavía no está lista (o el proyecto tiene Makefile).", Nivel::Info);
                 }
             }
+            Accion::GitDeshacerCommit => self.pedir_deshacer_commit(),
             Accion::GitStageTodo | Accion::GitUnstageTodo | Accion::GitCommit | Accion::GitLog => {
                 self.git_accion(a)
             }
@@ -4408,6 +4472,7 @@ impl App {
                     KeyCode::Char('u') if !ctrl => self.git_accion(Accion::GitUnstageTodo),
                     KeyCode::Char('c') if !ctrl => self.git_accion(Accion::GitCommit),
                     KeyCode::Char('l') => self.git_accion(Accion::GitLog),
+                    KeyCode::Char('z') => self.pedir_deshacer_commit(),
                     KeyCode::Char('m') if en_log => {
                         let h = self
                             .git
@@ -4834,6 +4899,7 @@ impl App {
                     Confirmacion::Entregar => self.entregar(),
                     Confirmacion::Recuperar => self.recuperar(true),
                     Confirmacion::Borrar => self.borrar_ruta(),
+                    Confirmacion::DeshacerCommit => self.deshacer_commit(),
                     Confirmacion::AbrirClonado => {
                         if let Some(p) = self.proyecto_pendiente.take() {
                             self.cambiar_proyecto(p);

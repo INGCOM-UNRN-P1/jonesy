@@ -66,6 +66,7 @@ pub enum Accion {
     DiffArchivo,
     Herramientas,
     Integraciones,
+    GitDeshacerCommit,
 }
 
 pub struct Info {
@@ -135,6 +136,10 @@ impl Accion {
                 "Comparar con la versión de git (diff lado a lado)",
                 "Alt+Shift+D",
             ),
+            GitDeshacerCommit => (
+                "Git: deshacer el último commit (sus cambios quedan en el stage)",
+                "z",
+            ),
             Herramientas => ("Herramientas del ecosistema para este archivo…", "Alt+H"),
             Integraciones => ("Integraciones: qué herramientas corren y cuándo…", ""),
         };
@@ -186,6 +191,7 @@ impl Accion {
             GitCommit,
             GitLog,
             GitClonar,
+            GitDeshacerCommit,
             Formatear,
             GenerarDoc,
             DiffArchivo,
@@ -283,6 +289,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
                 GitUnstageTodo,
                 GitCommit,
                 GitLog,
+                GitDeshacerCommit,
             ],
         ),
     ];
