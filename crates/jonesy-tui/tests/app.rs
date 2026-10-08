@@ -1282,3 +1282,30 @@ fn aviso_de_documentacion_solo_si_el_proyecto_la_usa() {
     let (a, _rx) = app(dir.path(), false);
     assert_eq!(a.aviso_doc(), Some("sin doc"));
 }
+
+#[test]
+fn exportar_la_traza_de_memoria() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::ExportarMemoria);
+    assert!(a
+        .mensaje
+        .as_ref()
+        .is_some_and(|(m, _, _)| m.contains("Todavía no hay una traza")));
+    let mt = dir.path().join(".jonesy/memtrace");
+    std::fs::create_dir_all(&mt).unwrap();
+    std::fs::write(mt.join("reporte.html"), "<html>traza</html>").unwrap();
+    std::fs::write(
+        mt.join("trace.json"),
+        r#"{"meta": {"source": "/tp/main.c"}, "steps": []}"#,
+    )
+    .unwrap();
+    // Sin entorno gráfico en la prueba: sólo se copia.
+    std::env::remove_var("DISPLAY");
+    std::env::remove_var("WAYLAND_DISPLAY");
+    a.accion(jonesy_tui::accion::Accion::ExportarMemoria);
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("memoria-main.html")).unwrap(),
+        "<html>traza</html>"
+    );
+}

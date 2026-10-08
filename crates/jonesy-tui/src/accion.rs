@@ -67,6 +67,7 @@ pub enum Accion {
     Herramientas,
     Integraciones,
     GitDeshacerCommit,
+    ExportarMemoria,
 }
 
 pub struct Info {
@@ -136,6 +137,10 @@ impl Accion {
                 "Comparar con la versión de git (diff lado a lado)",
                 "Alt+Shift+D",
             ),
+            ExportarMemoria => (
+                "Exportar la traza de memoria (reporte HTML de mem-trace)",
+                "",
+            ),
             GitDeshacerCommit => (
                 "Git: deshacer el último commit (sus cambios quedan en el stage)",
                 "z",
@@ -192,6 +197,7 @@ impl Accion {
             GitLog,
             GitClonar,
             GitDeshacerCommit,
+            ExportarMemoria,
             Formatear,
             GenerarDoc,
             DiffArchivo,
@@ -277,6 +283,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
                 Detener,
                 AlternarBreakpoint,
                 CatScan,
+                ExportarMemoria,
             ],
         ),
         (

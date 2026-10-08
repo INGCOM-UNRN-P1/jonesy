@@ -2140,6 +2140,67 @@ impl App {
         );
     }
 
+    /// Copia el reporte HTML de la última traza de mem-trace al proyecto
+    /// (`memoria-<programa>.html`) y lo abre en el navegador si hay entorno gráfico; si
+    /// no (por SSH), copia la ruta al portapapeles.
+    fn exportar_memoria(&mut self) {
+        let dir = self.proyecto.dir_estado().join("memtrace");
+        let reporte = dir.join("reporte.html");
+        if !reporte.is_file() {
+            self.avisar(
+                "Todavía no hay una traza: depurá con F5 y esperá «cat-scan listo».",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let programa = jonesy_core::catscan::Traza::cargar(&dir.join("trace.json"))
+            .ok()
+            .and_then(|t| {
+                Path::new(&t.meta.source)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+            })
+            .unwrap_or_else(|| "programa".into());
+        let destino = self.proyecto.raiz.join(format!("memoria-{programa}.html"));
+        if let Err(e) = std::fs::copy(&reporte, &destino) {
+            self.avisar(format!("No se pudo exportar: {e}"), Nivel::Error);
+            return;
+        }
+        let rel = self.proyecto.relativa(&destino);
+        let grafico = cfg!(target_os = "macos")
+            || cfg!(windows)
+            || std::env::var_os("DISPLAY").is_some()
+            || std::env::var_os("WAYLAND_DISPLAY").is_some();
+        let abridor = if cfg!(target_os = "macos") {
+            "open"
+        } else if cfg!(windows) {
+            "explorer"
+        } else {
+            "xdg-open"
+        };
+        if grafico && jonesy_core::proyecto::en_path(abridor) {
+            let _ = std::process::Command::new(abridor)
+                .arg(&destino)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn();
+            self.avisar(
+                format!("Traza exportada a {rel} y abierta en el navegador."),
+                Nivel::Ok,
+            );
+        } else {
+            if self.proyecto.config.interfaz.osc52 {
+                sistema::osc52(&destino.to_string_lossy());
+            }
+            self.avisar(
+                format!("Traza exportada a {rel} (ruta copiada al portapapeles)."),
+                Nivel::Ok,
+            );
+        }
+        self.refrescar_git();
+    }
+
     fn detener_depuracion(&mut self) {
         if let Some(mut d) = self.depuracion.take() {
             d.gdb.terminar();
@@ -3788,6 +3849,7 @@ impl App {
                 }
             }
             Accion::GitDeshacerCommit => self.pedir_deshacer_commit(),
+            Accion::ExportarMemoria => self.exportar_memoria(),
             Accion::GitStageTodo | Accion::GitUnstageTodo | Accion::GitCommit | Accion::GitLog => {
                 self.git_accion(a)
             }
