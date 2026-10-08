@@ -12,6 +12,7 @@ Uso:
   jonesy [opciones] [directorio | archivos...]
   jonesy replay <telemetry.log> [--resumen | --json]
   jonesy verificar <telemetry.log>
+  jonesy doctor [--json] [directorio]   herramientas del entorno y del ecosistema
 
 Opciones:
   --exam             modo examen (también JONESY_EXAM_MODE=1)
@@ -103,6 +104,57 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
             }
             jonesy_tui::reproductor::ejecutar(log)?;
             return Ok(ExitCode::SUCCESS);
+        }
+        Some("doctor") => {
+            let raiz = args
+                .iter()
+                .skip(1)
+                .find(|a| !a.starts_with("--"))
+                .map(PathBuf::from)
+                .unwrap_or(std::env::current_dir()?);
+            let proyecto = jonesy_core::Proyecto::abrir(&raiz);
+            let (integraciones, errores) = jonesy_core::integraciones::cargar(
+                &proyecto.dir_estado(),
+                &proyecto.config.integraciones,
+            );
+            let informe = jonesy_core::doctor::informe(
+                env!("CARGO_PKG_VERSION"),
+                jonesy_core::doctor::chequeos(&proyecto.raiz, &integraciones),
+            );
+            if tiene("--json") {
+                println!("{}", serde_json::to_string_pretty(&informe)?);
+            } else {
+                println!("jonesy {} · {}", informe.version, proyecto.raiz.display());
+                for c in &informe.chequeos {
+                    let marca = if c.ok {
+                        "✓"
+                    } else if c.requerido {
+                        "✗"
+                    } else {
+                        "·"
+                    };
+                    println!("{marca} {:<12} {:<45} {}", c.nombre, c.proposito, c.detalle);
+                    if !c.ok && !c.sugerencia.is_empty() {
+                        println!("  {:<12} → {}", "", c.sugerencia);
+                    }
+                }
+                for e in &errores {
+                    println!("✗ integración inválida: {e}");
+                }
+                println!(
+                    "{}",
+                    if informe.ok {
+                        "Todo lo necesario está instalado."
+                    } else {
+                        "Falta algo necesario (✗)."
+                    }
+                );
+            }
+            return Ok(if informe.ok {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            });
         }
         Some("verificar") => {
             let Some(log) = args.get(1) else {

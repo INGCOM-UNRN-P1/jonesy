@@ -7,6 +7,7 @@ pub mod buffer;
 pub mod catscan;
 pub mod diagnostico;
 pub mod diff;
+pub mod doctor;
 pub mod documentacion;
 pub mod entrega;
 pub mod estructura;
