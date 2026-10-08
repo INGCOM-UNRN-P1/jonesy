@@ -1,0 +1,129 @@
+# Integraciones de fábrica con las herramientas del ecosistema de la cátedra.
+#
+# Cada [[integracion]] se activa sola si su `binario` está en el PATH. Un proyecto
+# puede agregar o reemplazar integraciones con archivos TOML en .jonesy/integraciones/
+# (y cada usuario en ~/.config/jonesy/integraciones/), con este mismo formato; una
+# integración con el mismo `nombre` pisa a la de fábrica. Ver docs/integraciones.md.
+#
+# Marcadores en los comandos: {archivo} (ruta relativa a la raíz), {dir} (directorio
+# del archivo), {modulo} (directorio del módulo con Makefile), {codigo} (en `explicar`).
+
+[[integracion]]
+nombre = "ripley"
+descripcion = "Reglas P1, compilación y sanitizers: el tutor de la cátedra"
+binario = "ripley"
+cuando = "guardar"
+archivos = ["*.c"]
+comando = "ripley check {archivo} --format json"
+formato = "ripley"
+explicar = "ripley explain {codigo}"
+lento = true
+
+[[integracion]]
+nombre = "gaff"
+descripcion = "Estilo y arquitectura de la cátedra"
+binario = "gaff"
+cuando = "guardar"
+archivos = ["*.c", "*.h"]
+comando = "gaff check {archivo} --json"
+formato = "hallazgos"
+explicar = "gaff explain {codigo}"
+
+  [[integracion.accion]]
+  titulo = "Corregir el estilo automáticamente (gaff fix)"
+  comando = "gaff fix {archivo}"
+  modo = "recargar"
+
+  [[integracion.accion]]
+  titulo = "Explicar cada sentencia sin azúcar sintáctico (gaff explain-syntax)"
+  comando = "gaff explain-syntax {archivo}"
+  modo = "visor"
+
+[[integracion]]
+nombre = "kaneda"
+descripcion = "Seguridad: desbordes y funciones peligrosas"
+binario = "kaneda"
+cuando = "guardar"
+archivos = ["*.c", "*.h"]
+comando = "kaneda audit {archivo} --json"
+formato = "hallazgos"
+explicar = "kaneda explain {codigo}"
+
+[[integracion]]
+nombre = "spunkmeyer"
+descripcion = "Antipatrones y vicios de diseño"
+binario = "spunkmeyer"
+cuando = "guardar"
+archivos = ["*.c", "*.h"]
+comando = "spunkmeyer detect {archivo} --json"
+formato = "hallazgos"
+explicar = "spunkmeyer explain {codigo}"
+# spunkmeyer marca los hallazgos que gaff ya informa: no se repiten.
+omitir_si = "tambien_en_gaff"
+
+[[integracion]]
+nombre = "corbel"
+descripcion = "Documentación de funciones y tipos"
+binario = "corbel"
+cuando = "guardar"
+archivos = ["*.h"]
+comando = "corbel check {archivo} --json"
+formato = "corbel"
+activa = false
+
+  [[integracion.accion]]
+  titulo = "Generar el esqueleto de documentación (corbel scaffold)"
+  comando = "corbel scaffold {archivo} --in-place"
+  modo = "recargar"
+  archivos = ["*.h", "*.c"]
+
+[[integracion]]
+nombre = "daedalus"
+descripcion = "Compilación con diagnósticos explicados en español"
+binario = "daedalus"
+cuando = "manual"
+archivos = ["*.c"]
+comando = "daedalus compile {archivo} --json"
+formato = "hallazgos"
+
+  [[integracion.accion]]
+  titulo = "Compilar con explicaciones en español (daedalus)"
+  comando = "daedalus compile {archivo} --json"
+  modo = "diagnosticos"
+
+[[integracion]]
+nombre = "tetsuo"
+descripcion = "Sanitizers (ASan, UBSan, LSan) explicados"
+binario = "tetsuo"
+cuando = "manual"
+archivos = ["*.c"]
+
+  [[integracion.accion]]
+  titulo = "Ejecutar con sanitizers (tetsuo run)"
+  comando = "tetsuo run {archivo}"
+  modo = "terminal"
+
+[[integracion]]
+nombre = "motoko"
+descripcion = "Encapsulamiento y opacidad de TDAs"
+binario = "motoko"
+cuando = "manual"
+archivos = ["*.h"]
+
+  [[integracion.accion]]
+  titulo = "Verificar la opacidad del TDA (motoko check)"
+  comando = "motoko check {archivo}"
+  modo = "visor"
+
+[[integracion]]
+nombre = "callahan"
+descripcion = "Verificación formal de contratos ACSL (Frama-C)"
+binario = "callahan"
+cuando = "manual"
+archivos = ["*.c"]
+examen = false
+
+  [[integracion.accion]]
+  titulo = "Verificar los contratos ACSL (callahan verify)"
+  comando = "callahan verify {archivo}"
+  modo = "panel"

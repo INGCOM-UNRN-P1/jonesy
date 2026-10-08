@@ -11,6 +11,7 @@ pub mod documentacion;
 pub mod entrega;
 pub mod estructura;
 pub mod gdb;
+pub mod integraciones;
 pub mod proceso;
 pub mod proyecto;
 pub mod sesion;

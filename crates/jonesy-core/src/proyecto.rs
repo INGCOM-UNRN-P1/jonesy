@@ -20,6 +20,8 @@ pub struct Config {
     pub modulo: Vec<crate::estructura::ModuloConfig>,
     pub formato: Formato,
     pub documentacion: Documentacion,
+    /// Herramientas del ecosistema integradas como plugins.
+    pub integraciones: crate::integraciones::ConfigIntegraciones,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
