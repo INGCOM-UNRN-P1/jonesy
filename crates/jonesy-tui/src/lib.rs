@@ -5,6 +5,7 @@ pub mod app;
 pub mod dibujo;
 pub mod layout;
 pub mod markdown;
+pub mod navegador;
 pub mod paleta;
 pub mod reproductor;
 pub mod resaltado;

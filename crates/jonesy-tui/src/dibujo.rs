@@ -39,7 +39,7 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         } else {
             0
         },
-        izquierdo: false,
+        izquierdo: app.navegador.is_some(),
         tam: app.paneles,
     };
     app.areas = layout::calcular(&pedido);
@@ -47,6 +47,9 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
     let mut cursor: Option<(u16, u16)> = None;
 
     dibujar_menu(f, app, a.menu);
+    if let Some(r) = a.izquierdo {
+        dibujar_navegador(f, app, r);
+    }
     if let Some(r) = a.consigna {
         dibujar_consigna(f, app, r);
     }
@@ -197,6 +200,308 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             );
             app.zonas.botones.push((zb, a));
         }
+    }
+}
+
+// ------------------------------------------------------------------ barra izquierda
+
+fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
+    use crate::navegador::{FilaProyecto, PestanaNav};
+    use jonesy_core::estructura::TipoModulo;
+    let foco = app.foco == Foco::Navegador && app.modal.is_none();
+    let b = bloque_app(app, "", foco);
+    let i = b.inner(r);
+    f.render_widget(b, r);
+    if i.height < 3 {
+        return;
+    }
+    // Pestañas sobre el borde superior.
+    let mut x = r.x + 1;
+    for p in [PestanaNav::Archivos, PestanaNav::Proyecto] {
+        let t = match p {
+            PestanaNav::Archivos => " Archivos ",
+            PestanaNav::Proyecto => " Proyecto ",
+        };
+        let w = t.chars().count() as u16;
+        if x + w > r.x + r.width {
+            break;
+        }
+        let estilo = if app.navegador == Some(p) {
+            Style::default()
+                .fg(if foco { Color::Black } else { Color::White })
+                .bg(if foco {
+                    tema::ACENTO
+                } else {
+                    tema::FONDO_SELECCION
+                })
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(tema::ATENUADO)
+        };
+        let zona = Rect::new(x, r.y, w, 1);
+        f.render_widget(Paragraph::new(t).style(estilo), zona);
+        app.zonas.pestanas_nav.push((zona, p));
+        x += w + 1;
+    }
+    let ascii = app.sim.ascii;
+    let (pleg, despl) = if ascii { ("+", "-") } else { ("▸", "▾") };
+    match app.navegador {
+        Some(PestanaNav::Archivos) => {
+            if app.explorador.filas.is_empty() {
+                app.explorador.reconstruir(&app.proyecto.raiz);
+            }
+            let pie = 1u16;
+            let lista = Rect {
+                height: i.height.saturating_sub(pie),
+                ..i
+            };
+            let alto = lista.height as usize;
+            let e = &app.explorador;
+            let base = e.sel.saturating_sub(alto.saturating_sub(1));
+            app.zonas.lista_nav = Some((lista, base));
+            let marcas = crate::navegador::marcas_git(
+                app.git_estado.as_ref(),
+                app.repo
+                    .as_ref()
+                    .map(|r| r.dir.as_path())
+                    .unwrap_or(&app.proyecto.raiz),
+            );
+            let activo = app.buf().buf.ruta.clone();
+            let lineas: Vec<Line> = e
+                .filas
+                .iter()
+                .enumerate()
+                .skip(base)
+                .take(alto)
+                .map(|(n, fila)| {
+                    let sel = n == e.sel;
+                    let fondo = if sel && foco {
+                        tema::FONDO_SELECCION
+                    } else {
+                        Color::Reset
+                    };
+                    let icono = if fila.es_dir {
+                        if e.expandidos.contains(&fila.ruta) {
+                            despl
+                        } else {
+                            pleg
+                        }
+                    } else {
+                        " "
+                    };
+                    let es_activo = activo.as_deref() == Some(fila.ruta.as_path());
+                    let mut estilo = Style::default().bg(fondo);
+                    if fila.es_dir {
+                        estilo = estilo.fg(tema::ACENTO);
+                    }
+                    if es_activo {
+                        estilo = estilo.add_modifier(Modifier::BOLD).fg(Color::White);
+                    }
+                    let marca = marcas.get(&fila.ruta).copied();
+                    let color_marca = match marca {
+                        Some('?') => tema::OK,
+                        Some('M') | Some('•') => tema::ADVERTENCIA,
+                        Some('D') | Some('!') => tema::ERROR,
+                        _ => tema::NOTA,
+                    };
+                    let nombre = format!(
+                        "{}{} {}{}",
+                        "  ".repeat(fila.nivel),
+                        icono,
+                        fila.nombre,
+                        if fila.es_dir { "/" } else { "" }
+                    );
+                    let ancho = lista.width as usize;
+                    let nombre: String = nombre.chars().take(ancho.saturating_sub(2)).collect();
+                    let relleno = ancho.saturating_sub(UnicodeWidthStr::width(nombre.as_str()) + 2);
+                    Line::from(vec![
+                        Span::styled(nombre, estilo),
+                        Span::styled(" ".repeat(relleno), Style::default().bg(fondo)),
+                        Span::styled(
+                            marca
+                                .map(|c| format!("{c} "))
+                                .unwrap_or_else(|| "  ".into()),
+                            Style::default().fg(color_marca).bg(fondo),
+                        ),
+                    ])
+                })
+                .collect();
+            f.render_widget(Paragraph::new(lineas), lista);
+            f.buffer_mut().set_string(
+                i.x,
+                i.y + i.height - 1,
+                "n archivo · m carpeta · r refrescar · Tab proyecto",
+                Style::default().fg(tema::ATENUADO),
+            );
+        }
+        Some(PestanaNav::Proyecto) => {
+            let est = app.proyecto.estructura.clone();
+            if est.vacia() {
+                f.render_widget(
+                    Paragraph::new("No encontré Makefiles ni tp.sh en el proyecto. F6 compila el archivo activo con gcc.")
+                        .style(Style::default().fg(tema::ATENUADO))
+                        .wrap(Wrap { trim: true }),
+                    i,
+                );
+                return;
+            }
+            let filas = app.vista_proyecto.filas(&est);
+            let v = &mut app.vista_proyecto;
+            v.sel = v.sel.min(filas.len().saturating_sub(1));
+            // Pie con la descripción completa de la fila elegida.
+            let descripcion = match filas.get(v.sel) {
+                Some(FilaProyecto::Objetivo(m, o)) => {
+                    let md = &est.modulos[*m];
+                    format!(
+                        "{} — {}",
+                        md.comando(&md.objetivos[*o].nombre),
+                        md.objetivos[*o].descripcion
+                    )
+                }
+                Some(FilaProyecto::Modulo(m)) => {
+                    let md = &est.modulos[*m];
+                    let mut d = if md.rel.is_empty() {
+                        "Makefile de la raíz".to_string()
+                    } else {
+                        md.rel.clone()
+                    };
+                    if let Some(p) = &md.programa {
+                        d.push_str(&format!(" · programa: {p}"));
+                    }
+                    if !md.dependencias.is_empty() {
+                        d.push_str(&format!(" · usa: {}", md.dependencias.join(", ")));
+                    }
+                    if let Some(r) = &md.repositorio {
+                        d.push_str(&format!(" · {r}"));
+                    }
+                    d
+                }
+                Some(FilaProyecto::ComandoTp(c)) => format!(
+                    "./tp.sh {} — {}",
+                    est.tp_sh[*c].uso, est.tp_sh[*c].descripcion
+                ),
+                Some(FilaProyecto::TpSh) => "Gestor del TP: bibliotecas y ejercicios".into(),
+                _ => String::new(),
+            };
+            let pie = 3u16.min(i.height.saturating_sub(1));
+            let lista = Rect {
+                height: i.height - pie,
+                ..i
+            };
+            let alto = lista.height as usize;
+            let base = v.sel.saturating_sub(alto.saturating_sub(1));
+            app.zonas.lista_nav = Some((lista, base));
+            let v = &app.vista_proyecto;
+            let ancho = lista.width as usize;
+            let lineas: Vec<Line> = filas
+                .iter()
+                .enumerate()
+                .skip(base)
+                .take(alto)
+                .map(|(n, fila)| {
+                    let fondo = if n == v.sel && foco {
+                        tema::FONDO_SELECCION
+                    } else {
+                        Color::Reset
+                    };
+                    let st = Style::default().bg(fondo);
+                    let spans: Vec<Span> = match fila {
+                        FilaProyecto::Grupo(t) => vec![Span::styled(
+                            t.titulo().to_uppercase(),
+                            st.fg(tema::ATENUADO).add_modifier(Modifier::BOLD),
+                        )],
+                        FilaProyecto::Modulo(m) => {
+                            let md = &est.modulos[*m];
+                            let icono = if v.desplegados.contains(&md.rel) {
+                                despl
+                            } else {
+                                pleg
+                            };
+                            let nombre = if md.tipo == TipoModulo::Raiz {
+                                "Makefile".to_string()
+                            } else {
+                                md.nombre.clone()
+                            };
+                            let extra = md
+                                .version
+                                .as_ref()
+                                .map(|v| format!(" {v}"))
+                                .unwrap_or_default();
+                            vec![
+                                Span::styled(
+                                    format!("{icono} {nombre}"),
+                                    st.fg(tema::ACENTO).add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(extra, st.fg(tema::ATENUADO)),
+                            ]
+                        }
+                        FilaProyecto::Objetivo(m, o) => {
+                            let obj = &est.modulos[*m].objetivos[*o];
+                            vec![
+                                Span::styled(
+                                    format!("   {} ", if ascii { ">" } else { "▶" }),
+                                    st.fg(tema::OK),
+                                ),
+                                Span::styled(
+                                    format!("{:<9}", obj.nombre),
+                                    st.add_modifier(Modifier::BOLD),
+                                ),
+                                Span::styled(obj.descripcion.clone(), st.fg(tema::ATENUADO)),
+                            ]
+                        }
+                        FilaProyecto::TpSh => {
+                            let icono = if v.tp_desplegado { despl } else { pleg };
+                            vec![Span::styled(
+                                format!("{icono} tp.sh"),
+                                st.fg(tema::ESTILO).add_modifier(Modifier::BOLD),
+                            )]
+                        }
+                        FilaProyecto::ComandoTp(c) => {
+                            let cmd = &est.tp_sh[*c];
+                            vec![
+                                Span::styled(
+                                    format!("   {} ", if ascii { ">" } else { "▶" }),
+                                    st.fg(tema::ESTILO),
+                                ),
+                                Span::styled(cmd.uso.clone(), st),
+                            ]
+                        }
+                    };
+                    // Recorta al ancho y rellena el fondo de la selección.
+                    let mut usado = 0;
+                    let mut recortados = vec![];
+                    for sp in spans {
+                        let resto = ancho.saturating_sub(usado);
+                        if resto == 0 {
+                            break;
+                        }
+                        let t: String = sp.content.chars().take(resto).collect();
+                        usado += UnicodeWidthStr::width(t.as_str());
+                        recortados.push(Span::styled(t, sp.style));
+                    }
+                    recortados.push(Span::styled(" ".repeat(ancho.saturating_sub(usado)), st));
+                    Line::from(recortados)
+                })
+                .collect();
+            f.render_widget(Paragraph::new(lineas), lista);
+            let zona_pie = Rect {
+                y: lista.y + lista.height,
+                height: pie,
+                ..i
+            };
+            f.render_widget(
+                Paragraph::new(vec![
+                    Line::styled(descripcion, Style::default().fg(tema::NOTA)),
+                    Line::styled(
+                        "Enter corre · →← despliega · r relee",
+                        Style::default().fg(tema::ATENUADO),
+                    ),
+                ])
+                .wrap(Wrap { trim: true }),
+                zona_pie,
+            );
+        }
+        None => {}
     }
 }
 
@@ -1489,6 +1794,13 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         format!("Ln {}, Col {} ", l + 1, c + 1),
         fondo.fg(tema::ATENUADO),
     ));
+    // Módulo (biblioteca o ejercicio) del archivo activo: ahí actúan F6, Ctrl+F5 y F5.
+    if let Some(m) = app.proyecto.modulo_activo(app.buf().buf.ruta.as_deref()) {
+        izq.push(Span::styled(
+            format!("[{}] ", m.nombre),
+            fondo.fg(tema::ACENTO),
+        ));
+    }
     let tareas = app.tareas_en_curso();
     if !tareas.is_empty() {
         izq.push(Span::styled(
@@ -1611,6 +1923,53 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 " Abrir archivo (Tab marca varios) "
             };
             lista_modal(f, app, area, titulo, &filtro, &items, sel)
+        }
+        Modal::Argumentos {
+            titulo,
+            texto,
+            comando,
+        } => {
+            let r = centrado(area, 76, 6);
+            f.render_widget(Clear, r);
+            let b = bloque(
+                format!(" {comando} · Enter corre en la terminal · Esc cancela "),
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(
+                Paragraph::new(titulo.clone())
+                    .style(Style::default().fg(tema::ATENUADO))
+                    .wrap(Wrap { trim: true }),
+                Rect { height: 2, ..i },
+            );
+            let y = i.y + i.height.saturating_sub(1);
+            let linea = format!("> {texto}");
+            f.buffer_mut()
+                .set_string(i.x, y, &linea, Style::default().fg(tema::ACENTO));
+            Some((
+                i.x + (UnicodeWidthStr::width(linea.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                y,
+            ))
+        }
+        Modal::NuevoArchivo { texto, carpeta } => {
+            let titulo = if *carpeta {
+                " Nueva carpeta (ruta relativa al proyecto) "
+            } else {
+                " Nuevo archivo (ruta relativa al proyecto) "
+            };
+            let r = centrado(area, 64, 3);
+            f.render_widget(Clear, r);
+            let b = bloque(titulo, true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(Paragraph::new(texto.clone()), i);
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
         }
         Modal::Buscar { texto } | Modal::IrALinea { texto } => {
             let titulo = if matches!(modal, Modal::Buscar { .. }) {

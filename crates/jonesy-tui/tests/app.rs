@@ -424,3 +424,63 @@ fn paneles_se_redimensionan_con_mouse_y_opciones() {
     let (b, _rx) = app(dir.path(), false);
     assert_eq!(b.paneles, a.paneles);
 }
+
+#[test]
+fn navegador_de_archivos_y_proyecto_con_objetivos() {
+    let dir = proyecto(&[
+        ("Makefile", "# Compila todo\nall:\n\t@$(MAKE) -C ejercicios/ej1\n"),
+        (
+            "ejercicios/ej1/Makefile",
+            "PROG_TARGET = programa\n# Compilar el programa\nall:\n\t@echo compilando ej1\n# Corre las pruebas del ejercicio\ntest:\n\t@echo pruebas ok\n",
+        ),
+        ("ejercicios/ej1/main.c", MAIN),
+        ("tp.sh", "echo -e \"  ${VERDE}add-ex <nombre> [libs]${NC}    Agrega un ejercicio.\"\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    // Alt+E: el árbol revela el archivo activo.
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/main.c"), true);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    assert_eq!(a.foco, Foco::Navegador);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Archivos") && p.contains("ej1/") && p.contains("main.c"),
+        "{p}"
+    );
+    assert_eq!(a.explorador.seleccionada().unwrap().nombre, "main.c");
+    // n crea un archivo en la carpeta seleccionada y lo abre.
+    tecla(&mut a, KeyCode::Char('n'), KeyModifiers::NONE);
+    escribir(&mut a, "lista.h");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(dir.path().join("ejercicios/ej1/lista.h").is_file());
+    assert_eq!(a.buf().buf.nombre(), "lista.h");
+    // Tab pasa a Proyecto: el módulo del archivo activo está desplegado con sus objetivos.
+    tecla(&mut a, KeyCode::Char('y'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("EJERCICIOS") && p.contains("▶ test"), "{p}");
+    assert!(p.contains("tp.sh"), "{p}");
+    // Bajar hasta «test» y correrlo con Enter: la salida va al panel.
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.salida.iter().any(|(l, _)| l.contains("terminó bien"))
+    });
+    assert!(a
+        .salida
+        .iter()
+        .any(|(l, _)| l.contains("make -C ejercicios/ej1 test")));
+    assert!(a.salida.iter().any(|(l, _)| l == "pruebas ok"));
+    // La paleta lista los objetivos de make.
+    tecla(&mut a, KeyCode::Char('k'), KeyModifiers::CONTROL);
+    escribir(&mut a, "make ej1 test");
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("make: ej1 › test"), "{p}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // La barra queda en la sesión.
+    a.guardar_sesion();
+    let (b, _rx) = app(dir.path(), false);
+    assert_eq!(
+        b.navegador,
+        Some(jonesy_tui::navegador::PestanaNav::Proyecto)
+    );
+}

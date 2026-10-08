@@ -33,6 +33,7 @@ use ratatui::text::Line;
 use crate::accion::{self, Accion};
 use crate::layout::{Areas, Modo, Vista};
 use crate::markdown::{self, Documento};
+use crate::navegador::{Explorador, FilaProyecto, PestanaNav, VistaProyecto};
 use crate::paleta;
 use crate::resaltado;
 use crate::sistema::{self, Aviso};
@@ -60,6 +61,7 @@ pub enum Foco {
     Inferior,
     Lateral,
     Doc,
+    Navegador,
 }
 
 impl Foco {
@@ -70,6 +72,7 @@ impl Foco {
             Foco::Inferior => "inferior",
             Foco::Lateral => "lateral",
             Foco::Doc => "quickdoc",
+            Foco::Navegador => "navegador",
         }
     }
 }
@@ -115,6 +118,10 @@ pub enum Lateral {
 pub enum QuePaleta {
     Accion(Accion),
     Plugin(ComandoPlugin),
+    /// Objetivo de make: (índice del módulo, objetivo).
+    Objetivo(usize, String),
+    /// Comando de tp.sh por índice.
+    Tp(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -167,6 +174,17 @@ pub enum Modal {
         indice: usize,
         sel: usize,
     },
+    /// Argumentos para un comando (tp.sh add-lib …) que corre en el deck.
+    Argumentos {
+        titulo: String,
+        comando: String,
+        texto: String,
+    },
+    /// Nombre del archivo (o carpeta) nuevo, relativo a la raíz.
+    NuevoArchivo {
+        texto: String,
+        carpeta: bool,
+    },
     /// Ver → Tamaños de paneles: fila elegida.
     Paneles {
         sel: usize,
@@ -190,11 +208,23 @@ pub enum Luego {
 
 #[derive(Debug, Clone)]
 enum Tarea {
-    Compilar { luego: Luego },
-    Ripley { archivo: PathBuf },
+    Compilar {
+        luego: Luego,
+    },
+    Ripley {
+        archivo: PathBuf,
+    },
     Verificar,
-    Explicar { codigo: String },
-    MemTrace { traza: PathBuf },
+    Explicar {
+        codigo: String,
+    },
+    MemTrace {
+        traza: PathBuf,
+    },
+    /// Objetivo de make lanzado desde la vista de proyecto o la paleta.
+    Objetivo {
+        comando: String,
+    },
 }
 
 pub struct BufferAbierto {
@@ -261,6 +291,10 @@ pub struct Zonas {
     pub menu: Vec<(Rect, usize)>,
     pub botones: Vec<(Rect, Accion)>,
     pub pestanas_buffers: Vec<(Rect, usize)>,
+    /// Pestañas Archivos / Proyecto de la barra izquierda.
+    pub pestanas_nav: Vec<(Rect, PestanaNav)>,
+    /// Lista de la barra izquierda: (área, primera fila visible).
+    pub lista_nav: Option<(Rect, usize)>,
     /// Botón × de cada pestaña.
     pub cierres_buffers: Vec<(Rect, usize)>,
     /// Flechas ‹ › de desborde de la barra de pestañas (desplazamiento −1 / +1).
@@ -294,6 +328,12 @@ pub struct App {
     pub panel_inferior: bool,
     /// Tamaños de los paneles (mouse, Ver → Tamaños de paneles, `.jonesy.toml`).
     pub paneles: TamPaneles,
+    /// Barra izquierda visible y su pestaña.
+    pub navegador: Option<PestanaNav>,
+    pub explorador: Explorador,
+    pub vista_proyecto: VistaProyecto,
+    /// Releer la estructura cuando termine el comando del deck (tp.sh add-lib …).
+    refrescar_estructura: bool,
     pub lateral: Option<Lateral>,
     pub quickdoc_visible: bool,
     pub quickdoc_posicion: PosicionDoc,
@@ -432,6 +472,10 @@ impl App {
             pestana: Pestana::Problemas,
             panel_inferior: false,
             paneles: proyecto.config.interfaz.paneles.acotar(),
+            navegador: None,
+            explorador: Explorador::default(),
+            vista_proyecto: VistaProyecto::default(),
+            refrescar_estructura: false,
             lateral: None,
             quickdoc_visible: true,
             quickdoc_posicion: proyecto.config.interfaz.quickdoc,
@@ -533,6 +577,12 @@ impl App {
             if let Some(p) = s.paneles {
                 self.paneles = p.acotar();
             }
+            self.navegador = s.izquierdo.as_deref().and_then(PestanaNav::de_nombre);
+            for rel in &s.expandidos {
+                self.explorador
+                    .expandidos
+                    .insert(self.proyecto.raiz.join(rel));
+            }
             self.preview_markdown = s.preview_markdown;
             for (rel, linea) in s.breakpoints {
                 self.breakpoints
@@ -612,8 +662,13 @@ impl App {
                 .map(|(p, l)| (self.proyecto.relativa(p), *l))
                 .collect(),
             paneles: Some(self.paneles),
-            izquierdo: None,
-            expandidos: vec![],
+            izquierdo: self.navegador.map(|p| p.nombre().to_string()),
+            expandidos: self
+                .explorador
+                .expandidos
+                .iter()
+                .map(|p| self.proyecto.relativa(p))
+                .collect(),
         };
         let _ = s.guardar(&dir);
     }
@@ -886,6 +941,7 @@ impl App {
                 Tarea::Verificar => "verificando",
                 Tarea::Explicar { .. } => "ripley explain",
                 Tarea::MemTrace { .. } => "mem-trace",
+                Tarea::Objetivo { .. } => "make",
             })
             .collect();
         v.sort();
@@ -1154,6 +1210,12 @@ impl App {
             );
             return;
         };
+        self.correr_en_deck(cmd);
+    }
+
+    /// Corre un comando de shell en la pestaña Ejecución (con E/S interactiva) y deja la
+    /// salida visible al terminar.
+    pub fn correr_en_deck(&mut self, cmd: String) {
         self.guardar_todo();
         let envoltorio = format!("{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n");
         let (filas, cols) = self.tam_panel_inferior();
@@ -1722,7 +1784,7 @@ impl App {
             Salida::Linea { id, texto, error } => {
                 if matches!(
                     self.procesos.get(&id),
-                    Some(Tarea::Compilar { .. } | Tarea::Verificar)
+                    Some(Tarea::Compilar { .. } | Tarea::Verificar | Tarea::Objetivo { .. })
                 ) {
                     self.salida.push((texto, error));
                 }
@@ -1840,6 +1902,31 @@ impl App {
                     desplazamiento: 0,
                 });
             }
+            Tarea::Objetivo { comando } => {
+                self.tel(TelemetryEvent::CommandExec {
+                    command: comando.clone(),
+                    exit_code: codigo,
+                });
+                self.diag_compilador = diagnostico::parsear_gcc(&salida, &self.proyecto.raiz);
+                if codigo == Some(0) {
+                    self.salida
+                        .push((format!("[«{comando}» terminó bien]"), false));
+                    self.avisar(format!("«{comando}» terminó bien."), Nivel::Ok);
+                } else {
+                    let c = codigo.map(|c| c.to_string()).unwrap_or_else(|| "?".into());
+                    self.salida
+                        .push((format!("[«{comando}» falló: código {c}]"), true));
+                    self.avisar(format!("«{comando}» falló (código {c})."), Nivel::Error);
+                    if self
+                        .diag_compilador
+                        .iter()
+                        .any(|d| d.severidad == Severidad::Error)
+                    {
+                        self.pestana = Pestana::Problemas;
+                        self.sel_problema = 0;
+                    }
+                }
+            }
             Tarea::MemTrace { traza } => {
                 if codigo == Some(0) {
                     if let (Some(d), Ok(t)) = (&mut self.depuracion, Traza::cargar(&traza)) {
@@ -1935,6 +2022,302 @@ impl App {
         grupos.into_iter().collect()
     }
 
+    // ------------------------------------------------------------ barra izquierda
+
+    /// Muestra la barra izquierda en la pestaña `p`, o la oculta si ya estaba en ella con foco.
+    pub fn alternar_navegador(&mut self, p: PestanaNav) {
+        if self.navegador == Some(p) && self.foco == Foco::Navegador {
+            self.navegador = None;
+            self.cambiar_foco(Foco::Editor);
+            if self.vista == Vista::Navegador {
+                self.vista = Vista::Codigo;
+            }
+            return;
+        }
+        self.navegador = Some(p);
+        self.cambiar_foco(Foco::Navegador);
+        if self.modo() == Modo::Compacto {
+            self.vista = Vista::Navegador;
+        }
+        let activo = self.activo_ruta();
+        match p {
+            PestanaNav::Archivos => match &activo {
+                Some(r) => self.explorador.revelar(r, &self.proyecto.raiz),
+                None => self.explorador.reconstruir(&self.proyecto.raiz),
+            },
+            PestanaNav::Proyecto => {
+                if let Some(r) = &activo {
+                    self.vista_proyecto.revelar(&self.proyecto.estructura, r);
+                }
+            }
+        }
+    }
+
+    /// Vuelve a leer Makefiles, library.json y tp.sh (y el árbol de archivos).
+    pub fn refrescar_estructura(&mut self) {
+        self.proyecto.estructura = jonesy_core::estructura::Estructura::descubrir(
+            &self.proyecto.raiz,
+            &self.proyecto.config.modulo,
+        );
+        self.explorador.reconstruir(&self.proyecto.raiz);
+    }
+
+    /// Corre un objetivo de make: los interactivos (run) en el deck, el resto con la
+    /// salida en el panel y los errores de gcc en Problemas.
+    pub fn correr_objetivo(&mut self, modulo: usize, objetivo: &str) {
+        let Some(m) = self.proyecto.estructura.modulos.get(modulo).cloned() else {
+            return;
+        };
+        let comando = m.comando(objetivo);
+        let interactivo = m
+            .objetivos
+            .iter()
+            .find(|o| o.nombre == objetivo)
+            .is_some_and(|o| o.interactivo());
+        if interactivo {
+            self.correr_en_deck(comando);
+            return;
+        }
+        if self
+            .procesos
+            .values()
+            .any(|t| matches!(t, Tarea::Objetivo { .. } | Tarea::Compilar { .. }))
+        {
+            self.avisar("Ya hay un make en curso.", Nivel::Aviso);
+            return;
+        }
+        self.guardar_todo();
+        self.salida = vec![(format!("$ {comando}"), false)];
+        self.titulo_salida = comando.clone();
+        self.salida_desplazamiento = 0;
+        self.panel_inferior = true;
+        self.pestana = Pestana::Salida;
+        self.avisar(format!("Corriendo {comando}"), Nivel::Info);
+        self.lanzar(
+            &comando,
+            Tarea::Objetivo {
+                comando: comando.clone(),
+            },
+        );
+    }
+
+    /// Comando de tp.sh: si pide argumentos se preguntan antes; corre en el deck.
+    pub fn correr_tp(&mut self, i: usize) {
+        let Some(c) = self.proyecto.estructura.tp_sh.get(i).cloned() else {
+            return;
+        };
+        let base = format!("./tp.sh {}", c.comando);
+        if c.pide_argumentos() {
+            self.modal = Some(Modal::Argumentos {
+                titulo: format!("tp.sh {} — {}", c.uso, c.descripcion),
+                comando: base,
+                texto: String::new(),
+            });
+        } else {
+            self.refrescar_estructura = true;
+            self.correr_en_deck(base);
+        }
+    }
+
+    /// Crea un archivo vacío (o una carpeta) y lo abre.
+    fn crear_archivo(&mut self, rel: &str, carpeta: bool) {
+        let rel = rel.trim().trim_start_matches('/');
+        if rel.is_empty() {
+            return;
+        }
+        let ruta = self.proyecto.raiz.join(rel);
+        if !ruta.starts_with(&self.proyecto.raiz) || rel.split('/').any(|c| c == "..") {
+            self.avisar(
+                "La ruta tiene que quedar dentro del proyecto.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        if ruta.exists() {
+            if !carpeta && ruta.is_file() {
+                self.abrir_archivo(&ruta, true);
+            } else {
+                self.avisar(format!("Ya existe {rel}."), Nivel::Aviso);
+            }
+            return;
+        }
+        let creado = if carpeta {
+            std::fs::create_dir_all(&ruta)
+        } else {
+            ruta.parent()
+                .map(std::fs::create_dir_all)
+                .unwrap_or(Ok(()))
+                .and_then(|_| std::fs::write(&ruta, ""))
+        };
+        if let Err(e) = creado {
+            self.avisar(format!("No se pudo crear {rel}: {e}"), Nivel::Error);
+            return;
+        }
+        if carpeta {
+            self.explorador.expandidos.insert(ruta.clone());
+            self.explorador.revelar(&ruta, &self.proyecto.raiz);
+            self.avisar(format!("Carpeta {rel} creada."), Nivel::Ok);
+        } else {
+            self.abrir_archivo(&ruta, true);
+            self.explorador.revelar(&ruta, &self.proyecto.raiz);
+            self.avisar(format!("Archivo {rel} creado."), Nivel::Ok);
+        }
+        self.refrescar_git();
+    }
+
+    /// Pide el nombre de un archivo o carpeta nueva, partiendo de `dir`.
+    fn pedir_nuevo(&mut self, dir: &Path, carpeta: bool) {
+        let mut texto = self.proyecto.relativa(dir);
+        if !texto.is_empty() && !texto.ends_with('/') {
+            texto.push('/');
+        }
+        self.modal = Some(Modal::NuevoArchivo { texto, carpeta });
+    }
+
+    fn tecla_navegador(&mut self, k: KeyEvent) {
+        match k.code {
+            KeyCode::Esc => {
+                self.cambiar_foco(Foco::Editor);
+                if self.vista == Vista::Navegador {
+                    self.vista = Vista::Codigo;
+                }
+                return;
+            }
+            KeyCode::Tab | KeyCode::BackTab => {
+                let otra = match self.navegador {
+                    Some(PestanaNav::Archivos) => PestanaNav::Proyecto,
+                    _ => PestanaNav::Archivos,
+                };
+                self.navegador = Some(otra);
+                if otra == PestanaNav::Archivos && self.explorador.filas.is_empty() {
+                    self.explorador.reconstruir(&self.proyecto.raiz);
+                }
+                return;
+            }
+            _ => {}
+        }
+        let alto = self
+            .zonas
+            .lista_nav
+            .map(|(r, _)| r.height as usize)
+            .unwrap_or(10)
+            .max(1);
+        match self.navegador {
+            Some(PestanaNav::Archivos) => {
+                let raiz = self.proyecto.raiz.clone();
+                let e = &mut self.explorador;
+                let n = e.filas.len();
+                match k.code {
+                    KeyCode::Up => e.sel = e.sel.saturating_sub(1),
+                    KeyCode::Down => e.sel = (e.sel + 1).min(n.saturating_sub(1)),
+                    KeyCode::PageUp => e.sel = e.sel.saturating_sub(alto),
+                    KeyCode::PageDown => e.sel = (e.sel + alto).min(n.saturating_sub(1)),
+                    KeyCode::Home => e.sel = 0,
+                    KeyCode::End => e.sel = n.saturating_sub(1),
+                    KeyCode::Left => match e.seleccionada() {
+                        Some(f) if f.es_dir && e.expandidos.contains(&f.ruta) => {
+                            e.alternar(e.sel, &raiz)
+                        }
+                        _ => {
+                            if let Some(p) = e.padre(e.sel) {
+                                e.sel = p;
+                            }
+                        }
+                    },
+                    KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => {
+                        match e.seleccionada().cloned() {
+                            Some(f) if f.es_dir => {
+                                if k.code != KeyCode::Right || !e.expandidos.contains(&f.ruta) {
+                                    e.alternar(e.sel, &raiz);
+                                }
+                            }
+                            Some(f) if k.code != KeyCode::Right => {
+                                self.abrir_archivo(&f.ruta, true);
+                                if self.modo() == Modo::Compacto {
+                                    self.vista = Vista::Codigo;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    KeyCode::Char('n') => {
+                        let d = e.directorio_destino(&raiz);
+                        self.pedir_nuevo(&d, false);
+                    }
+                    KeyCode::Char('m') => {
+                        let d = e.directorio_destino(&raiz);
+                        self.pedir_nuevo(&d, true);
+                    }
+                    KeyCode::Char('r') => {
+                        self.refrescar_estructura();
+                        self.refrescar_git();
+                    }
+                    _ => {}
+                }
+            }
+            Some(PestanaNav::Proyecto) => {
+                let filas = self.vista_proyecto.filas(&self.proyecto.estructura);
+                let n = filas.len();
+                let v = &mut self.vista_proyecto;
+                v.sel = v.sel.min(n.saturating_sub(1));
+                match k.code {
+                    KeyCode::Up => v.sel = v.sel.saturating_sub(1),
+                    KeyCode::Down => v.sel = (v.sel + 1).min(n.saturating_sub(1)),
+                    KeyCode::PageUp => v.sel = v.sel.saturating_sub(alto),
+                    KeyCode::PageDown => v.sel = (v.sel + alto).min(n.saturating_sub(1)),
+                    KeyCode::Home => v.sel = 0,
+                    KeyCode::End => v.sel = n.saturating_sub(1),
+                    KeyCode::Char('r') => self.refrescar_estructura(),
+                    KeyCode::Left => match filas.get(v.sel) {
+                        Some(FilaProyecto::Objetivo(m, _)) => {
+                            let m = *m;
+                            if let Some(i) =
+                                filas.iter().position(|f| *f == FilaProyecto::Modulo(m))
+                            {
+                                v.sel = i;
+                            }
+                        }
+                        Some(f @ (FilaProyecto::Modulo(_) | FilaProyecto::TpSh)) => {
+                            let abierto = match f {
+                                FilaProyecto::Modulo(i) => v
+                                    .desplegados
+                                    .contains(&self.proyecto.estructura.modulos[*i].rel),
+                                _ => v.tp_desplegado,
+                            };
+                            if abierto {
+                                v.alternar(f, &self.proyecto.estructura);
+                            }
+                        }
+                        _ => {}
+                    },
+                    KeyCode::Right | KeyCode::Enter | KeyCode::Char(' ') => {
+                        let fila = filas.get(v.sel).cloned();
+                        self.activar_fila_proyecto(fila, k.code != KeyCode::Right);
+                    }
+                    _ => {}
+                }
+            }
+            None => self.cambiar_foco(Foco::Editor),
+        }
+    }
+
+    /// Enter sobre una fila de la vista de proyecto: despliega módulos y corre objetivos.
+    fn activar_fila_proyecto(&mut self, fila: Option<FilaProyecto>, ejecutar: bool) {
+        match fila {
+            Some(f @ (FilaProyecto::Modulo(_) | FilaProyecto::TpSh)) => {
+                self.vista_proyecto.alternar(&f, &self.proyecto.estructura)
+            }
+            Some(FilaProyecto::Objetivo(m, o)) if ejecutar => {
+                let nombre = self.proyecto.estructura.modulos[m].objetivos[o]
+                    .nombre
+                    .clone();
+                self.correr_objetivo(m, &nombre);
+            }
+            Some(FilaProyecto::ComandoTp(i)) if ejecutar => self.correr_tp(i),
+            _ => {}
+        }
+    }
+
     // ------------------------------------------------------------ paleta y modales
 
     fn abrir_paleta(&mut self) {
@@ -1955,6 +2338,27 @@ impl App {
                 titulo: c.titulo(),
                 atajo: "plugin".into(),
                 que: QuePaleta::Plugin(c.clone()),
+            });
+        }
+        for (i, m) in self.proyecto.estructura.modulos.iter().enumerate() {
+            let nombre = if m.rel.is_empty() {
+                "proyecto".to_string()
+            } else {
+                m.nombre.clone()
+            };
+            for o in &m.objetivos {
+                opciones.push(OpcionPaleta {
+                    titulo: format!("make: {nombre} › {} — {}", o.nombre, o.descripcion),
+                    atajo: m.comando(&o.nombre),
+                    que: QuePaleta::Objetivo(i, o.nombre.clone()),
+                });
+            }
+        }
+        for (i, c) in self.proyecto.estructura.tp_sh.iter().enumerate() {
+            opciones.push(OpcionPaleta {
+                titulo: format!("tp.sh: {} — {}", c.uso, c.descripcion),
+                atajo: "tp.sh".into(),
+                que: QuePaleta::Tp(i),
             });
         }
         if self.comandos_plugins.is_empty() {
@@ -2178,6 +2582,20 @@ impl App {
             }
             Accion::Paleta => self.abrir_paleta(),
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
+            Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
+            Accion::EstructuraProyecto => self.alternar_navegador(PestanaNav::Proyecto),
+            Accion::NuevoArchivo => {
+                let dir = if self.foco == Foco::Navegador
+                    && self.navegador == Some(PestanaNav::Archivos)
+                {
+                    self.explorador.directorio_destino(&self.proyecto.raiz)
+                } else {
+                    self.activo_ruta()
+                        .and_then(|r| r.parent().map(Path::to_path_buf))
+                        .unwrap_or_else(|| self.proyecto.raiz.clone())
+                };
+                self.pedir_nuevo(&dir, false);
+            }
         }
     }
 
@@ -2313,6 +2731,11 @@ impl App {
 
     /// Tareas periódicas tras cada lote de eventos.
     fn tic(&mut self) {
+        // tp.sh add-lib/add-ex/sync cambian la estructura: se relee al terminar.
+        if self.refrescar_estructura && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            self.refrescar_estructura = false;
+            self.refrescar_estructura();
+        }
         self.tic_examen();
         self.sondear_git();
         self.eventos_gdb();
@@ -2386,6 +2809,8 @@ impl App {
             Some(
                 Modal::Buscar { texto }
                 | Modal::IrALinea { texto }
+                | Modal::Argumentos { texto, .. }
+                | Modal::NuevoArchivo { texto, .. }
                 | Modal::Commit { mensaje: texto },
             ) => {
                 texto.push_str(&t);
@@ -2513,6 +2938,9 @@ impl App {
             (KeyCode::F(9), _, _, _) => Some(Accion::VistaTerminal),
             (KeyCode::F(12), _, _, _) => Some(Accion::Entregar),
             (KeyCode::Char('g'), false, true, _) => Some(Accion::PanelGit),
+            (KeyCode::Char('e'), false, true, _) => Some(Accion::Explorador),
+            (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
+            (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('r'), false, true, _) => Some(Accion::PanelReglas),
             (KeyCode::Char('p'), false, true, _) => Some(Accion::Problemas),
             (KeyCode::Char('o'), false, true, _) => Some(Accion::SalidaCompilacion),
@@ -2537,6 +2965,7 @@ impl App {
             Foco::Inferior => self.tecla_inferior(k),
             Foco::Lateral => self.tecla_lateral(k),
             Foco::Consigna => self.tecla_consigna(k),
+            Foco::Navegador => self.tecla_navegador(k),
             _ => self.tecla_editor(k),
         }
     }
@@ -3046,6 +3475,38 @@ impl App {
                     desplazamiento,
                 });
             }
+            Modal::Argumentos {
+                titulo,
+                comando,
+                mut texto,
+            } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.refrescar_estructura = true;
+                    let completo = format!("{comando} {}", texto.trim()).trim_end().to_string();
+                    self.correr_en_deck(completo);
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::Argumentos {
+                    titulo,
+                    comando,
+                    texto,
+                });
+            }
+            Modal::NuevoArchivo { mut texto, carpeta } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.crear_archivo(&texto, carpeta);
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::NuevoArchivo { texto, carpeta });
+            }
             Modal::Paneles { mut sel } => {
                 let n = CAMPOS_PANELES.len();
                 match k.code {
@@ -3096,6 +3557,8 @@ impl App {
     fn ejecutar_opcion(&mut self, q: QuePaleta) {
         match q {
             QuePaleta::Accion(a) => self.accion(a),
+            QuePaleta::Objetivo(m, o) => self.correr_objetivo(m, &o),
+            QuePaleta::Tp(i) => self.correr_tp(i),
             QuePaleta::Plugin(c) => {
                 if let Some(p) = &self.plugins {
                     let b = &self.buf().buf;
@@ -3143,7 +3606,26 @@ impl App {
                         as usize;
                     return;
                 }
-                if self.zonas.preview.is_some_and(dentro) {
+                if self.areas.izquierdo.is_some_and(dentro) {
+                    let paso = delta.signum();
+                    match self.navegador {
+                        Some(PestanaNav::Archivos) => {
+                            let n = self.explorador.filas.len().saturating_sub(1);
+                            self.explorador.sel =
+                                ((self.explorador.sel as isize + paso * 3).max(0) as usize).min(n);
+                        }
+                        Some(PestanaNav::Proyecto) => {
+                            let n = self
+                                .vista_proyecto
+                                .filas(&self.proyecto.estructura)
+                                .len()
+                                .saturating_sub(1);
+                            let v = &mut self.vista_proyecto;
+                            v.sel = ((v.sel as isize + paso * 3).max(0) as usize).min(n);
+                        }
+                        None => {}
+                    }
+                } else if self.zonas.preview.is_some_and(dentro) {
                     let b = self.buf_mut();
                     b.preview_desplazamiento =
                         (b.preview_desplazamiento as isize + delta).max(0) as usize;
@@ -3335,6 +3817,59 @@ impl App {
             .copied()
         {
             self.arrastre = Some(Arrastre::Separador(sep));
+            return;
+        }
+        // Barra izquierda: pestañas y filas.
+        if let Some((_, p)) = self
+            .zonas
+            .pestanas_nav
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
+            self.navegador = Some(p);
+            self.cambiar_foco(Foco::Navegador);
+            if p == PestanaNav::Archivos && self.explorador.filas.is_empty() {
+                self.explorador.reconstruir(&self.proyecto.raiz);
+            }
+            return;
+        }
+        if let Some((r, base)) = self.zonas.lista_nav {
+            if dentro(r) {
+                self.cambiar_foco(Foco::Navegador);
+                let i = base + (y - r.y) as usize;
+                match self.navegador {
+                    Some(PestanaNav::Archivos) => {
+                        if let Some(f) = self.explorador.filas.get(i).cloned() {
+                            self.explorador.sel = i;
+                            if f.es_dir {
+                                self.explorador.alternar(i, &self.proyecto.raiz);
+                            } else {
+                                // Un clic abre el archivo (en una pestaña nueva si no estaba).
+                                self.abrir_archivo(&f.ruta, true);
+                                self.foco = Foco::Navegador;
+                            }
+                        }
+                    }
+                    Some(PestanaNav::Proyecto) => {
+                        let filas = self.vista_proyecto.filas(&self.proyecto.estructura);
+                        if let Some(f) = filas.get(i).cloned() {
+                            self.vista_proyecto.sel = i;
+                            // Módulos se despliegan con un clic; objetivos corren con doble clic.
+                            let correr =
+                                doble || matches!(f, FilaProyecto::Modulo(_) | FilaProyecto::TpSh);
+                            if correr {
+                                self.activar_fila_proyecto(Some(f), true);
+                            }
+                        }
+                    }
+                    None => {}
+                }
+                return;
+            }
+        }
+        if self.areas.izquierdo.is_some_and(dentro) {
+            self.cambiar_foco(Foco::Navegador);
             return;
         }
         if let Some(z) = self.zonas.editor {

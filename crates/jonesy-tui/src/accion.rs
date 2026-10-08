@@ -56,6 +56,9 @@ pub enum Accion {
     AcercaDe,
     Paleta,
     TamanosPaneles,
+    Explorador,
+    EstructuraProyecto,
+    NuevoArchivo,
 }
 
 pub struct Info {
@@ -114,6 +117,9 @@ impl Accion {
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
             TamanosPaneles => ("Tamaños de paneles…", ""),
+            Explorador => ("Explorador de archivos", "Alt+E"),
+            EstructuraProyecto => ("Proyecto: bibliotecas, ejercicios y objetivos", "Alt+Y"),
+            NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),
         };
         Info { titulo, atajo }
     }
@@ -165,6 +171,9 @@ impl Accion {
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
+            Explorador,
+            EstructuraProyecto,
+            NuevoArchivo,
             Atajos,
             AcercaDe,
             Salir,
@@ -179,6 +188,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
         (
             "Archivo",
             vec![
+                NuevoArchivo,
                 Abrir,
                 Guardar,
                 GuardarTodo,
@@ -205,6 +215,8 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
         (
             "Ver",
             vec![
+                Explorador,
+                EstructuraProyecto,
                 QuickDoc,
                 OrientacionQuickDoc,
                 Terminal,
@@ -222,6 +234,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
         (
             "Construir",
             vec![
+                EstructuraProyecto,
                 Compilar,
                 Ejecutar,
                 Depurar,
@@ -255,7 +268,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Ir a línea | Ctrl+G |
-| Abrir archivo (Tab marca varios) | Ctrl+O |
+| Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
+| Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
 | Paleta de comandos | Ctrl+K, F1 |
 | Explicar regla (sobre un diagnóstico) | F1 |
