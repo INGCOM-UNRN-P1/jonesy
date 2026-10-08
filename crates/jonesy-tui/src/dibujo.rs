@@ -1983,7 +1983,13 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     ];
     // Documentación del proyecto ausente o vieja: botón para regenerarla (no se versiona).
     if let Some(aviso) = app.aviso_doc() {
-        botones.insert(0, (format!("[{aviso}: make doc]"), Accion::GenerarDoc));
+        botones.insert(
+            0,
+            (
+                format!("[{aviso}: {}]", app.etiqueta_comando_doc()),
+                Accion::GenerarDoc,
+            ),
+        );
     }
     let git = app
         .git_estado
@@ -1996,10 +2002,17 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
             Accion::PanelGit,
         ));
     }
-    let ancho_der: u16 = botones
-        .iter()
-        .map(|(t, _)| UnicodeWidthStr::width(t.as_str()) as u16 + 1)
-        .sum();
+    // Si no entran, se descartan los últimos botones: la izquierda (archivo, posición,
+    // vista y mensajes) conserva al menos 36 columnas.
+    let ancho_botones = |b: &[(String, Accion)]| -> u16 {
+        b.iter()
+            .map(|(t, _)| UnicodeWidthStr::width(t.as_str()) as u16 + 1)
+            .sum()
+    };
+    while !botones.is_empty() && ancho_botones(&botones) + 36 > r.width {
+        botones.pop();
+    }
+    let ancho_der = ancho_botones(&botones);
     let ancho_izq = r.width.saturating_sub(ancho_der);
     f.render_widget(
         Paragraph::new(Line::from(izq)).style(fondo),

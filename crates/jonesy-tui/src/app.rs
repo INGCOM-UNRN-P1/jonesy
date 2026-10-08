@@ -2417,6 +2417,15 @@ impl App {
         }
     }
 
+    /// Cómo se nombra el comando en el botón: make doc o corbel (sin objetivo doc).
+    pub fn etiqueta_comando_doc(&self) -> &'static str {
+        match &self.comando_doc {
+            Some(c) if c.starts_with("make") => "make doc",
+            Some(_) => "corbel",
+            None => "",
+        }
+    }
+
     fn generar_doc(&mut self) {
         match self.comando_doc() {
             Some(cmd) => self.correr_en_panel(cmd),
