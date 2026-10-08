@@ -1309,3 +1309,42 @@ fn exportar_la_traza_de_memoria() {
         "<html>traza</html>"
     );
 }
+
+#[test]
+#[cfg(unix)] // usa python3
+fn nuevo_plugin_python_desde_el_ide() {
+    if std::process::Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::NuevoPlugin);
+    tecla(&mut a, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    escribir(&mut a, ".jonesy/plugins/contador.py");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let ruta = dir.path().join(".jonesy/plugins/contador.py");
+    assert!(
+        std::fs::read_to_string(&ruta)
+            .unwrap()
+            .contains("def comando_contar_lineas"),
+        "plantilla"
+    );
+    assert_eq!(a.buf().buf.nombre(), "contador.py");
+    // Guardarlo lo recarga: su comando aparece en la paleta.
+    tecla(&mut a, KeyCode::End, KeyModifiers::CONTROL);
+    escribir(&mut a, "# mío");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| !a.comandos_plugins.is_empty());
+    assert!(a
+        .comandos_plugins
+        .iter()
+        .any(|c| c.plugin == "contador" && c.comando == "contar_lineas"));
+    // En examen no se crean plugins.
+    let (mut e, _rx) = app(dir.path(), true);
+    e.accion(jonesy_tui::accion::Accion::NuevoPlugin);
+    assert!(e.modal.is_none());
+}

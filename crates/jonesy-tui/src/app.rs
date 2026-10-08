@@ -1114,7 +1114,37 @@ impl App {
     }
 
     /// ripley, extensiones nativas y plugins Python tras guardar.
+    /// Relanza el servicio de plugins Python (después de agregar o editar uno).
+    pub fn recargar_plugins(&mut self) {
+        let permitidos = self.proyecto.config.examen.plugins_permitidos.clone();
+        let sup = Supervisor::nuevo(
+            &self.proyecto.dir_estado().join("plugins"),
+            self.examen.is_some().then_some(permitidos.as_slice()),
+        );
+        self.comandos_plugins.clear();
+        // Soltar el servicio anterior cierra su canal: su hilo termina y mata al worker.
+        self.plugins = sup.hay_plugins().then(|| {
+            let tx = self.tx.clone();
+            Servicio::iniciar(sup, move |r| {
+                let _ = tx.send(Aviso::Plugins(r));
+            })
+        });
+        if let Some(p) = &self.plugins {
+            p.pedir(PedidoPlugin::Comandos);
+        }
+    }
+
     fn al_guardar(&mut self, ruta: &Path, i: usize) {
+        if ruta.starts_with(self.proyecto.dir_estado().join("plugins"))
+            && ruta.extension().is_some_and(|e| e == "py")
+        {
+            self.recargar_plugins();
+            self.avisar(
+                "Plugin guardado y recargado: sus comandos están en la paleta (Ctrl+K).",
+                Nivel::Ok,
+            );
+            return;
+        }
         if ruta.extension().is_some_and(|e| e == "h" || e == "c") && self.doc.is_some() {
             self.reevaluar_doc();
         }
@@ -3326,7 +3356,9 @@ impl App {
             ruta.parent()
                 .map(std::fs::create_dir_all)
                 .unwrap_or(Ok(()))
-                .and_then(|_| std::fs::write(&ruta, ""))
+                .and_then(|_| {
+                    std::fs::write(&ruta, plantilla_para(&ruta, &self.proyecto.dir_estado()))
+                })
         };
         if let Err(e) = creado {
             self.avisar(format!("No se pudo crear {rel}: {e}"), Nivel::Error);
@@ -3850,6 +3882,28 @@ impl App {
             }
             Accion::GitDeshacerCommit => self.pedir_deshacer_commit(),
             Accion::ExportarMemoria => self.exportar_memoria(),
+            Accion::NuevoPlugin => {
+                if self.examen.is_some() {
+                    self.avisar(
+                        "En modo examen sólo corren los plugins firmados por la cátedra.",
+                        Nivel::Aviso,
+                    );
+                    return;
+                }
+                self.modal = Some(Modal::NuevoArchivo {
+                    texto: ".jonesy/plugins/mi_plugin.py".into(),
+                    carpeta: false,
+                });
+            }
+            Accion::RecargarPlugins => {
+                self.recargar_plugins();
+                let n = if self.plugins.is_some() {
+                    "listos"
+                } else {
+                    "no hay plugins"
+                };
+                self.avisar(format!("Plugins Python recargados ({n})."), Nivel::Ok);
+            }
             Accion::GitStageTodo | Accion::GitUnstageTodo | Accion::GitCommit | Accion::GitLog => {
                 self.git_accion(a)
             }
@@ -5959,6 +6013,17 @@ pub fn nombre_de_repo(url: &str) -> String {
         "repositorio".into()
     } else {
         n.to_string()
+    }
+}
+
+/// Contenido inicial de un archivo nuevo: los plugins Python arrancan con una plantilla
+/// comentada (al_guardar y un comando de ejemplo); el resto, vacíos.
+pub fn plantilla_para(ruta: &Path, dir_estado: &Path) -> &'static str {
+    const PLANTILLA_PLUGIN: &str = include_str!("../../../docs/plugin-ejemplo.py");
+    if ruta.starts_with(dir_estado.join("plugins")) && ruta.extension().is_some_and(|e| e == "py") {
+        PLANTILLA_PLUGIN
+    } else {
+        ""
     }
 }
 

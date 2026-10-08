@@ -68,6 +68,8 @@ pub enum Accion {
     Integraciones,
     GitDeshacerCommit,
     ExportarMemoria,
+    NuevoPlugin,
+    RecargarPlugins,
 }
 
 pub struct Info {
@@ -137,6 +139,8 @@ impl Accion {
                 "Comparar con la versión de git (diff lado a lado)",
                 "Alt+Shift+D",
             ),
+            NuevoPlugin => ("Nuevo plugin Python (.jonesy/plugins)…", ""),
+            RecargarPlugins => ("Recargar los plugins Python", ""),
             ExportarMemoria => (
                 "Exportar la traza de memoria (reporte HTML de mem-trace)",
                 "",
@@ -198,6 +202,8 @@ impl Accion {
             GitClonar,
             GitDeshacerCommit,
             ExportarMemoria,
+            NuevoPlugin,
+            RecargarPlugins,
             Formatear,
             GenerarDoc,
             DiffArchivo,
@@ -311,6 +317,8 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
             GenerarDoc,
             ExplicarRegla,
             Integraciones,
+            NuevoPlugin,
+            RecargarPlugins,
         ],
     ));
     m.push(("Ayuda", vec![Paleta, ExplicarRegla, Atajos, AcercaDe]));
