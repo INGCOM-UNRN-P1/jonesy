@@ -22,6 +22,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 | Explorador: renombrar y borrar archivos | falta | hoy sólo crea archivos y carpetas |
 | Estructura: dependencias entre bibliotecas | falta | F6 compila las bibliotecas de `LIB_NAME` de un ejercicio, pero no las dependencias de una biblioteca con otra |
 | Resaltado de Makefiles | hecho | directivas, variables, objetivos, recetas; TAB visible y receta con espacios marcada en rojo |
+| Integración con el ecosistema como plugins | hecho | manifiestos TOML (de fábrica, usuario, proyecto); ripley, gaff, kaneda y spunkmeyer al guardar; acciones de gaff, corbel, daedalus, tetsuo, motoko y callahan en Herramientas (Alt+H); F1 por herramienta; panel por tema; `jonesy doctor --json`. Ver `docs/integraciones.md` |
 | Diff lado a lado | hecho | panel de git (archivos y commits) y buffer actual contra HEAD (Alt+Shift+D); `s` alterna con unificado |
 | quick-doc con la documentación del proyecto | hecho | busca `doc/api.json` (corbel), lo muestra en el quick-doc y avisa con un botón `make doc` si falta o quedó viejo (RF-9 de la especificación de corbel). Falta que corbel implemente `corbel proyecto` y que plantilla-TP tenga el objetivo `doc` |
 | Diff: resaltado de sintaxis y líneas largas | flojo | el diff no colorea C y las líneas que no entran se cortan (sin desplazamiento horizontal) |
@@ -29,6 +30,11 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 | Diff: entre dos commits cualesquiera | falta | hoy: archivo contra índice/HEAD, buffer contra HEAD y cada commit del log contra su padre |
 | Aviso de documentación con corbel instalado | flojo | si corbel está en el PATH, `[sin doc: corbel]` aparece en cualquier proyecto sin `doc/api.json`, aunque nadie use corbel ahí; se podría silenciar por proyecto |
 | `corbel proyecto` y objetivo `doc` en plantilla-TP | falta | dependen de implementar `corbel/especificacion_documentacion_proyecto.md` (fases 1 a 5) |
+| Carga al guardar con todas las herramientas | flojo | cada guardado de un .c lanza ripley (~10 s), gaff, kaneda y spunkmeyer (~0,3 s c/u); ripley ya incluye reglas de gaff y kaneda, así que se deduplica en la vista pero se calcula dos veces. Decidir si con ripley instalado conviene apagar gaff/kaneda al guardar, o pedirle a ripley que no las repita |
+| Integraciones permitidas en examen | flojo | hoy todas salvo callahan; la cátedra tiene que decidir cuáles (por ejemplo, si `gaff fix` o `corbel scaffold` corrigen demasiado durante un examen) |
+| hal, vasquez, holden y dredd como integraciones | falta | hal (core dumps) no tiene manifiesto; vasquez y holden llegan sólo vía `make fallos`; dredd no evalúa desde el IDE |
+| Dos sistemas de extensiones | flojo | conviven los manifiestos de integraciones (comandos externos) y los plugins Python (`.jonesy/plugins`); falta documentar cuándo usar cada uno o unificarlos |
+| Integraciones en Windows | flojo | los comandos de fábrica son de shell POSIX; con `cmd` sin sh podrían fallar las comillas |
 | Descripciones de objetivos en la barra | flojo | con 28 columnas se cortan; el pie muestra la completa. Se puede ensanchar la barra |
 
 ## Requisitos de la especificación
@@ -43,7 +49,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 | RF-6.3 recuperación | flojo | las copias de `.jonesy/recuperacion/` se escriben ante SIGHUP fuera del examen, pero al reabrir no se ofrece restaurarlas. |
 | RF-5.3 shell de cátedra | falta | el deck abre `$SHELL`; no toma las variables de `entorno` (`PORTABLE_ROOT`, rutas de bibliotecas) ni `entorno/config/gdb`. |
 | RF-6.5 / RNF-D.3 dredd | falta | la entrega verifica con `make test` (no existe `dredd eval --local`) y dredd no verifica la cadena de `telemetry.log`. Requiere cambios en dredd o integrar con `entorno entregar`/`verificar`. Decidir cuál. |
-| RF-3.1 ripley vía worker Python | falta | opcional en la spec; hoy siempre por CLI. |
+| RF-3.1 ripley vía worker Python | no aplica | reemplazado por las integraciones declarativas: ripley corre como una más. |
 | §12.5 estrés de 100 sesiones | falta | no hay script ni medición (≤ 5,5 GiB y < 1,5 % de CPU). |
 | §12.6 corte por SIGHUP | flojo | implementado (guarda, sella y restaura la sesión) pero sin prueba automática. |
 | §10.2 reconexión de sesión ≤ 20 ms | no aplica | jonesy no tiene modo servidor. |
