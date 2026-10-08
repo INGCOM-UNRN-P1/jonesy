@@ -21,7 +21,14 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 | Más verificaciones en la CI | hecho | matriz Linux/Windows/macOS, MSRV, docs, shellcheck, worker, audit, binarios |
 | Explorador: renombrar y borrar archivos | falta | hoy sólo crea archivos y carpetas |
 | Estructura: dependencias entre bibliotecas | falta | F6 compila las bibliotecas de `LIB_NAME` de un ejercicio, pero no las dependencias de una biblioteca con otra |
+| Resaltado de Makefiles | hecho | directivas, variables, objetivos, recetas; TAB visible y receta con espacios marcada en rojo |
+| Diff lado a lado | hecho | panel de git (archivos y commits) y buffer actual contra HEAD (Alt+Shift+D); `s` alterna con unificado |
 | quick-doc con la documentación del proyecto | hecho | busca `doc/api.json` (corbel), lo muestra en el quick-doc y avisa con un botón `make doc` si falta o quedó viejo (RF-9 de la especificación de corbel). Falta que corbel implemente `corbel proyecto` y que plantilla-TP tenga el objetivo `doc` |
+| Diff: resaltado de sintaxis y líneas largas | flojo | el diff no colorea C y las líneas que no entran se cortan (sin desplazamiento horizontal) |
+| Diff: archivos binarios y renombres | flojo | un binario aparece como diferencias de texto vacías; un renombre se ve como borrado + nuevo |
+| Diff: entre dos commits cualesquiera | falta | hoy: archivo contra índice/HEAD, buffer contra HEAD y cada commit del log contra su padre |
+| Aviso de documentación con corbel instalado | flojo | si corbel está en el PATH, `[sin doc: corbel]` aparece en cualquier proyecto sin `doc/api.json`, aunque nadie use corbel ahí; se podría silenciar por proyecto |
+| `corbel proyecto` y objetivo `doc` en plantilla-TP | falta | dependen de implementar `corbel/especificacion_documentacion_proyecto.md` (fases 1 a 5) |
 | Descripciones de objetivos en la barra | flojo | con 28 columnas se cortan; el pie muestra la completa. Se puede ensanchar la barra |
 
 ## Requisitos de la especificación
@@ -65,6 +72,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 
 | Ítem | Estado | Detalle |
 |---|---|---|
-| Pruebas de la TUI | flojo | cubren flujos principales con TestBackend; no hay pruebas de mouse sobre separadores ni del explorador. |
+| Pruebas de la TUI | flojo | cubren flujos principales con TestBackend (incluidos arrastre de separadores, explorador, proyecto, clonar, diff y documentación); faltan pruebas del menú con mouse y del modo compacto con la barra izquierda. |
 | ripley tarda ~10 s por archivo | flojo | jonesy lo corre en segundo plano con indicador y cola; la latencia es de ripley. |
-| MSRV | flojo | `rust-version` declarada sin verificar; la CI la comprueba. |
+| MSRV | flojo | `rust-version` 1.85 declarada sin compilar con esa versión; la CI la comprueba. |
+| Commit con una prueba fallando | hecho | `95f8d41` se commiteó con la prueba del layout fallando; la corrigió `0ce85fb`. Los commits se hacen ahora sólo si fmt, clippy y las pruebas pasan. |
