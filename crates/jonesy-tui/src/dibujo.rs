@@ -34,6 +34,7 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         ancho_consigna: app.ancho_consigna,
         vista: app.vista,
         lateral: app.lateral.is_some(),
+        ancho_lateral: if app.lateral == Some(Lateral::CatScan) { 45 } else { 30 },
     };
     app.areas = layout::calcular(&pedido);
     let a = app.areas;

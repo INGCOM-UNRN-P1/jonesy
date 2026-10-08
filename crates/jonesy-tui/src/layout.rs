@@ -81,8 +81,10 @@ pub struct Pedido {
     /// Porcentaje del ancho para la consigna (redimensionable con el mouse).
     pub ancho_consigna: Option<u16>,
     pub vista: Vista,
-    /// Panel lateral derecho extra (git, reglas, variables).
+    /// Panel lateral derecho extra (git, reglas, variables, cat-scan).
     pub lateral: bool,
+    /// Porcentaje del ancho para el panel lateral (cat-scan necesita más).
+    pub ancho_lateral: u16,
 }
 
 /// Rectángulos resultantes; `None` = no visible.
@@ -135,10 +137,10 @@ pub fn calcular(p: &Pedido) -> Areas {
         return r;
     }
 
-    // Panel lateral derecho (git, reglas, variables): 30 % del ancho, mín. 28 columnas.
+    // Panel lateral derecho: por defecto 30 % del ancho, mín. 28 columnas.
     let mut centro = cuerpo;
     if p.lateral {
-        let w = (cuerpo.width * 30 / 100).max(28).min(cuerpo.width / 2);
+        let w = (cuerpo.width * p.ancho_lateral.clamp(20, 60) / 100).max(28).min(cuerpo.width * 6 / 10);
         let (c, l) = partir_h(cuerpo, cuerpo.width - w);
         centro = c;
         r.lateral = Some(l);
@@ -206,6 +208,7 @@ mod tests {
             ancho_consigna: None,
             vista: Vista::Codigo,
             lateral: false,
+            ancho_lateral: 30,
         }
     }
 
