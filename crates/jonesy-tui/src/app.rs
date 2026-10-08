@@ -455,13 +455,15 @@ impl App {
             }
         }
         if self.buffers.is_empty() {
-            let candidatos = self.proyecto.archivos(500);
-            let elegido = candidatos
-                .iter()
-                .find(|p| p.file_name().is_some_and(|n| n == "main.c"))
-                .or_else(|| candidatos.iter().find(|p| p.extension().is_some_and(|e| e == "c")))
-                .or_else(|| candidatos.iter().find(|p| Some(p.as_path()) != self.consigna.as_ref().map(|c| c.ruta.as_path())))
-                .cloned();
+            let raiz = self.proyecto.raiz.clone();
+            let candidatos = self.proyecto.archivos(5000);
+            let consigna = self.consigna.as_ref().map(|c| c.ruta.clone());
+            let elegido = [raiz.join("main.c"), raiz.join("src/main.c")]
+                .into_iter()
+                .find(|p| p.is_file())
+                .or_else(|| candidatos.iter().find(|p| p.file_name().is_some_and(|n| n == "main.c")).cloned())
+                .or_else(|| candidatos.iter().find(|p| p.extension().is_some_and(|e| e == "c")).cloned())
+                .or_else(|| candidatos.iter().find(|p| Some(*p) != consigna.as_ref()).cloned());
             if let Some(p) = elegido {
                 self.abrir_archivo(&p, false);
             } else {
