@@ -397,11 +397,50 @@ impl Reproductor {
             .border_style(Style::default().fg(tema::ATENUADO));
         let i = b.inner(r);
         f.render_widget(b, r);
+        // Abajo, el ritmo de escritura por minuto (verde) y los pegados (▲ rojo).
+        let alto_grafico = if i.height >= 10 { 4 } else { 0 };
+        let texto = Rect {
+            height: i.height - alto_grafico,
+            ..i
+        };
         f.render_widget(
             Paragraph::new(lineas_resumen(&self.resumen, &self.verificacion))
                 .wrap(Wrap { trim: true }),
-            i,
+            texto,
         );
+        if alto_grafico > 0 {
+            let ancho = i.width as usize;
+            let tipeado =
+                jonesy_telemetry::replay::agrupar(&self.resumen.tipeado_por_minuto, ancho);
+            let pegado = jonesy_telemetry::replay::agrupar(&self.resumen.pegado_por_minuto, ancho);
+            let y = i.y + i.height - alto_grafico;
+            let buf = f.buffer_mut();
+            buf.set_string(
+                i.x,
+                y,
+                "Escritura por minuto (▲ pegados):",
+                Style::default().fg(tema::ATENUADO),
+            );
+            let maximo = tipeado.iter().copied().max().unwrap_or(0);
+            buf.set_string(
+                i.x,
+                y + 1,
+                jonesy_telemetry::replay::sparkline(&tipeado),
+                Style::default().fg(tema::OK),
+            );
+            let marcas: String = pegado
+                .iter()
+                .map(|&p| if p > 0 { '▲' } else { ' ' })
+                .collect();
+            buf.set_string(i.x, y + 2, marcas, Style::default().fg(tema::PELIGRO));
+            let minutos = self.resumen.tipeado_por_minuto.len();
+            buf.set_string(
+                i.x,
+                y + 3,
+                format!("{minutos} min · máximo {maximo} car. por columna"),
+                Style::default().fg(tema::ATENUADO),
+            );
+        }
     }
 }
 
@@ -547,7 +586,7 @@ mod tests {
         let d = &r.rep.documentos["a.c"];
         assert_eq!(d.como_texto(), "int x;\nint y;");
         assert!(d.pegado[7] && !d.pegado[0]);
-        let mut term = ratatui::Terminal::new(TestBackend::new(120, 30)).unwrap();
+        let mut term = ratatui::Terminal::new(TestBackend::new(120, 40)).unwrap();
         term.draw(|f| r.dibujar(f)).unwrap();
         let pantalla: String = term
             .backend()
@@ -558,6 +597,11 @@ mod tests {
             .collect();
         assert!(pantalla.contains("íntegra"));
         assert!(pantalla.contains("Pegados: 1"));
+        assert!(
+            pantalla.contains("Escritura por minuto"),
+            "gráfico de ritmo"
+        );
+        assert!(pantalla.contains('▲'), "el pegado se marca en el gráfico");
         assert!(pantalla.contains("int y;"));
         assert!(!r.tecla(KeyCode::Char('q')));
     }

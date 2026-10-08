@@ -137,9 +137,41 @@ pub struct Resumen {
     pub pegados: Vec<Pegado>,
     pub guardados: usize,
     pub comandos: Vec<(String, Option<i32>)>,
+    /// Caracteres tipeados (sin pegados) en cada minuto de la sesión.
+    pub tipeado_por_minuto: Vec<u32>,
+    /// Caracteres pegados en cada minuto de la sesión.
+    pub pegado_por_minuto: Vec<u32>,
 }
 
 pub const PAUSA_LARGA_S: f64 = 30.0;
+
+/// Agrupa una serie en `ancho` columnas (sumando) para dibujarla.
+pub fn agrupar(valores: &[u32], ancho: usize) -> Vec<u32> {
+    if ancho == 0 || valores.is_empty() {
+        return vec![];
+    }
+    if valores.len() <= ancho {
+        return valores.to_vec();
+    }
+    let por = valores.len().div_ceil(ancho);
+    valores.chunks(por).map(|c| c.iter().sum()).collect()
+}
+
+/// Gráfico de una línea con ▁▂▃▄▅▆▇█ (cero = espacio).
+pub fn sparkline(valores: &[u32]) -> String {
+    const NIVELES: [char; 8] = ['▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'];
+    let max = valores.iter().copied().max().unwrap_or(0).max(1);
+    valores
+        .iter()
+        .map(|&v| {
+            if v == 0 {
+                ' '
+            } else {
+                NIVELES[((v as usize * 8 - 1) / max as usize).min(7)]
+            }
+        })
+        .collect()
+}
 
 pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
     let mut r = Resumen {
@@ -153,7 +185,17 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
         pegados: Vec::new(),
         guardados: 0,
         comandos: Vec::new(),
+        tipeado_por_minuto: Vec::new(),
+        pegado_por_minuto: Vec::new(),
     };
+    let t0 = registros.first().map(|r| r.ts_micros).unwrap_or(0);
+    let minutos = registros
+        .last()
+        .map(|u| (u.ts_micros.saturating_sub(t0) / 60_000_000) as usize + 1)
+        .unwrap_or(0);
+    r.tipeado_por_minuto = vec![0; minutos];
+    r.pegado_por_minuto = vec![0; minutos];
+    let minuto = |ts: u64| (ts.saturating_sub(t0) / 60_000_000) as usize;
     if let (Some(primero), Some(ultimo)) = (registros.first(), registros.last()) {
         r.duracion_s = (ultimo.ts_micros.saturating_sub(primero.ts_micros)) as f64 / 1e6;
     }
@@ -175,6 +217,7 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
                 content_hash,
             } => {
                 r.caracteres_pegados += length;
+                r.pegado_por_minuto[minuto(reg.ts_micros)] += *length as u32;
                 r.pegados.push(Pegado {
                     seq: reg.seq,
                     ts_micros: reg.ts_micros,
@@ -193,7 +236,9 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
                 if pegado_pendiente && !inserted.is_empty() {
                     pegado_pendiente = false;
                 } else {
-                    r.caracteres_tipeados += inserted.chars().count();
+                    let n = inserted.chars().count();
+                    r.caracteres_tipeados += n;
+                    r.tipeado_por_minuto[minuto(reg.ts_micros)] += n as u32;
                 }
             }
             TelemetryEvent::BufferSave { .. } => r.guardados += 1,
@@ -211,6 +256,14 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn graficos_por_minuto() {
+        assert_eq!(sparkline(&[0, 1, 8, 4]), " ▁█▄");
+        assert_eq!(agrupar(&[1, 2, 3, 4, 5], 2), vec![6, 9]);
+        assert_eq!(agrupar(&[1, 2], 5), vec![1, 2]);
+    }
+
     use super::*;
     use crate::Cadena;
 

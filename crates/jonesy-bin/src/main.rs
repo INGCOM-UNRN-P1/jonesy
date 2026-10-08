@@ -303,6 +303,19 @@ fn imprimir_resumen(r: &jonesy_telemetry::replay::Resumen, v: &jonesy_telemetry:
         );
     }
     println!("Pausas de más de 30 s: {}", r.pausas_largas.len());
+    if !r.tipeado_por_minuto.is_empty() {
+        let ancho = 60;
+        let t = jonesy_telemetry::replay::agrupar(&r.tipeado_por_minuto, ancho);
+        let p = jonesy_telemetry::replay::agrupar(&r.pegado_por_minuto, ancho);
+        println!("Escritura por minuto ({} min):", r.tipeado_por_minuto.len());
+        println!("  |{}|", jonesy_telemetry::replay::sparkline(&t));
+        let marcas: String = p.iter().map(|&x| if x > 0 { '^' } else { ' ' }).collect();
+        if marcas.trim().is_empty() {
+            println!("  sin pegados");
+        } else {
+            println!("  |{marcas}| ^ = pegado");
+        }
+    }
     println!(
         "Guardados: {} · comandos: {}",
         r.guardados,
