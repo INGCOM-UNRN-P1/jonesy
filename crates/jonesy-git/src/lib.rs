@@ -340,6 +340,11 @@ impl Repo {
             .collect())
     }
 
+    /// Diff entre dos commits (de `desde` a `hasta`), con detección de renombres.
+    pub fn diff_commits(&self, desde: &str, hasta: &str) -> Result<String, ErrorGit> {
+        self.ejecutar(&["diff", "--no-color", "-M", desde, hasta])
+    }
+
     pub fn mostrar(&self, hash: &str) -> Result<String, ErrorGit> {
         self.ejecutar(&["show", "--stat", "--patch", "--no-color", hash])
     }

@@ -193,6 +193,11 @@ pub fn comparar(viejo: &str, nuevo: &str, contexto: usize) -> Vec<FilaDiff> {
     filas
 }
 
+/// true si el contenido parece binario (tiene bytes nulos en el primer bloque).
+pub fn es_binario(datos: &[u8]) -> bool {
+    datos.iter().take(8000).any(|b| *b == 0)
+}
+
 /// Interpreta un diff unificado de git (uno o varios archivos). Las líneas que no son
 /// del diff (encabezado de un commit) se ignoran.
 pub fn desde_unificado(texto: &str) -> Vec<FilaDiff> {
@@ -204,8 +209,24 @@ pub fn desde_unificado(texto: &str) -> Vec<FilaDiff> {
         if let Some(resto) = linea.strip_prefix("diff --git ") {
             volcar(&mut filas, &mut borradas, &mut agregadas);
             en_bloque = false;
-            let nombre = resto.split(" b/").last().unwrap_or(resto).to_string();
-            filas.push(FilaDiff::Archivo(nombre));
+            // «a/viejo b/nuevo»: con nombres distintos es un renombre.
+            let nuevo = resto.split(" b/").last().unwrap_or(resto).to_string();
+            let viejo = resto
+                .strip_prefix("a/")
+                .and_then(|r| r.split(" b/").next())
+                .unwrap_or(&nuevo)
+                .to_string();
+            filas.push(FilaDiff::Archivo(if viejo != nuevo {
+                format!("{viejo} → {nuevo}")
+            } else {
+                nuevo
+            }));
+            continue;
+        }
+        if linea.starts_with("Binary files ") || linea.starts_with("Los archivos binarios ") {
+            filas.push(FilaDiff::Bloque(
+                "archivo binario: no se compara como texto".into(),
+            ));
             continue;
         }
         if linea.starts_with("@@") {
@@ -313,6 +334,18 @@ mod tests {
     #[test]
     fn sin_cambios_no_hay_filas() {
         assert!(comparar("a\nb\n", "a\nb\n", 3).is_empty());
+    }
+
+    #[test]
+    fn renombres_y_binarios() {
+        let t = "diff --git a/lista.c b/listas.c\nsimilarity index 90%\nrename from lista.c\nrename to listas.c\n@@ -1 +1 @@\n-int a;\n+int b;\ndiff --git a/foto.png b/foto.png\nBinary files a/foto.png and b/foto.png differ\n";
+        let f = desde_unificado(t);
+        assert_eq!(f[0], FilaDiff::Archivo("lista.c → listas.c".into()));
+        assert!(f.contains(&FilaDiff::Bloque(
+            "archivo binario: no se compara como texto".into()
+        )));
+        assert!(es_binario(b"PNG\0\x01"));
+        assert!(!es_binario(b"int main(void);\n"));
     }
 
     #[test]

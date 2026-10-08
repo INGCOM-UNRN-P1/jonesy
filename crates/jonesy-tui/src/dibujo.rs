@@ -1622,7 +1622,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         ),
     ])];
     let ayuda = if app.git.log.is_some() {
-        "Enter: ver commit · l: volver"
+        "Enter ver commit · m marca otro para comparar · l volver"
     } else {
         "Espacio stage · a/u todo · c commit · l log · Enter diff"
     };
@@ -1672,7 +1672,13 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 } else {
                     Color::Reset
                 };
+                let marca = if app.git.marcado.as_deref() == Some(c.hash.as_str()) {
+                    "● "
+                } else {
+                    "  "
+                };
                 Line::from(vec![
+                    Span::styled(marca, Style::default().fg(tema::ACENTO).bg(fondo)),
                     Span::styled(
                         format!("{} ", c.hash),
                         Style::default().fg(tema::ADVERTENCIA).bg(fondo),
@@ -2113,16 +2119,24 @@ const FONDO_AGREGADO: Color = Color::Rgb(26, 56, 34);
 const FONDO_AGREGADO_FUERTE: Color = Color::Rgb(40, 110, 55);
 
 /// Escribe una celda de diff (número + texto) en `x..x+ancho` de la fila `y`.
+/// Cómo dibujar las celdas de un diff: lenguaje (para el resaltado) y desplazamiento
+/// horizontal.
+struct CtxDiff {
+    lenguaje: Lenguaje,
+    desp_h: usize,
+}
+
+/// Escribe una celda de diff (número + texto resaltado) en la fila `area`.
 fn celda_diff(
     buf: &mut ratatui::buffer::Buffer,
-    x: u16,
-    y: u16,
-    ancho: u16,
+    area: Rect,
     celda: Option<&jonesy_core::diff::Celda>,
     izquierda: bool,
     marca: Option<char>,
+    ctx: &CtxDiff,
 ) {
     use jonesy_core::diff::Tipo;
+    let (x, y, ancho) = (area.x, area.y, area.width);
     let (fondo, fuerte) = if izquierda {
         (FONDO_BORRADO, FONDO_BORRADO_FUERTE)
     } else {
@@ -2158,20 +2172,32 @@ fn celda_diff(
         );
         col += 2;
     }
+    // Resaltado de sintaxis de la línea (sin arrastrar estado: un diff muestra fragmentos).
+    let chars: Vec<char> = c.texto.chars().collect();
+    let tramos = resaltado::resaltar(ctx.lenguaje, &chars, &mut resaltado::Estado::default());
     let fin = x + ancho;
-    for (i, ch) in c.texto.chars().enumerate() {
-        let w = unicode_width::UnicodeWidthChar::width(ch)
+    if ctx.desp_h > 0 && !chars.is_empty() {
+        buf.set_string(col.saturating_sub(1), y, "‹", base.fg(tema::ATENUADO));
+    }
+    let mut t = 0;
+    for (i, ch) in chars.iter().enumerate().skip(ctx.desp_h) {
+        let w = unicode_width::UnicodeWidthChar::width(*ch)
             .unwrap_or(1)
             .max(1) as u16;
         if col + w > fin {
+            buf.set_string(fin.saturating_sub(1), y, "›", base.fg(tema::ATENUADO));
             break;
         }
-        let resaltado = c.resaltes.iter().any(|(a, b)| i >= *a && i < *b);
-        let estilo = if resaltado {
-            base.bg(fuerte).add_modifier(Modifier::BOLD)
-        } else {
-            base
-        };
+        while t < tramos.len() && tramos[t].1 <= i {
+            t += 1;
+        }
+        let mut estilo = base;
+        if t < tramos.len() && tramos[t].0 <= i {
+            estilo = estilo.patch(estilo_clase(tramos[t].2)).bg(fondo);
+        }
+        if c.resaltes.iter().any(|(a, b)| i >= *a && i < *b) {
+            estilo = estilo.bg(fuerte).add_modifier(Modifier::BOLD);
+        }
         let mut b = [0u8; 4];
         buf[(col, y)]
             .set_symbol(ch.encode_utf8(&mut b))
@@ -2190,8 +2216,24 @@ fn dibujar_diff(
     filas: &[jonesy_core::diff::FilaDiff],
     desplazamiento: usize,
     lado_a_lado: bool,
+    ctx_base: (Lenguaje, usize),
 ) {
     use jonesy_core::diff::{FilaDiff, Tipo};
+    // Lenguaje del archivo de las filas visibles: el del último encabezado de archivo
+    // anterior (diffs de varios archivos) o el del diff.
+    let lenguaje_de =
+        |nombre: &str| Lenguaje::de_ruta(Path::new(nombre.rsplit(" → ").next().unwrap_or(nombre)));
+    let mut ctx = CtxDiff {
+        lenguaje: filas[..desplazamiento.min(filas.len())]
+            .iter()
+            .rev()
+            .find_map(|f| match f {
+                FilaDiff::Archivo(n) => Some(lenguaje_de(n)),
+                _ => None,
+            })
+            .unwrap_or(ctx_base.0),
+        desp_h: ctx_base.1,
+    };
     let r = Rect::new(
         area.x + 1,
         area.y + 1,
@@ -2213,7 +2255,7 @@ fn dibujar_diff(
             Span::styled(format!("+{agregadas} "), Style::default().fg(tema::OK)),
             Span::styled(format!("−{borradas} "), Style::default().fg(tema::ERROR)),
             Span::styled(
-                format!("· {vista} · s alterna · n/p cambio · Esc cierra "),
+                format!("· {vista} · s alterna · n/p cambio · ←→ desplaza · Esc cierra "),
                 Style::default().fg(tema::ATENUADO),
             ),
         ]),
@@ -2251,6 +2293,7 @@ fn dibujar_diff(
         let y = i.y + n as u16;
         match fila {
             FilaDiff::Archivo(nombre) => {
+                ctx.lenguaje = lenguaje_de(nombre);
                 let t = format!(" {nombre} ");
                 buf.set_string(
                     i.x,
@@ -2274,30 +2317,49 @@ fn dibujar_diff(
             FilaDiff::Par { izq, der } if lado_a_lado => {
                 celda_diff(
                     buf,
-                    i.x,
-                    y,
-                    mitad.saturating_sub(1),
+                    Rect::new(i.x, y, mitad.saturating_sub(1), 1),
                     izq.as_ref(),
                     true,
                     None,
+                    &ctx,
                 );
                 buf[(i.x + mitad - 1, y)]
                     .set_symbol("│")
                     .set_style(Style::default().fg(tema::ATENUADO));
                 celda_diff(
                     buf,
-                    i.x + mitad,
-                    y,
-                    i.width - mitad,
+                    Rect::new(i.x + mitad, y, i.width - mitad, 1),
                     der.as_ref(),
                     false,
                     None,
+                    &ctx,
                 );
             }
             FilaDiff::Par { izq, der } => match lado {
-                None => celda_diff(buf, i.x, y, i.width, izq.as_ref(), true, Some(' ')),
-                Some(true) => celda_diff(buf, i.x, y, i.width, izq.as_ref(), true, Some('-')),
-                Some(false) => celda_diff(buf, i.x, y, i.width, der.as_ref(), false, Some('+')),
+                None => celda_diff(
+                    buf,
+                    Rect::new(i.x, y, i.width, 1),
+                    izq.as_ref(),
+                    true,
+                    Some(' '),
+                    &ctx,
+                ),
+                Some(true) => celda_diff(
+                    buf,
+                    Rect::new(i.x, y, i.width, 1),
+                    izq.as_ref(),
+                    true,
+                    Some('-'),
+                    &ctx,
+                ),
+                Some(false) => celda_diff(
+                    buf,
+                    Rect::new(i.x, y, i.width, 1),
+                    der.as_ref(),
+                    false,
+                    Some('+'),
+                    &ctx,
+                ),
             },
         }
     }
@@ -2626,11 +2688,23 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             filas,
             desplazamiento,
             lado_a_lado,
+            desplazamiento_h,
+            lenguaje,
         } => {
             let (titulo, desplazamiento, lado_a_lado) =
                 (titulo.clone(), *desplazamiento, *lado_a_lado);
             let filas = filas.clone();
-            dibujar_diff(f, app, area, &titulo, &filas, desplazamiento, lado_a_lado);
+            let ctx = (*lenguaje, *desplazamiento_h);
+            dibujar_diff(
+                f,
+                app,
+                area,
+                &titulo,
+                &filas,
+                desplazamiento,
+                lado_a_lado,
+                ctx,
+            );
             None
         }
         Modal::Integraciones { sel } => {

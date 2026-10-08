@@ -1113,3 +1113,98 @@ fn explorador_renombra_y_borra() {
     assert!(e.modal.is_none());
     assert!(dir.path().join("src/lista.h").exists());
 }
+
+#[test]
+fn diff_entre_commits_renombres_binarios_y_lineas_largas() {
+    let largo = format!("int main(void) {{ return {}; }}\n", "1 + ".repeat(60) + "0");
+    let dir = proyecto(&[("main.c", MAIN), ("lista.c", "int lista;\n")]);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=p",
+                "-c",
+                "user.email=p@x",
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap()
+    };
+    if git(&["init", "-q"]).status.code() != Some(0) {
+        return;
+    }
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "uno"]);
+    std::fs::write(dir.path().join("main.c"), &largo).unwrap();
+    git(&["commit", "-qam", "dos"]);
+    std::fs::write(dir.path().join("main.c"), "int main(void) { return 3; }\n").unwrap();
+    git(&["commit", "-qam", "tres"]);
+    let (mut a, _rx) = app(dir.path(), false);
+    // Log: m marca «uno», Enter sobre «tres» compara los dos.
+    a.refrescar_git();
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('l'), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('m'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("● "), "{p}");
+    tecla(&mut a, KeyCode::Up, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Up, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("return 0;") && p.contains("return 3;"),
+        "diff de uno a tres: {p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // Línea larga: → desplaza en horizontal (el log sigue abierto).
+    a.git.sel_log = 1; // «dos»
+    a.git.marcado = None;
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let antes = pantalla(&mut a, 100, 30);
+    for _ in 0..20 {
+        tecla(&mut a, KeyCode::Right, KeyModifiers::NONE);
+    }
+    let despues = pantalla(&mut a, 100, 30);
+    assert_ne!(antes, despues);
+    assert!(despues.contains('‹'), "{despues}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // Renombre en el stage y binario.
+    git(&["mv", "lista.c", "listas.c"]);
+    std::fs::write(dir.path().join("foto.bin"), b"\x00\x01\x02").unwrap();
+    a.refrescar_git();
+    a.git.log = None;
+    let estado = a.git_estado.clone().unwrap();
+    a.git.sel = estado
+        .entradas
+        .iter()
+        .position(|e| e.ruta == "listas.c")
+        .unwrap();
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("sólo cambió el nombre")),
+        "{:?}",
+        a.mensaje
+    );
+    a.git.sel = estado
+        .entradas
+        .iter()
+        .position(|e| e.ruta == "foto.bin")
+        .unwrap();
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("binario")),
+        "{:?}",
+        a.mensaje
+    );
+}

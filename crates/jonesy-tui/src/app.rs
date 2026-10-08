@@ -302,6 +302,10 @@ pub enum Modal {
         filas: Vec<jonesy_core::diff::FilaDiff>,
         desplazamiento: usize,
         lado_a_lado: bool,
+        /// Columnas desplazadas con ←/→ para leer líneas largas.
+        desplazamiento_h: usize,
+        /// Lenguaje para el resaltado (en diffs de varios archivos, el de cada uno).
+        lenguaje: Lenguaje,
     },
     /// Herramientas → Integraciones: fila elegida.
     Integraciones {
@@ -428,6 +432,8 @@ pub struct PanelGit {
     pub sel: usize,
     pub log: Option<Vec<Commit>>,
     pub sel_log: usize,
+    /// Commit marcado con m en el log: Enter sobre otro muestra el diff entre ambos.
+    pub marcado: Option<String>,
 }
 
 /// Zonas clicables registradas en el último dibujo.
@@ -1602,6 +1608,30 @@ impl App {
             let Some(c) = log.get(self.git.sel_log).cloned() else {
                 return;
             };
+            // Con otro commit marcado (m): el diff entre los dos, del más viejo al más nuevo.
+            if let Some(m) = self.git.marcado.clone().filter(|m| *m != c.hash) {
+                let pos = |h: &str| log.iter().position(|x| x.hash == h).unwrap_or(0);
+                let (viejo, nuevo) = if pos(&m) > pos(&c.hash) {
+                    (m, c.hash.clone())
+                } else {
+                    (c.hash.clone(), m)
+                };
+                match repo.diff_commits(&viejo, &nuevo) {
+                    Ok(t) => {
+                        let filas = jonesy_core::diff::desde_unificado(&t);
+                        if filas.is_empty() {
+                            self.avisar(
+                                format!("Sin diferencias entre {viejo} y {nuevo}."),
+                                Nivel::Info,
+                            );
+                        } else {
+                            self.abrir_diff(format!("{viejo} → {nuevo}"), filas);
+                        }
+                    }
+                    Err(e) => self.avisar(e.to_string(), Nivel::Error),
+                }
+                return;
+            }
             match repo.mostrar(&c.hash) {
                 Ok(t) => {
                     let filas = jonesy_core::diff::desde_unificado(&t);
@@ -1628,7 +1658,33 @@ impl App {
         else {
             return;
         };
-        let actual = std::fs::read_to_string(repo.dir.join(&e.ruta)).unwrap_or_default();
+        let bytes = std::fs::read(repo.dir.join(&e.ruta)).unwrap_or_default();
+        if jonesy_core::diff::es_binario(&bytes) {
+            self.avisar(
+                format!(
+                    "{} es un archivo binario: no se compara como texto.",
+                    e.ruta
+                ),
+                Nivel::Info,
+            );
+            return;
+        }
+        let actual = String::from_utf8_lossy(&bytes).into_owned();
+        // Un renombre (en el stage) se compara contra el nombre anterior en HEAD.
+        if let Some(origen) = e.origen.clone() {
+            let viejo = repo.contenido(&origen, false).unwrap_or_default();
+            let nuevo = repo.contenido(&e.ruta, true).unwrap_or(actual);
+            let filas = jonesy_core::diff::comparar(&viejo, &nuevo, 3);
+            if filas.is_empty() {
+                self.avisar(
+                    format!("{origen} → {}: sólo cambió el nombre.", e.ruta),
+                    Nivel::Info,
+                );
+            } else {
+                self.abrir_diff(format!("{} (renombrado de {origen})", e.ruta), filas);
+            }
+            return;
+        }
         // Sólo en el stage: HEAD contra el índice. Con cambios sin stage: índice contra el
         // árbol de trabajo (lo que mostraría git diff). Nuevo: vacío contra el archivo.
         let (titulo, viejo, nuevo) = if e.en_stage() && !e.sin_stage() {
@@ -1686,11 +1742,22 @@ impl App {
     }
 
     fn abrir_diff(&mut self, titulo: String, filas: Vec<jonesy_core::diff::FilaDiff>) {
+        // El lenguaje sale del nombre del archivo en el título («main.c (HEAD → editor)»).
+        let archivo = titulo
+            .split(" (")
+            .next()
+            .unwrap_or(&titulo)
+            .rsplit(" → ")
+            .next()
+            .unwrap_or(&titulo);
+        let lenguaje = Lenguaje::de_ruta(Path::new(archivo.trim()));
         self.modal = Some(Modal::Diff {
             titulo,
             filas,
             desplazamiento: 0,
             lado_a_lado: self.preferir_lado_a_lado,
+            desplazamiento_h: 0,
+            lenguaje,
         });
     }
 
@@ -4341,6 +4408,15 @@ impl App {
                     KeyCode::Char('u') if !ctrl => self.git_accion(Accion::GitUnstageTodo),
                     KeyCode::Char('c') if !ctrl => self.git_accion(Accion::GitCommit),
                     KeyCode::Char('l') => self.git_accion(Accion::GitLog),
+                    KeyCode::Char('m') if en_log => {
+                        let h = self
+                            .git
+                            .log
+                            .as_ref()
+                            .and_then(|l| l.get(self.git.sel_log))
+                            .map(|c| c.hash.clone());
+                        self.git.marcado = if self.git.marcado == h { None } else { h };
+                    }
                     KeyCode::Char('r') => self.refrescar_git(),
                     KeyCode::Enter => self.git_mostrar(),
                     _ => self.tecla_editor(k),
@@ -4966,6 +5042,8 @@ impl App {
                 filas,
                 mut desplazamiento,
                 mut lado_a_lado,
+                mut desplazamiento_h,
+                lenguaje,
             } => {
                 let alto = self.tam.1.saturating_sub(6) as usize;
                 let cambios = jonesy_core::diff::inicios_de_cambios(&filas);
@@ -4975,8 +5053,13 @@ impl App {
                     KeyCode::Down => desplazamiento += 1,
                     KeyCode::PageUp => desplazamiento = desplazamiento.saturating_sub(alto),
                     KeyCode::PageDown | KeyCode::Char(' ') => desplazamiento += alto,
-                    KeyCode::Home => desplazamiento = 0,
+                    KeyCode::Home => {
+                        desplazamiento = 0;
+                        desplazamiento_h = 0;
+                    }
                     KeyCode::End => desplazamiento = filas.len(),
+                    KeyCode::Left => desplazamiento_h = desplazamiento_h.saturating_sub(8),
+                    KeyCode::Right => desplazamiento_h += 8,
                     KeyCode::Char('n') => {
                         if let Some(&i) = cambios.iter().find(|&&i| i > desplazamiento) {
                             desplazamiento = i;
@@ -4999,6 +5082,8 @@ impl App {
                     filas,
                     desplazamiento,
                     lado_a_lado,
+                    desplazamiento_h,
+                    lenguaje,
                 });
             }
             Modal::Integraciones { mut sel } => {
