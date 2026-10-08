@@ -496,11 +496,19 @@ pub fn en_path(programa: &str) -> bool {
 
 /// Comillas simples para `sh -c`.
 pub fn shell_quote(s: &str) -> String {
-    if !s.is_empty()
-        && s.chars()
-            .all(|c| c.is_ascii_alphanumeric() || "._-/+".contains(c))
-    {
+    comillas_para(crate::proceso::interprete().0, s)
+}
+
+/// Comillas para el intérprete dado: simples para sh; dobles para cmd (Windows sin sh),
+/// que no entiende las simples.
+pub fn comillas_para(interprete: &str, s: &str) -> String {
+    let seguro = |c: char| {
+        c.is_ascii_alphanumeric() || "._-/+".contains(c) || (interprete == "cmd" && c == '\\')
+    };
+    if !s.is_empty() && s.chars().all(seguro) {
         s.to_string()
+    } else if interprete == "cmd" {
+        format!("\"{}\"", s.replace('"', "\\\""))
     } else {
         format!("'{}'", s.replace('\'', "'\\''"))
     }
@@ -508,6 +516,16 @@ pub fn shell_quote(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn comillas_segun_el_interprete() {
+        assert_eq!(comillas_para("sh", "src/a.c"), "src/a.c");
+        assert_eq!(comillas_para("sh", "mi tp/a.c"), "'mi tp/a.c'");
+        assert_eq!(comillas_para("sh", "o'neil.c"), "'o'\\''neil.c'");
+        assert_eq!(comillas_para("cmd", "mi tp\\a.c"), "\"mi tp\\a.c\"");
+        assert_eq!(comillas_para("cmd", "src\\a.c"), "src\\a.c");
+    }
+
     use super::*;
 
     #[test]

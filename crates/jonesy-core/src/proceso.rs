@@ -25,11 +25,16 @@ pub enum Salida {
 /// Intérprete para una línea de comandos: `sh -c` en Linux, macOS y en Windows con
 /// UCRT64/MSYS2 o Git Bash; `cmd /C` en Windows sin `sh` en el PATH.
 pub fn interprete() -> (&'static str, &'static str) {
-    if cfg!(windows) && !crate::proyecto::en_path("sh") {
-        ("cmd", "/C")
-    } else {
-        ("sh", "-c")
-    }
+    // Se decide una vez: el PATH no cambia durante la sesión.
+    static INTERPRETE: std::sync::OnceLock<(&'static str, &'static str)> =
+        std::sync::OnceLock::new();
+    *INTERPRETE.get_or_init(|| {
+        if cfg!(windows) && !crate::proyecto::en_path("sh") {
+            ("cmd", "/C")
+        } else {
+            ("sh", "-c")
+        }
+    })
 }
 
 /// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
