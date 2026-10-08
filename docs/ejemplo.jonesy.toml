@@ -22,7 +22,8 @@ argumentos = ["datos/entrada.txt"]
 consigna = "consigna.md"
 # Duración en minutos para el cronómetro (0 = sin cronómetro).
 duracion_min = 120
-# Verificación de la entrega (vacío = "make test" si el Makefile lo define).
+# Verificación de la entrega (vacío = "make test" si el Makefile lo define, si no el
+# «verificar» del entorno de la cátedra).
 verificar = "make test"
 # Archivos de la entrega (vacío = *.c, *.h, *.md y el Makefile, también en src/, test/, include/).
 archivos = ["*.c", "*.h", "Makefile"]
@@ -38,6 +39,10 @@ osc52 = true
 ascii = false
 # Shell del deck (vacío = $SHELL).
 shell = ""
+# Entorno de la cátedra (INGCOM-UNRN-P1/entorno): vacío = buscarlo en P1_ENTORNO o
+# ~/p1/entorno y sumar sus comandos al PATH del deck, la compilación y las herramientas
+# (y su gdbinit al depurador); "no" = no usarlo; o la ruta de la instalación.
+entorno = ""
 
 [interfaz.paneles]
 # Tamaños iniciales; se cambian arrastrando los bordes con el mouse o desde

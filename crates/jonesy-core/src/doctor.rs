@@ -164,6 +164,30 @@ pub fn chequeos(raiz: &Path, integraciones: &[crate::integraciones::Integracion]
             "Instalá Python 3",
         ),
     ];
+    let entorno = crate::entorno::detectar("");
+    v.push(Chequeo {
+        nombre: "entorno".into(),
+        requerido: false,
+        ok: entorno.is_some(),
+        detalle: match &entorno {
+            Some(e) => format!(
+                "{}{}",
+                e.raiz.display(),
+                if e.gdbinit.is_some() {
+                    " (con gdbinit de cátedra)"
+                } else {
+                    ""
+                }
+            ),
+            None => "No encontrado (P1_ENTORNO, ~/p1/entorno)".into(),
+        },
+        proposito: "Comandos y variables de la cátedra en la terminal y el depurador".into(),
+        sugerencia: if entorno.is_some() {
+            String::new()
+        } else {
+            "https://github.com/INGCOM-UNRN-P1/entorno".into()
+        },
+    });
     let mut vistos: Vec<String> = vec!["gcc".into(), "make".into(), "git".into(), "gdb".into()];
     for i in integraciones {
         if i.binario.is_empty() || vistos.contains(&i.binario) {

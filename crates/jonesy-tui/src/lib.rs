@@ -19,6 +19,15 @@ pub use app::{App, Opciones};
 pub fn ejecutar(op: Opciones) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
     jonesy_core::sesion::recientes::registrar(&op.raiz);
+    // Entorno de la cátedra: sus comandos y variables para el deck, la compilación y las
+    // herramientas (antes de crear hilos, porque modifica el entorno del proceso).
+    let config = jonesy_core::Proyecto::abrir(&op.raiz)
+        .config
+        .interfaz
+        .entorno;
+    if let Some(e) = jonesy_core::entorno::detectar(&config) {
+        e.aplicar();
+    }
     let mut app = App::nueva(op, tx.clone());
     sistema::instalar_gancho_panico();
     sistema::preparar()?;

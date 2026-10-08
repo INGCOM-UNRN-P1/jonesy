@@ -415,8 +415,25 @@ impl Gdb {
         tty: Option<&str>,
         notificar: impl Fn() + Send + Sync + 'static,
     ) -> std::io::Result<Gdb> {
-        let mut hijo = Command::new(std::env::var("JONESY_GDB").unwrap_or_else(|_| "gdb".into()))
-            .args(["--interpreter=mi3", "-q", "-nx"])
+        Self::lanzar_con(programa, argumentos, dir, tty, None, notificar)
+    }
+
+    /// Como [`Gdb::lanzar`], cargando además un gdbinit (el del entorno de la cátedra) en
+    /// lugar de los del usuario.
+    pub fn lanzar_con(
+        programa: &Path,
+        argumentos: &[String],
+        dir: &Path,
+        tty: Option<&str>,
+        gdbinit: Option<&Path>,
+        notificar: impl Fn() + Send + Sync + 'static,
+    ) -> std::io::Result<Gdb> {
+        let mut cmd = Command::new(std::env::var("JONESY_GDB").unwrap_or_else(|_| "gdb".into()));
+        cmd.args(["--interpreter=mi3", "-q", "-nx"]);
+        if let Some(g) = gdbinit {
+            cmd.arg("-x").arg(g);
+        }
+        let mut hijo = cmd
             .arg(programa)
             .current_dir(dir)
             .env("LC_ALL", "C")

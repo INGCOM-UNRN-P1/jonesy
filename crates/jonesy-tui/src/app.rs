@@ -1910,11 +1910,14 @@ impl App {
         };
         let tx = self.tx.clone();
         let args = self.proyecto.config.depurar.argumentos.clone();
-        let mut gdb = match Gdb::lanzar(
+        let gdbinit = jonesy_core::entorno::detectar(&self.proyecto.config.interfaz.entorno)
+            .and_then(|e| e.gdbinit);
+        let mut gdb = match Gdb::lanzar_con(
             &programa,
             &args,
             &self.proyecto.raiz,
             pty.as_ref().map(|p| p.ruta()),
+            gdbinit.as_deref(),
             move || {
                 let _ = tx.send(Aviso::Despertar);
             },

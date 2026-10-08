@@ -9,6 +9,7 @@ pub mod diagnostico;
 pub mod diff;
 pub mod doctor;
 pub mod documentacion;
+pub mod entorno;
 pub mod entrega;
 pub mod estructura;
 pub mod gdb;

@@ -91,6 +91,9 @@ pub struct Interfaz {
     pub ascii: bool,
     /// Shell de la terminal interna (vacío = $SHELL o bash).
     pub shell: String,
+    /// Instalación del entorno de la cátedra (vacío = buscarla en P1_ENTORNO o
+    /// ~/p1/entorno; "no" = no usarla).
+    pub entorno: String,
     /// Tamaños iniciales de los paneles (`[interfaz.paneles]`); los cambios hechos con el
     /// mouse o desde Ver → Tamaños de paneles se guardan en la sesión.
     pub paneles: TamPaneles,
@@ -152,6 +155,7 @@ impl Default for Interfaz {
             osc52: true,
             ascii: false,
             shell: String::new(),
+            entorno: String::new(),
             paneles: TamPaneles::default(),
         }
     }
@@ -382,10 +386,11 @@ impl Proyecto {
         if !self.config.examen.verificar.trim().is_empty() {
             return Some(self.config.examen.verificar.clone());
         }
-        self.objetivos_make()
-            .iter()
-            .any(|o| o == "test")
-            .then(|| "make test".into())
+        if self.objetivos_make().iter().any(|o| o == "test") {
+            return Some("make test".into());
+        }
+        // Sin objetivo test: el corrector local del entorno de la cátedra, si está.
+        en_path("verificar").then(|| "verificar .".into())
     }
 
     /// Consigna del examen: la configurada o `consigna.md` / `enunciado.md` en la raíz.
