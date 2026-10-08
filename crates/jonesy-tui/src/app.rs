@@ -227,6 +227,8 @@ pub enum Confirmacion {
     AbrirClonado,
     /// Restaurar las copias de recuperación de un corte anterior (`App::recuperables`).
     Recuperar,
+    /// Borrar el archivo o la carpeta de `App::borrar_pendiente`.
+    Borrar,
 }
 
 pub enum Modal {
@@ -269,6 +271,11 @@ pub enum Modal {
     Argumentos {
         titulo: String,
         comando: String,
+        texto: String,
+    },
+    /// Nuevo nombre (ruta relativa a la raíz) para un archivo o carpeta.
+    Renombrar {
+        origen: PathBuf,
         texto: String,
     },
     /// Nombre del archivo (o carpeta) nuevo, relativo a la raíz.
@@ -482,6 +489,8 @@ pub struct App {
     comando_doc: Option<String>,
     /// Última vista elegida en los diffs (lado a lado o unificada).
     pub preferir_lado_a_lado: bool,
+    /// Archivo o carpeta a borrar si se confirma.
+    borrar_pendiente: Option<PathBuf>,
     /// Copias de recuperación pendientes de restaurar o descartar: (archivo, copia).
     pub recuperables: Vec<(PathBuf, PathBuf)>,
     /// Destino de un `git clone` en curso en el deck.
@@ -645,6 +654,7 @@ impl App {
             comando_doc: None,
             preferir_lado_a_lado: true,
             recuperables: vec![],
+            borrar_pendiente: None,
             clonando: None,
             proyecto_pendiente: None,
             lateral: None,
@@ -3115,6 +3125,106 @@ impl App {
         self.refrescar_git();
     }
 
+    /// Pide el nombre nuevo de un archivo o carpeta (F2 en el explorador).
+    fn pedir_renombrar(&mut self, ruta: &Path) {
+        if self.examen.is_some() {
+            self.avisar("En modo examen no se renombran archivos.", Nivel::Aviso);
+            return;
+        }
+        let texto = self.proyecto.relativa(ruta);
+        self.modal = Some(Modal::Renombrar {
+            origen: ruta.to_path_buf(),
+            texto,
+        });
+    }
+
+    /// Renombra (o mueve) dentro del proyecto y actualiza los buffers abiertos.
+    fn renombrar(&mut self, origen: &Path, nuevo: &str) {
+        let nuevo = nuevo.trim().trim_start_matches('/');
+        let destino = self.proyecto.raiz.join(nuevo);
+        if nuevo.is_empty() || nuevo.split('/').any(|c| c == "..") || destino == origen {
+            return;
+        }
+        if destino.exists() {
+            self.avisar(format!("Ya existe {nuevo}."), Nivel::Aviso);
+            return;
+        }
+        if let Some(p) = destino.parent() {
+            let _ = std::fs::create_dir_all(p);
+        }
+        if let Err(e) = std::fs::rename(origen, &destino) {
+            self.avisar(format!("No se pudo renombrar: {e}"), Nivel::Error);
+            return;
+        }
+        let destino = jonesy_core::canonica(&destino);
+        for b in &mut self.buffers {
+            if let Some(r) = b.buf.ruta.clone() {
+                if let Ok(resto) = r.strip_prefix(origen) {
+                    b.buf.ruta = Some(if resto.as_os_str().is_empty() {
+                        destino.clone()
+                    } else {
+                        destino.join(resto)
+                    });
+                }
+            }
+        }
+        self.explorador.revelar(&destino, &self.proyecto.raiz);
+        self.refrescar_estructura();
+        self.refrescar_git();
+        self.avisar(format!("Renombrado a {nuevo}."), Nivel::Ok);
+    }
+
+    /// Pide confirmación para borrar (Supr en el explorador).
+    fn pedir_borrar(&mut self, ruta: &Path) {
+        if self.examen.is_some() {
+            self.avisar("En modo examen no se borran archivos.", Nivel::Aviso);
+            return;
+        }
+        let rel = self.proyecto.relativa(ruta);
+        let que = if ruta.is_dir() {
+            let n = std::fs::read_dir(ruta).map(|i| i.count()).unwrap_or(0);
+            format!("la carpeta {rel} y todo su contenido ({n} elemento(s) adentro)")
+        } else {
+            format!("el archivo {rel}")
+        };
+        self.borrar_pendiente = Some(ruta.to_path_buf());
+        self.modal = Some(Modal::Confirmar {
+            titulo: "Borrar".into(),
+            mensaje: format!("¿Borrar {que}? No se puede deshacer desde jonesy (sí desde git, si estaba commiteado). (s/n)"),
+            que: Confirmacion::Borrar,
+        });
+    }
+
+    fn borrar_ruta(&mut self) {
+        let Some(ruta) = self.borrar_pendiente.take() else {
+            return;
+        };
+        let r = if ruta.is_dir() {
+            std::fs::remove_dir_all(&ruta)
+        } else {
+            std::fs::remove_file(&ruta)
+        };
+        if let Err(e) = r {
+            self.avisar(format!("No se pudo borrar: {e}"), Nivel::Error);
+            return;
+        }
+        // Las pestañas de lo borrado se cierran (sus cambios sin guardar se pierden con el archivo).
+        self.buffers
+            .retain(|b| b.buf.ruta.as_ref().is_none_or(|r| !r.starts_with(&ruta)));
+        if self.buffers.is_empty() {
+            self.buffers
+                .push(BufferAbierto::nuevo(Buffer::desde_texto("")));
+        }
+        self.activo = self.activo.min(self.buffers.len() - 1);
+        self.explorador.reconstruir(&self.proyecto.raiz);
+        self.refrescar_estructura();
+        self.refrescar_git();
+        self.avisar(
+            format!("Borrado {}.", self.proyecto.relativa(&ruta)),
+            Nivel::Ok,
+        );
+    }
+
     /// Pide el nombre de un archivo o carpeta nueva, partiendo de `dir`.
     fn pedir_nuevo(&mut self, dir: &Path, carpeta: bool) {
         let mut texto = self.proyecto.relativa(dir);
@@ -3197,6 +3307,16 @@ impl App {
                     KeyCode::Char('m') => {
                         let d = e.directorio_destino(&raiz);
                         self.pedir_nuevo(&d, true);
+                    }
+                    KeyCode::F(2) => {
+                        if let Some(f) = e.seleccionada().cloned() {
+                            self.pedir_renombrar(&f.ruta);
+                        }
+                    }
+                    KeyCode::Delete => {
+                        if let Some(f) = e.seleccionada().cloned() {
+                            self.pedir_borrar(&f.ruta);
+                        }
                     }
                     KeyCode::Char('r') => {
                         self.refrescar_estructura();
@@ -3904,6 +4024,7 @@ impl App {
                 | Modal::IrALinea { texto }
                 | Modal::Argumentos { texto, .. }
                 | Modal::NuevoArchivo { texto, .. }
+                | Modal::Renombrar { texto, .. }
                 | Modal::Clonar {
                     url: texto,
                     campo: 0,
@@ -4636,6 +4757,7 @@ impl App {
                     Confirmacion::CerrarBuffer => self.cerrar_buffer(true),
                     Confirmacion::Entregar => self.entregar(),
                     Confirmacion::Recuperar => self.recuperar(true),
+                    Confirmacion::Borrar => self.borrar_ruta(),
                     Confirmacion::AbrirClonado => {
                         if let Some(p) = self.proyecto_pendiente.take() {
                             self.cambiar_proyecto(p);
@@ -4719,6 +4841,17 @@ impl App {
                     comando,
                     texto,
                 });
+            }
+            Modal::Renombrar { origen, mut texto } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.renombrar(&origen, &texto);
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::Renombrar { origen, texto });
             }
             Modal::NuevoArchivo { mut texto, carpeta } => {
                 if cerrar {

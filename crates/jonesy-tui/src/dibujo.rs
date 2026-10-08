@@ -330,7 +330,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
             f.buffer_mut().set_string(
                 i.x,
                 i.y + i.height - 1,
-                "n archivo · m carpeta · r refrescar · Tab proyecto",
+                "n nuevo · m carpeta · F2 renombrar · Supr borrar · r relee",
                 Style::default().fg(tema::ATENUADO),
             );
         }
@@ -2394,6 +2394,19 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.x + (UnicodeWidthStr::width(linea.as_str()) as u16)
                     .min(i.width.saturating_sub(1)),
                 y,
+            ))
+        }
+        Modal::Renombrar { texto, .. } => {
+            let r = centrado(area, 64, 3);
+            f.render_widget(Clear, r);
+            let b = bloque(" Renombrar o mover (ruta relativa al proyecto) ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(Paragraph::new(texto.clone()), i);
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
             ))
         }
         Modal::NuevoArchivo { texto, carpeta } => {

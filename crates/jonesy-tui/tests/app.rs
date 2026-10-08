@@ -1077,3 +1077,39 @@ fn recuperacion_tras_un_corte() {
     tecla(&mut c, KeyCode::Char('n'), KeyModifiers::NONE);
     assert!(!copia.exists());
 }
+
+#[test]
+fn explorador_renombra_y_borra() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("src/lista.c", "int l;\n"),
+        ("src/lista.h", "int l;\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("src/lista.c"), true);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    assert_eq!(a.explorador.seleccionada().unwrap().nombre, "lista.c");
+    // F2: renombrar; la pestaña abierta sigue al archivo.
+    tecla(&mut a, KeyCode::F(2), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    escribir(&mut a, "src/listas.c");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(dir.path().join("src/listas.c").is_file() && !dir.path().join("src/lista.c").exists());
+    assert_eq!(a.buf().buf.nombre(), "listas.c");
+    // Supr: borrar con confirmación; la pestaña se cierra.
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    assert_eq!(a.explorador.seleccionada().unwrap().nombre, "listas.c");
+    tecla(&mut a, KeyCode::Delete, KeyModifiers::NONE);
+    assert!(matches!(a.modal, Some(Modal::Confirmar { .. })));
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    assert!(!dir.path().join("src/listas.c").exists());
+    assert!(a.buffers.iter().all(|b| b.buf.nombre() != "listas.c"));
+    // En examen no se puede.
+    let (mut e, _rx) = app(dir.path(), true);
+    e.abrir_archivo(&dir.path().join("src/lista.h"), true);
+    tecla(&mut e, KeyCode::Char('e'), KeyModifiers::ALT);
+    tecla(&mut e, KeyCode::Delete, KeyModifiers::NONE);
+    assert!(e.modal.is_none());
+    assert!(dir.path().join("src/lista.h").exists());
+}
