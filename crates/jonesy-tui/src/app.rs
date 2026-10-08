@@ -1123,7 +1123,8 @@ impl App {
                 EventoGdb::Variables(v) => d.variables = v,
                 EventoGdb::Consola(t) => {
                     for l in t.lines() {
-                        d.consola.push(l.to_string());
+                        // Los tabs de GDB («4\tint *p») dejarían celdas sin pisar.
+                        d.consola.push(expandir_tabs(l));
                     }
                     if d.consola.len() > 500 {
                         d.consola.drain(..d.consola.len() - 500);
@@ -2722,6 +2723,23 @@ fn desindentar(b: &mut Buffer) -> Option<Delta> {
     d
 }
 
+/// Reemplaza tabs por espacios hasta la próxima columna múltiplo de 4.
+pub fn expandir_tabs(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut col = 0;
+    for c in s.chars() {
+        if c == '\t' {
+            let n = ANCHO_TAB - col % ANCHO_TAB;
+            out.extend(std::iter::repeat_n(' ', n));
+            col += n;
+        } else {
+            out.push(c);
+            col += 1;
+        }
+    }
+    out
+}
+
 /// Edita un campo de texto de una línea; true si cambió.
 pub fn editar_campo(campo: &mut String, k: &KeyEvent) -> bool {
     match k.code {
@@ -2790,4 +2808,15 @@ pub fn lineas_diff(texto: &str) -> Vec<Line<'static>> {
             Line::styled(l.replace('\t', "    "), estilo)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn expande_tabs_a_multiplos_de_cuatro() {
+        assert_eq!(expandir_tabs("4\tint *p;"), "4   int *p;");
+        assert_eq!(expandir_tabs("\tx"), "    x");
+    }
 }
