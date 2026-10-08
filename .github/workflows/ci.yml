@@ -129,6 +129,13 @@ jobs:
       - run: cargo build --release --locked
       - name: El binario arranca
         run: ${{ matrix.binario }} --version
+      - name: jonesy doctor emite el sobre común
+        shell: bash
+        # En Windows puede faltar make (requerido): el código de salida no importa acá.
+        run: |
+          ${{ matrix.binario }} doctor --json > doctor.json || true
+          PY=$(command -v python3 || command -v python)
+          "$PY" -c "import json; d = json.load(open('doctor.json')); assert d['herramienta'] == 'jonesy' and d['schema_version'] == '1.0.0' and d['chequeos']" 
       - uses: actions/upload-artifact@v5
         with:
           name: jonesy-${{ runner.os }}

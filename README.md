@@ -9,8 +9,9 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   de comandos.
 - **F6** compila con el Makefile o gcc y salta a los errores; **Ctrl+F5** corre
   el programa en la terminal interna (`deck`, PTY real con vt100).
-- **ripley** al guardar: observaciones como texto virtual, panel de reglas por
-  categoría y **F1** para la explicación didáctica de la regla.
+- **Herramientas del ecosistema** como plugins: ripley, gaff, kaneda y spunkmeyer al
+  guardar (texto virtual, panel por tema, **F1** con la explicación y el enlace al
+  apunte) y el resto desde el menú Herramientas.
 - **Depurador** visual sobre GDB/MI con breakpoints en el margen, paso a paso,
   pila y variables, y **cat-scan**: stack y heap dibujados con flechas a
   partir de la traza de `mem-trace`, con punteros colgantes en rojo.
@@ -168,6 +169,26 @@ ya está en `TextDelta`), `BufferSave`, `CommandExec`, `FocusChange` y
 guardados, cambios de foco e inicio/fin de sesión fuerzan `flush` +
 `sync_data`. `jonesy verificar` recorre la cadena y `jonesy replay` reconstruye
 el texto evento por evento marcando lo pegado.
+
+## Herramientas del ecosistema
+
+Las herramientas de la cátedra se integran como **plugins declarativos** (manifiestos
+TOML, ver [`docs/integraciones.md`](docs/integraciones.md)):
+
+- **Al guardar** corren ripley, gaff, kaneda y spunkmeyer si están instaladas; sus
+  hallazgos (en la forma común de `yutani.hallazgos`) aparecen como texto virtual, en
+  Problemas con el nombre de la herramienta, y en el panel Alt+R agrupados por tema
+  (memoria, punteros, seguridad, estilo…). Lo repetido entre herramientas se muestra una
+  vez.
+- **F1** explica el hallazgo con la herramienta que lo informó (`gaff explain`,
+  `kaneda explain`…) y muestra el enlace al apunte.
+- **Herramientas (Alt+H)**: `gaff fix`, `gaff explain-syntax`, `corbel scaffold`,
+  daedalus, `tetsuo run` (sanitizers), motoko (opacidad de TDAs) y callahan (contratos
+  ACSL), sobre el archivo activo.
+- **Herramientas → Integraciones** muestra cuáles están activas y permite apagarlas; un
+  proyecto suma las suyas en `.jonesy/integraciones/` y un usuario en
+  `~/.config/jonesy/integraciones/`.
+- `jonesy doctor [--json]` informa qué está instalado con el sobre común del ecosistema.
 
 ## Extensiones
 

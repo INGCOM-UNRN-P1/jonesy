@@ -61,6 +61,14 @@ comando = ""
 # viejo respecto del código, con un botón que corre make doc.
 dir = "doc"
 
+[integraciones]
+# Herramientas del ecosistema como plugins (ver docs/integraciones.md). Las de fábrica
+# (ripley, gaff, kaneda, spunkmeyer al guardar; corbel, daedalus, tetsuo, motoko y
+# callahan desde Herramientas) se activan solas si están instaladas.
+desactivar = []          # p. ej. ["spunkmeyer"]
+activar = []             # p. ej. ["corbel"] para revisar la documentación al guardar
+# Integraciones propias del proyecto: .jonesy/integraciones/*.toml
+
 [ripley]
 # Correr "ripley check <archivo> --format json" al guardar archivos C.
 activo = true
