@@ -1177,7 +1177,7 @@ impl App {
         self.modal = Some(Modal::Confirmar {
             titulo: "Entregar examen".into(),
             mensaje: format!(
-                "Se guardan todos los archivos, se corre «{verificar}», se sella la bitácora y se arma el paquete final. Después no se puede editar. ¿Entregar? (s/n)"
+                "Se guardan todos los archivos, se corre «{verificar}», se sella la bitácora y se arma el paquete final. Después ya no vas a poder editar. ¿Confirmás la entrega? (s/n)"
             ),
             que: Confirmacion::Entregar,
         });
