@@ -21,6 +21,7 @@ jonesy-git = { path = "../jonesy-git" }
 jonesy-plugins = { path = "../jonesy-plugins" }
 jonesy-telemetry = { path = "../jonesy-telemetry" }
 jonesy-terminal = { path = "../jonesy-terminal" }
+vt100.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
