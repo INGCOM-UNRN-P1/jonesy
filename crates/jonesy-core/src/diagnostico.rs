@@ -106,22 +106,39 @@ struct SalidaRipley {
     ast_findings: Vec<HallazgoRipley>,
 }
 
+/// Un hallazgo de ripley. ripley emite cada campo en inglés y en español a la vez
+/// (`file` y `archivo`, `line` y `linea`...): no sirven `#[serde(alias)]` (serde
+/// rechaza el campo duplicado), así que se leen por separado y se prefiere el inglés.
 #[derive(Deserialize)]
 struct HallazgoRipley {
-    #[serde(default, alias = "archivo")]
+    #[serde(default)]
     file: Option<String>,
-    #[serde(default, alias = "linea")]
+    #[serde(default)]
+    archivo: Option<String>,
+    #[serde(default)]
     line: Option<usize>,
-    #[serde(default, alias = "columna")]
+    #[serde(default)]
+    linea: Option<usize>,
+    #[serde(default)]
     column: Option<usize>,
-    #[serde(default, alias = "severidad")]
+    #[serde(default)]
+    columna: Option<usize>,
+    #[serde(default)]
     severity: Option<String>,
-    #[serde(default, alias = "mensaje")]
+    #[serde(default)]
+    severidad: Option<String>,
+    #[serde(default)]
     message: Option<String>,
-    #[serde(default, alias = "sugerencia")]
+    #[serde(default)]
+    mensaje: Option<String>,
+    #[serde(default)]
     suggestion: Option<String>,
-    #[serde(default, alias = "codigo")]
+    #[serde(default)]
+    sugerencia: Option<String>,
+    #[serde(default)]
     rule_code: Option<String>,
+    #[serde(default)]
+    codigo: Option<String>,
 }
 
 /// Interpreta `ripley check --format json`. Las rutas se resuelven contra `dir`.
@@ -133,16 +150,16 @@ pub fn parsear_ripley(json: &str, dir: &Path) -> Result<Vec<Diagnostico>, String
         .ast_findings
         .into_iter()
         .map(|h| Diagnostico {
-            archivo: h.file.map(|f| {
+            archivo: h.file.or(h.archivo).map(|f| {
                 let p = PathBuf::from(f);
                 if p.is_absolute() { p } else { dir.join(p) }
             }),
-            linea: h.line.unwrap_or(1).max(1),
-            columna: h.column.unwrap_or(1).max(1),
-            severidad: Severidad::de_texto(h.severity.as_deref().unwrap_or("estilo")),
-            mensaje: h.message.unwrap_or_default(),
-            codigo: h.rule_code,
-            sugerencia: h.suggestion.filter(|s| !s.is_empty()),
+            linea: h.line.or(h.linea).unwrap_or(1).max(1),
+            columna: h.column.or(h.columna).unwrap_or(1).max(1),
+            severidad: Severidad::de_texto(h.severity.or(h.severidad).as_deref().unwrap_or("estilo")),
+            mensaje: h.message.or(h.mensaje).unwrap_or_default(),
+            codigo: h.rule_code.or(h.codigo),
+            sugerencia: h.suggestion.or(h.sugerencia).filter(|s| !s.is_empty()),
             origen: Origen::Ripley,
         })
         .collect())
@@ -168,6 +185,22 @@ pub fn categoria_regla(codigo: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ripley_con_campos_bilingues() {
+        // Forma real de ripley 1.2: cada campo en inglés y en español.
+        let json = r#"{"version": "1.2.2", "ast_findings": [{"rule_code": "0x3001h", "codigo": "0x3001h",
+            "severity": "ERROR", "severidad": "ERROR", "file": "main.c", "archivo": "main.c",
+            "line": 4, "linea": 4, "column": 10, "columna": 10,
+            "message": "Verificá malloc", "mensaje": "Verificá malloc",
+            "suggestion": "if (p == NULL)", "sugerencia": "if (p == NULL)"}]}"#;
+        let d = parsear_ripley(json, Path::new("/tp")).unwrap();
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].codigo.as_deref(), Some("0x3001h"));
+        assert_eq!((d[0].linea, d[0].columna), (4, 10));
+        assert_eq!(d[0].severidad, Severidad::Error);
+        assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/main.c")));
+    }
 
     #[test]
     fn interpreta_gcc() {
