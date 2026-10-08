@@ -59,6 +59,7 @@ pub enum Accion {
     Explorador,
     EstructuraProyecto,
     NuevoArchivo,
+    AbrirProyecto,
 }
 
 pub struct Info {
@@ -120,6 +121,7 @@ impl Accion {
             Explorador => ("Explorador de archivos", "Alt+E"),
             EstructuraProyecto => ("Proyecto: bibliotecas, ejercicios y objetivos", "Alt+Y"),
             NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),
+            AbrirProyecto => ("Abrir proyecto o directorio…", ""),
         };
         Info { titulo, atajo }
     }
@@ -174,6 +176,7 @@ impl Accion {
             Explorador,
             EstructuraProyecto,
             NuevoArchivo,
+            AbrirProyecto,
             Atajos,
             AcercaDe,
             Salir,
@@ -190,6 +193,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
             vec![
                 NuevoArchivo,
                 Abrir,
+                AbrirProyecto,
                 Guardar,
                 GuardarTodo,
                 CerrarBuffer,

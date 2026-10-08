@@ -2071,6 +2071,39 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             }
             None
         }
+        Modal::AbrirProyecto {
+            dir,
+            filtro,
+            sel,
+            entradas,
+        } => {
+            let etiquetas: Vec<&str> = entradas.iter().map(|e| e.etiqueta.as_str()).collect();
+            let visibles: Vec<usize> = if filtro.is_empty() {
+                (0..entradas.len()).collect()
+            } else {
+                paleta::filtrar(filtro, &etiquetas)
+            };
+            let items: Vec<(String, String)> = visibles
+                .iter()
+                .map(|&i| {
+                    let e = &entradas[i];
+                    let marca = if e.abrir {
+                        "Enter abre"
+                    } else if e.es_proyecto {
+                        "proyecto"
+                    } else {
+                        ""
+                    };
+                    (e.etiqueta.clone(), marca.to_string())
+                })
+                .collect();
+            let (filtro, sel) = (filtro.clone(), *sel);
+            let titulo = format!(
+                " Abrir proyecto · {} · ← borra sube · escribí una ruta o filtrá ",
+                dir.display()
+            );
+            lista_modal(f, app, area, &titulo, &filtro, &items, sel)
+        }
         Modal::Paneles { sel } => {
             let sel = *sel;
             let r = centrado(area, 72, crate::app::CAMPOS_PANELES.len() as u16 + 5);

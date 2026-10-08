@@ -144,3 +144,72 @@ mod tests {
         );
     }
 }
+
+/// Proyectos abiertos recientemente (los más nuevos primero), guardados fuera del
+/// proyecto: `$XDG_STATE_HOME/jonesy/recientes.txt` (o `~/.local/state/…`; en Windows
+/// `%LOCALAPPDATA%\jonesy\recientes.txt`).
+pub mod recientes {
+    use std::path::{Path, PathBuf};
+
+    pub const MAXIMO: usize = 12;
+
+    pub fn archivo() -> Option<PathBuf> {
+        if let Ok(d) = std::env::var("JONESY_ESTADO") {
+            return Some(PathBuf::from(d).join("recientes.txt"));
+        }
+        let base = if cfg!(windows) {
+            std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+        } else {
+            std::env::var_os("XDG_STATE_HOME")
+                .map(PathBuf::from)
+                .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/state")))
+        };
+        base.map(|b| b.join("jonesy").join("recientes.txt"))
+    }
+
+    pub fn cargar() -> Vec<PathBuf> {
+        archivo()
+            .and_then(|a| std::fs::read_to_string(a).ok())
+            .map(|t| {
+                t.lines()
+                    .filter(|l| !l.trim().is_empty())
+                    .map(PathBuf::from)
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Pone `raiz` primera en la lista.
+    pub fn registrar(raiz: &Path) {
+        let Some(a) = archivo() else { return };
+        let mut v = cargar();
+        v.retain(|p| p != raiz);
+        v.insert(0, raiz.to_path_buf());
+        v.truncate(MAXIMO);
+        if let Some(d) = a.parent() {
+            let _ = std::fs::create_dir_all(d);
+        }
+        let texto: String = v.iter().map(|p| format!("{}\n", p.display())).collect();
+        let _ = crate::buffer::guardar_atomico(&a, texto.as_bytes());
+    }
+
+    #[cfg(test)]
+    mod tests {
+        #[test]
+        fn ultimos_primero_sin_repetir() {
+            let estado = tempfile::tempdir().unwrap();
+            let a = tempfile::tempdir().unwrap();
+            let b = tempfile::tempdir().unwrap();
+            // Variable propia del proceso de prueba: no afecta a otros tests.
+            std::env::set_var("JONESY_ESTADO", estado.path());
+            super::registrar(a.path());
+            super::registrar(b.path());
+            super::registrar(a.path());
+            assert_eq!(
+                super::cargar(),
+                vec![a.path().to_path_buf(), b.path().to_path_buf()]
+            );
+        }
+    }
+}

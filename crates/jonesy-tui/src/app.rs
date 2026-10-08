@@ -131,6 +131,85 @@ pub struct OpcionPaleta {
     pub que: QuePaleta,
 }
 
+/// Fila del diálogo Abrir proyecto.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EntradaDir {
+    pub etiqueta: String,
+    pub destino: PathBuf,
+    /// true: abre `destino` como proyecto; false: entra a navegarlo.
+    pub abrir: bool,
+    /// Tiene Makefile, .git o .jonesy.toml.
+    pub es_proyecto: bool,
+}
+
+/// Directorio con pinta de proyecto.
+pub fn parece_proyecto(d: &Path) -> bool {
+    [
+        "Makefile",
+        "makefile",
+        ".git",
+        jonesy_core::proyecto::ARCHIVO_CONFIG,
+        "tp.sh",
+    ]
+    .iter()
+    .any(|n| d.join(n).exists())
+}
+
+/// Entradas del diálogo para `dir`: abrir aquí, recientes (sólo al empezar), subir y subcarpetas.
+pub fn entradas_dir(dir: &Path, con_recientes: bool) -> Vec<EntradaDir> {
+    let mut v = vec![EntradaDir {
+        etiqueta: format!("Abrir {}", dir.display()),
+        destino: dir.to_path_buf(),
+        abrir: true,
+        es_proyecto: parece_proyecto(dir),
+    }];
+    if con_recientes {
+        for r in jonesy_core::sesion::recientes::cargar() {
+            v.push(EntradaDir {
+                etiqueta: format!("reciente: {}", r.display()),
+                destino: r.clone(),
+                abrir: true,
+                es_proyecto: true,
+            });
+        }
+    }
+    if let Some(p) = dir.parent() {
+        v.push(EntradaDir {
+            etiqueta: "../".into(),
+            destino: p.to_path_buf(),
+            abrir: false,
+            es_proyecto: false,
+        });
+    }
+    let mut subs: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|p| {
+                    p.is_dir()
+                        && !p
+                            .file_name()
+                            .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    subs.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
+    for d in subs {
+        let nombre = d
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        v.push(EntradaDir {
+            etiqueta: format!("{nombre}/"),
+            es_proyecto: parece_proyecto(&d),
+            destino: d,
+            abrir: false,
+        });
+    }
+    v
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Confirmacion {
     Salir,
@@ -184,6 +263,13 @@ pub enum Modal {
     NuevoArchivo {
         texto: String,
         carpeta: bool,
+    },
+    /// Archivo → Abrir proyecto: navegador de directorios.
+    AbrirProyecto {
+        dir: PathBuf,
+        filtro: String,
+        sel: usize,
+        entradas: Vec<EntradaDir>,
     },
     /// Ver → Tamaños de paneles: fila elegida.
     Paneles {
@@ -334,6 +420,8 @@ pub struct App {
     pub vista_proyecto: VistaProyecto,
     /// Releer la estructura cuando termine el comando del deck (tp.sh add-lib …).
     refrescar_estructura: bool,
+    /// Opciones de arranque (para reabrir otro proyecto con las mismas).
+    pub opciones: Opciones,
     pub lateral: Option<Lateral>,
     pub quickdoc_visible: bool,
     pub quickdoc_posicion: PosicionDoc,
@@ -476,6 +564,7 @@ impl App {
             explorador: Explorador::default(),
             vista_proyecto: VistaProyecto::default(),
             refrescar_estructura: false,
+            opciones: op.clone(),
             lateral: None,
             quickdoc_visible: true,
             quickdoc_posicion: proyecto.config.interfaz.quickdoc,
@@ -2022,6 +2111,45 @@ impl App {
         grupos.into_iter().collect()
     }
 
+    // ------------------------------------------------------------ cambio de proyecto
+
+    /// Cierra el proyecto actual (guarda sesión, sella la telemetría, termina procesos) y
+    /// abre `raiz` con las mismas opciones de arranque.
+    pub fn cambiar_proyecto(&mut self, raiz: PathBuf) {
+        if self.examen.is_some() {
+            self.avisar(
+                "En modo examen no se puede cambiar de proyecto.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let raiz = raiz.canonicalize().unwrap_or(raiz);
+        if !raiz.is_dir() {
+            self.avisar(
+                format!("No existe el directorio {}", raiz.display()),
+                Nivel::Error,
+            );
+            return;
+        }
+        let sin_guardar = self.buffers.iter().filter(|b| b.buf.modificado()).count();
+        self.finalizar("cambio de proyecto");
+        let op = Opciones {
+            raiz: raiz.clone(),
+            archivos: vec![],
+            ..self.opciones.clone()
+        };
+        let tam = self.tam;
+        *self = App::nueva(op, self.tx.clone());
+        self.tam = tam;
+        jonesy_core::sesion::recientes::registrar(&raiz);
+        let aviso = if sin_guardar > 0 {
+            format!("Proyecto {} abierto. Los cambios sin guardar quedaron en .jonesy/recuperacion del anterior.", raiz.display())
+        } else {
+            format!("Proyecto {} abierto.", raiz.display())
+        };
+        self.avisar(aviso, Nivel::Ok);
+    }
+
     // ------------------------------------------------------------ barra izquierda
 
     /// Muestra la barra izquierda en la pestaña `p`, o la oculta si ya estaba en ella con foco.
@@ -2583,6 +2711,27 @@ impl App {
             Accion::Paleta => self.abrir_paleta(),
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
+            Accion::AbrirProyecto => {
+                if self.examen.is_some() {
+                    self.avisar(
+                        "En modo examen no se puede cambiar de proyecto.",
+                        Nivel::Aviso,
+                    );
+                    return;
+                }
+                let dir = self
+                    .proyecto
+                    .raiz
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_else(|| self.proyecto.raiz.clone());
+                self.modal = Some(Modal::AbrirProyecto {
+                    entradas: entradas_dir(&dir, true),
+                    dir,
+                    filtro: String::new(),
+                    sel: 0,
+                });
+            }
             Accion::EstructuraProyecto => self.alternar_navegador(PestanaNav::Proyecto),
             Accion::NuevoArchivo => {
                 let dir = if self.foco == Foco::Navegador
@@ -2816,7 +2965,11 @@ impl App {
                 texto.push_str(&t);
                 return;
             }
-            Some(Modal::Paleta { filtro, .. } | Modal::Abrir { filtro, .. }) => {
+            Some(
+                Modal::Paleta { filtro, .. }
+                | Modal::Abrir { filtro, .. }
+                | Modal::AbrirProyecto { filtro, .. },
+            ) => {
                 filtro.push_str(t.lines().next().unwrap_or(""));
                 return;
             }
@@ -3507,6 +3660,76 @@ impl App {
                 editar_campo(&mut texto, &k);
                 self.modal = Some(Modal::NuevoArchivo { texto, carpeta });
             }
+            Modal::AbrirProyecto {
+                dir,
+                mut filtro,
+                mut sel,
+                entradas,
+            } => {
+                if cerrar {
+                    return;
+                }
+                let etiquetas: Vec<&str> = entradas.iter().map(|e| e.etiqueta.as_str()).collect();
+                let visibles = if filtro.is_empty() {
+                    (0..entradas.len()).collect()
+                } else {
+                    paleta::filtrar(&filtro, &etiquetas)
+                };
+                match k.code {
+                    KeyCode::Up => sel = sel.saturating_sub(1),
+                    KeyCode::Down => sel = (sel + 1).min(visibles.len().saturating_sub(1)),
+                    KeyCode::Enter => {
+                        // Una ruta escrita a mano (~/tp, /home/...) se abre directo.
+                        let escrita = expandir_ruta(&filtro, &dir);
+                        if let Some(r) = escrita.filter(|r| r.is_dir()) {
+                            self.cambiar_proyecto(r);
+                            return;
+                        }
+                        let Some(e) = visibles.get(sel).map(|&i| entradas[i].clone()) else {
+                            self.modal = Some(Modal::AbrirProyecto {
+                                dir,
+                                filtro,
+                                sel,
+                                entradas,
+                            });
+                            return;
+                        };
+                        if e.abrir {
+                            self.cambiar_proyecto(e.destino);
+                            return;
+                        }
+                        self.modal = Some(Modal::AbrirProyecto {
+                            entradas: entradas_dir(&e.destino, false),
+                            dir: e.destino,
+                            filtro: String::new(),
+                            sel: 0,
+                        });
+                        return;
+                    }
+                    KeyCode::Backspace if filtro.is_empty() => {
+                        if let Some(p) = dir.parent().map(Path::to_path_buf) {
+                            self.modal = Some(Modal::AbrirProyecto {
+                                entradas: entradas_dir(&p, false),
+                                dir: p,
+                                filtro,
+                                sel: 0,
+                            });
+                            return;
+                        }
+                    }
+                    _ => {
+                        if editar_campo(&mut filtro, &k) {
+                            sel = 0;
+                        }
+                    }
+                }
+                self.modal = Some(Modal::AbrirProyecto {
+                    dir,
+                    filtro,
+                    sel,
+                    entradas,
+                });
+            }
             Modal::Paneles { mut sel } => {
                 let n = CAMPOS_PANELES.len();
                 match k.code {
@@ -3731,8 +3954,12 @@ impl App {
             return;
         }
         if let Some(modal) = &mut self.modal {
-            if let (Some((r, base)), Modal::Paleta { sel, .. } | Modal::Abrir { sel, .. }) =
-                (self.zonas.modal_items, &mut *modal)
+            if let (
+                Some((r, base)),
+                Modal::Paleta { sel, .. }
+                | Modal::Abrir { sel, .. }
+                | Modal::AbrirProyecto { sel, .. },
+            ) = (self.zonas.modal_items, &mut *modal)
             {
                 if dentro(r) {
                     *sel = base + (y - r.y) as usize;
@@ -4148,6 +4375,22 @@ pub fn ajustar_panel(t: &mut TamPaneles, i: usize, delta: i32) {
         nuevo.max(0) as u16
     };
     *t = t.acotar();
+}
+
+/// Ruta escrita en un campo: `~/x`, absoluta o relativa a `base`. None si está vacía.
+pub fn expandir_ruta(texto: &str, base: &Path) -> Option<PathBuf> {
+    let t = texto.trim();
+    if t.is_empty() {
+        return None;
+    }
+    if let Some(resto) = t
+        .strip_prefix("~/")
+        .or(if t == "~" { Some("") } else { None })
+    {
+        return std::env::var_os("HOME").map(|h| PathBuf::from(h).join(resto));
+    }
+    let p = PathBuf::from(t);
+    Some(if p.is_absolute() { p } else { base.join(p) })
 }
 
 /// Reemplaza tabs por espacios hasta la próxima columna múltiplo de 4.

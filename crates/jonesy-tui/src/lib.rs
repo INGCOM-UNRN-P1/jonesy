@@ -18,6 +18,7 @@ pub use app::{App, Opciones};
 /// Corre el IDE en la terminal actual hasta que el usuario sale.
 pub fn ejecutar(op: Opciones) -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
+    jonesy_core::sesion::recientes::registrar(&op.raiz);
     let mut app = App::nueva(op, tx.clone());
     sistema::instalar_gancho_panico();
     sistema::preparar()?;

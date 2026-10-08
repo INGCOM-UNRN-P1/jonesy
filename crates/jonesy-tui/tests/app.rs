@@ -484,3 +484,30 @@ fn navegador_de_archivos_y_proyecto_con_objetivos() {
         Some(jonesy_tui::navegador::PestanaNav::Proyecto)
     );
 }
+
+#[test]
+fn abrir_otro_proyecto_desde_el_dialogo() {
+    let base = tempfile::tempdir().unwrap();
+    std::env::set_var("JONESY_ESTADO", base.path().join("estado"));
+    let a_dir = base.path().join("tp1");
+    let b_dir = base.path().join("tp2");
+    for d in [&a_dir, &b_dir] {
+        std::fs::create_dir_all(d).unwrap();
+        std::fs::write(d.join("Makefile"), "all:\n\t@true\n").unwrap();
+        std::fs::write(d.join("main.c"), MAIN).unwrap();
+    }
+    let (mut a, _rx) = app(&a_dir, false);
+    a.accion(jonesy_tui::accion::Accion::AbrirProyecto);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("tp2/") && p.contains("proyecto"), "{p}");
+    // Filtrar «tp2», entrar y abrirlo.
+    escribir(&mut a, "tp2");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.proyecto.raiz, b_dir.canonicalize().unwrap());
+    assert_eq!(a.buf().buf.nombre(), "main.c");
+    // En examen no se puede.
+    let (mut e, _rx) = app(&a_dir, true);
+    e.accion(jonesy_tui::accion::Accion::AbrirProyecto);
+    assert!(e.modal.is_none());
+}
