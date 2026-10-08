@@ -1,5 +1,6 @@
 //! Interfaz de terminal de jonesy.
 
+pub mod accion;
 pub mod layout;
 pub mod markdown;
 pub mod paleta;
