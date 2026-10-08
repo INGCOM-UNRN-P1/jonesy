@@ -610,7 +610,10 @@ mostrar_ayuda() {
 
     #[test]
     fn plantilla_tp_real() {
-        let p = Path::new(env!("HOME")).join("dev/tools/plantillas/plantilla-TP");
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let p = Path::new(&home).join("dev/tools/plantillas/plantilla-TP");
         if !p.is_dir() {
             return;
         }

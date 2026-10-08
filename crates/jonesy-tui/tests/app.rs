@@ -156,6 +156,7 @@ fn quickdoc_muestra_firma_con_parametro_activo() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn compila_y_salta_al_error() {
     if std::process::Command::new("gcc")
         .arg("--version")
@@ -186,6 +187,7 @@ fn compila_y_salta_al_error() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn examen_registra_pegado_y_entrega() {
     let dir = proyecto(&[
         ("main.c", MAIN),
@@ -274,6 +276,7 @@ fn breakpoint_por_clic_en_el_margen() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn ripley_al_guardar() {
     if std::process::Command::new("ripley")
         .arg("--version")
@@ -426,6 +429,7 @@ fn paneles_se_redimensionan_con_mouse_y_opciones() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn navegador_de_archivos_y_proyecto_con_objetivos() {
     let dir = proyecto(&[
         ("Makefile", "# Compila todo\nall:\n\t@$(MAKE) -C ejercicios/ej1\n"),
@@ -504,7 +508,7 @@ fn abrir_otro_proyecto_desde_el_dialogo() {
     escribir(&mut a, "tp2");
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
-    assert_eq!(a.proyecto.raiz, b_dir.canonicalize().unwrap());
+    assert_eq!(a.proyecto.raiz, jonesy_core::canonica(&b_dir));
     assert_eq!(a.buf().buf.nombre(), "main.c");
     // En examen no se puede.
     let (mut e, _rx) = app(&a_dir, true);
@@ -513,6 +517,7 @@ fn abrir_otro_proyecto_desde_el_dialogo() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn clonar_un_repositorio_y_abrirlo() {
     let git = |dir: &Path, args: &[&str]| {
         assert!(std::process::Command::new("git")
@@ -566,12 +571,13 @@ fn clonar_un_repositorio_y_abrirlo() {
     tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
     assert_eq!(
         a.proyecto.raiz,
-        destino.join("origen").canonicalize().unwrap()
+        jonesy_core::canonica(&destino.join("origen"))
     );
     assert_eq!(a.buf().buf.nombre(), "main.c");
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn autoformato_aplica_y_se_deshace() {
     let dir = proyecto(&[
         ("main.c", "int x=1;\nint y=2;\n"),
@@ -605,6 +611,7 @@ fn autoformato_aplica_y_se_deshace() {
 }
 
 #[test]
+#[cfg(unix)] // usa sh, make, gcc o el deck
 fn autoformato_con_clang_format() {
     if std::process::Command::new("clang-format")
         .arg("--version")

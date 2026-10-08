@@ -22,7 +22,17 @@ pub enum Salida {
     },
 }
 
-/// Lanza `sh -c comando` en `dir`. Devuelve enseguida; el progreso llega por `tx`.
+/// Intérprete para una línea de comandos: `sh -c` en Linux, macOS y en Windows con
+/// UCRT64/MSYS2 o Git Bash; `cmd /C` en Windows sin `sh` en el PATH.
+pub fn interprete() -> (&'static str, &'static str) {
+    if cfg!(windows) && !crate::proyecto::en_path("sh") {
+        ("cmd", "/C")
+    } else {
+        ("sh", "-c")
+    }
+}
+
+/// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
 /// `Fin` incluye toda la salida combinada, para parsear diagnósticos o JSON.
 pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: Sender<Salida>) {
     let comando = comando.to_string();
@@ -32,8 +42,9 @@ pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: 
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
     std::thread::spawn(move || {
-        let mut cmd = Command::new("sh");
-        cmd.arg("-c")
+        let (programa, opcion) = interprete();
+        let mut cmd = Command::new(programa);
+        cmd.arg(opcion)
             .arg(&comando)
             .current_dir(&dir)
             .stdin(Stdio::null())
@@ -131,7 +142,7 @@ mod tests {
         let (tx, rx) = std::sync::mpsc::channel();
         lanzar(
             7,
-            "echo hola; echo error >&2; exit 3",
+            "echo hola&& echo error 1>&2&& exit 3",
             Path::new("."),
             &[],
             tx,

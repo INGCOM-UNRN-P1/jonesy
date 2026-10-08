@@ -178,7 +178,7 @@ impl Proyecto {
     /// Abre el proyecto en `raiz` (un directorio). Si `.jonesy.toml` no existe, usa los valores por defecto.
     pub fn abrir(raiz: impl Into<PathBuf>) -> Proyecto {
         let raiz = raiz.into();
-        let raiz = raiz.canonicalize().unwrap_or(raiz);
+        let raiz = crate::canonica(&raiz);
         let (config, error_config) = match std::fs::read_to_string(raiz.join(ARCHIVO_CONFIG)) {
             Ok(texto) => match toml::from_str::<Config>(&texto) {
                 Ok(c) => (c, None),
@@ -296,15 +296,16 @@ impl Proyecto {
             return Some(self.raiz.join(cfg));
         }
         if let Some(p) = self.modulo_activo(activo).and_then(|m| m.ruta_programa()) {
-            return Some(p);
+            return Some(con_exe(p));
         }
         let activo = activo?;
         let stem = activo.file_stem()?.to_string_lossy().into_owned();
         let dir = activo.parent().unwrap_or(&self.raiz);
         [dir.join(&stem), self.raiz.join(&stem)]
             .into_iter()
+            .map(con_exe)
             .find(|p| p.is_file())
-            .or(Some(dir.join(stem)))
+            .or(Some(con_exe(dir.join(stem))))
     }
 
     /// Comando de autoformato para el archivo `archivo` (relativo a la raíz, se formatea
@@ -415,6 +416,17 @@ pub fn es_editable(ruta: &Path) -> bool {
                 | "gift"
         )
     )
+}
+
+/// En Windows gcc agrega `.exe` al ejecutable: si existe, se usa esa ruta.
+fn con_exe(p: PathBuf) -> PathBuf {
+    if cfg!(windows) && !p.is_file() {
+        let exe = p.with_extension("exe");
+        if exe.is_file() {
+            return exe;
+        }
+    }
+    p
 }
 
 /// true si `programa` está en el PATH (también `programa.exe` en Windows).

@@ -240,6 +240,18 @@ pub struct Supervisor {
     python: String,
 }
 
+/// Intérprete de Python: `$JONESY_PYTHON`, `python3` o, si no está (Windows), `python`.
+pub fn python_por_defecto() -> String {
+    if let Ok(p) = std::env::var("JONESY_PYTHON") {
+        return p;
+    }
+    if jonesy_core::proyecto::en_path("python3") || !jonesy_core::proyecto::en_path("python") {
+        "python3".into()
+    } else {
+        "python".into()
+    }
+}
+
 /// SHA-256 de un archivo en hexadecimal.
 pub fn sha256_archivo(ruta: &Path) -> std::io::Result<String> {
     use sha2::{Digest, Sha256};
@@ -277,7 +289,7 @@ impl Supervisor {
             siguiente_id: 1,
             tiempo_limite: TIEMPO_LIMITE,
             reinicios: 0,
-            python: std::env::var("JONESY_PYTHON").unwrap_or_else(|_| "python3".into()),
+            python: python_por_defecto(),
         }
     }
 
@@ -538,7 +550,10 @@ mod tests {
     use super::*;
 
     fn hay_python() -> bool {
-        Command::new("python3").arg("--version").output().is_ok()
+        Command::new(python_por_defecto())
+            .arg("--version")
+            .output()
+            .is_ok()
     }
 
     fn proyecto(plugins: &[(&str, &str)]) -> tempfile::TempDir {

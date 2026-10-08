@@ -17,6 +17,22 @@ pub use buffer::{Buffer, Delta, Lenguaje};
 pub use diagnostico::{Diagnostico, Origen, Severidad};
 pub use proyecto::{Config, PosicionDoc, Proyecto, TamPaneles};
 
+/// Ruta absoluta canónica. En Windows `canonicalize` devuelve `\\?\C:\…`, que no se
+/// compara bien con las rutas de git (`C:/…`) ni se muestra prolija: se quita el prefijo.
+pub fn canonica(p: &std::path::Path) -> std::path::PathBuf {
+    let c = p.canonicalize().unwrap_or_else(|_| p.to_path_buf());
+    #[cfg(windows)]
+    {
+        let s = c.to_string_lossy();
+        if let Some(resto) = s.strip_prefix(r"\\?\") {
+            if !resto.starts_with("UNC") {
+                return std::path::PathBuf::from(resto);
+            }
+        }
+    }
+    c
+}
+
 /// SHA-256 en hexadecimal.
 pub fn sha256_hex(datos: &[u8]) -> String {
     use sha2::{Digest, Sha256};

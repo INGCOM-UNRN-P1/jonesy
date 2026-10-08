@@ -685,6 +685,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn sesion_real_con_gdb() {
         if Command::new("gdb").arg("--version").output().is_err()
             || Command::new("gcc").arg("--version").output().is_err()

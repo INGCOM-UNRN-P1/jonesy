@@ -357,7 +357,8 @@ pub struct Consigna {
 
 pub struct Depuracion {
     pub gdb: Gdb,
-    pub pty: PtyInferior,
+    /// PTY propio del programa depurado (None en Windows: comparte la consola de GDB).
+    pub pty: Option<PtyInferior>,
     pub marcos: Vec<Marco>,
     pub variables: Vec<Variable>,
     pub ubicacion: Option<(PathBuf, usize)>,
@@ -864,7 +865,7 @@ impl App {
 
     /// Abre (o activa) un archivo; devuelve su índice.
     pub fn abrir_archivo(&mut self, ruta: &Path, activar: bool) -> Option<usize> {
-        let ruta = ruta.canonicalize().unwrap_or_else(|_| ruta.to_path_buf());
+        let ruta = jonesy_core::canonica(ruta);
         if let Some(i) = self
             .buffers
             .iter()
@@ -1327,12 +1328,18 @@ impl App {
     /// salida visible al terminar.
     pub fn correr_en_deck(&mut self, cmd: String) {
         self.guardar_todo();
-        let envoltorio = format!("{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n");
+        let (interprete, opcion) = proceso::interprete();
+        // Con sh se agrega el código de salida al final; cmd sólo corre el comando.
+        let envoltorio = if interprete == "sh" {
+            format!("{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n")
+        } else {
+            cmd.clone()
+        };
         let (filas, cols) = self.tam_panel_inferior();
         let tx = self.tx.clone();
         match Deck::iniciar(
-            Some("sh"),
-            &["-c".into(), envoltorio],
+            Some(interprete),
+            &[opcion.into(), envoltorio],
             &self.proyecto.raiz,
             filas,
             cols,
@@ -1447,7 +1454,9 @@ impl App {
         let pty = match PtyInferior::abrir(filas, cols_pty, move || {
             let _ = tx.send(Aviso::Despertar);
         }) {
-            Ok(p) => p,
+            Ok(p) => Some(p),
+            // Sin PTY separado (Windows) la E/S del programa aparece en la consola de GDB.
+            Err(e) if e.kind() == std::io::ErrorKind::Unsupported => None,
             Err(e) => {
                 self.avisar(
                     format!("No se pudo crear el PTY del programa: {e}"),
@@ -1462,7 +1471,7 @@ impl App {
             &programa,
             &args,
             &self.proyecto.raiz,
-            Some(pty.ruta()),
+            pty.as_ref().map(|p| p.ruta()),
             move || {
                 let _ = tx.send(Aviso::Despertar);
             },
@@ -2151,7 +2160,7 @@ impl App {
             );
             return;
         }
-        let raiz = raiz.canonicalize().unwrap_or(raiz);
+        let raiz = jonesy_core::canonica(&raiz);
         if !raiz.is_dir() {
             self.avisar(
                 format!("No existe el directorio {}", raiz.display()),
@@ -3124,12 +3133,7 @@ impl App {
             Aviso::Proceso(s) => self.al_proceso(s),
             Aviso::Plugins(r) => self.al_plugin(r),
             Aviso::Senal(s) => {
-                let nombre = match s {
-                    signal_hook::consts::SIGHUP => "SIGHUP",
-                    signal_hook::consts::SIGINT => "SIGINT",
-                    _ => "SIGTERM",
-                };
-                self.finalizar(nombre);
+                self.finalizar(sistema::nombre_senal(s));
                 self.salir = true;
             }
         }
@@ -3207,7 +3211,9 @@ impl App {
                             if d.foco_consola {
                                 d.entrada.push_str(t.lines().next().unwrap_or(""));
                             } else {
-                                let _ = d.pty.escribir(t.as_bytes());
+                                if let Some(p) = &mut d.pty {
+                                    let _ = p.escribir(t.as_bytes());
+                                }
                             }
                         }
                     }
@@ -3520,7 +3526,12 @@ impl App {
                         _ => {}
                     }
                 } else if let Some(bytes) = bytes_tecla(&k) {
-                    let _ = d.pty.escribir(&bytes);
+                    match &mut d.pty {
+                        Some(p) => {
+                            let _ = p.escribir(&bytes);
+                        }
+                        None => d.foco_consola = true,
+                    }
                 }
             }
         }

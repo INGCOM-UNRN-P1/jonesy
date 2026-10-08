@@ -7,7 +7,7 @@ version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 authors = ["Martín René Vilugrón <martinvilu@gmail.com>"]
-rust-version = "1.80"
+rust-version = "1.85"
 
 [workspace.dependencies]
 anyhow = "1"

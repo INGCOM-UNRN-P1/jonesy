@@ -24,14 +24,11 @@ pub enum Aviso {
 pub fn preparar() -> std::io::Result<()> {
     terminal::enable_raw_mode()?;
     let mut out = std::io::stdout();
-    execute!(
-        out,
-        EnterAlternateScreen,
-        EnableMouseCapture,
-        EnableBracketedPaste,
-        EnableFocusChange,
-        cursor::Hide
-    )?;
+    execute!(out, EnterAlternateScreen, EnableMouseCapture, cursor::Hide)?;
+    // La consola clásica de Windows no implementa bracketed paste ni eventos de foco:
+    // si fallan se sigue sin ellos.
+    let _ = execute!(out, EnableBracketedPaste);
+    let _ = execute!(out, EnableFocusChange);
     Ok(())
 }
 
@@ -74,6 +71,7 @@ pub fn hilo_entrada(tx: Sender<Aviso>) {
 
 /// SIGINT, SIGHUP y SIGTERM llegan como avisos (se guardan los buffers y se sella la
 /// telemetría antes de salir). Ctrl+C en modo crudo no genera SIGINT.
+#[cfg(unix)]
 pub fn hilo_senales(tx: Sender<Aviso>) {
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
     let Ok(mut senales) = signal_hook::iterator::Signals::new([SIGINT, SIGHUP, SIGTERM]) else {
@@ -89,6 +87,29 @@ pub fn hilo_senales(tx: Sender<Aviso>) {
             }
         })
         .ok();
+}
+
+/// En Windows cerrar la consola termina el proceso sin señales capturables; el
+/// autoguardado del examen cubre ese caso.
+#[cfg(not(unix))]
+pub fn hilo_senales(_tx: Sender<Aviso>) {}
+
+/// Nombre de una señal para la telemetría (SessionEnd).
+pub fn nombre_senal(s: i32) -> &'static str {
+    #[cfg(unix)]
+    {
+        use signal_hook::consts::{SIGHUP, SIGINT};
+        match s {
+            SIGHUP => "SIGHUP",
+            SIGINT => "SIGINT",
+            _ => "SIGTERM",
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = s;
+        "señal"
+    }
 }
 
 /// Secuencia OSC 52 para copiar al portapapeles del sistema a través de la terminal (también

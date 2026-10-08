@@ -1379,14 +1379,27 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
     let bp = bloque(" programa (E/S) ", foco && !d.foco_consola);
     let ip = bp.inner(izq);
     f.render_widget(bp, izq);
-    if d.tam_pty != (ip.height, ip.width) && ip.height > 1 && ip.width > 1 {
-        d.pty.redimensionar(ip.height, ip.width);
-        d.tam_pty = (ip.height, ip.width);
-    }
-    d.pty.tomar_pendiente();
-    let c1 = d.pty.con_pantalla(|s| {
-        crate::vt::dibujar_pantalla(s, ip, f.buffer_mut(), foco && !d.foco_consola)
-    });
+    let c1 = match &mut d.pty {
+        Some(pty) => {
+            if d.tam_pty != (ip.height, ip.width) && ip.height > 1 && ip.width > 1 {
+                pty.redimensionar(ip.height, ip.width);
+                d.tam_pty = (ip.height, ip.width);
+            }
+            pty.tomar_pendiente();
+            pty.con_pantalla(|s| {
+                crate::vt::dibujar_pantalla(s, ip, f.buffer_mut(), foco && !d.foco_consola)
+            })
+        }
+        None => {
+            f.render_widget(
+                Paragraph::new("En esta plataforma la E/S del programa aparece en la consola de GDB (a la derecha).")
+                    .style(Style::default().fg(tema::ATENUADO))
+                    .wrap(Wrap { trim: true }),
+                ip,
+            );
+            None
+        }
+    };
     let bc = bloque(" consola gdb (Tab alterna) ", foco && d.foco_consola);
     let ic = bc.inner(der);
     f.render_widget(bc, der);

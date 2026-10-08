@@ -85,8 +85,9 @@ impl Deck {
         let par = sistema
             .openpty(tamano(filas, cols))
             .map_err(std::io::Error::other)?;
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        let prog = programa.map(str::to_string).unwrap_or(shell);
+        let prog = programa
+            .map(str::to_string)
+            .unwrap_or_else(shell_por_defecto);
         let mut cmd = CommandBuilder::new(&prog);
         cmd.args(args);
         cmd.cwd(dir);
@@ -191,6 +192,7 @@ impl Drop for Deck {
 }
 
 /// PTY sin proceso para la E/S del programa depurado.
+#[cfg_attr(not(unix), allow(dead_code))]
 pub struct PtyInferior {
     parser: Arc<Mutex<vt100::Parser>>,
     escritor: Box<dyn Write + Send>,
@@ -203,6 +205,7 @@ pub struct PtyInferior {
 }
 
 impl PtyInferior {
+    #[cfg(unix)]
     pub fn abrir(
         filas: u16,
         cols: u16,
@@ -244,6 +247,20 @@ impl PtyInferior {
         })
     }
 
+    /// En Windows no hay un PTY con ruta para pasarle a GDB: el programa depurado
+    /// comparte la consola con GDB.
+    #[cfg(not(unix))]
+    pub fn abrir(
+        _filas: u16,
+        _cols: u16,
+        _notificar: impl Fn() + Send + Sync + 'static,
+    ) -> std::io::Result<PtyInferior> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "en Windows el programa depurado usa la consola de GDB",
+        ))
+    }
+
     /// Ruta del dispositivo (/dev/pts/N) para `-inferior-tty-set`.
     pub fn ruta(&self) -> &str {
         &self.ruta
@@ -271,7 +288,27 @@ impl PtyInferior {
     }
 }
 
+/// Shell del deck: `$SHELL`; en Windows bash (UCRT64/MSYS2, Git Bash) si está en el
+/// PATH y si no `%COMSPEC%`.
+pub fn shell_por_defecto() -> String {
+    if cfg!(windows) {
+        if en_path("bash") {
+            return "bash".into();
+        }
+        return std::env::var("COMSPEC").unwrap_or_else(|_| "cmd.exe".into());
+    }
+    std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into())
+}
+
+fn en_path(programa: &str) -> bool {
+    std::env::var_os("PATH").is_some_and(|p| {
+        std::env::split_paths(&p)
+            .any(|d| d.join(programa).is_file() || d.join(format!("{programa}.exe")).is_file())
+    })
+}
+
 /// Ruta del esclavo de un PTY a partir del descriptor del maestro.
+#[cfg(target_os = "linux")]
 fn ruta_esclavo(fd: std::os::unix::io::RawFd) -> std::io::Result<String> {
     let mut buf = [0 as libc::c_char; 128];
     // SAFETY: buf es válido y su largo se pasa explícitamente.
@@ -281,6 +318,22 @@ fn ruta_esclavo(fd: std::os::unix::io::RawFd) -> std::io::Result<String> {
     }
     // SAFETY: ptsname_r deja una cadena terminada en NUL dentro de buf.
     let c = unsafe { std::ffi::CStr::from_ptr(buf.as_ptr()) };
+    Ok(c.to_string_lossy().into_owned())
+}
+
+/// macOS y los BSD no tienen ptsname_r: ptsname usa un búfer estático, así que se
+/// serializa con un mutex.
+#[cfg(all(unix, not(target_os = "linux")))]
+fn ruta_esclavo(fd: std::os::unix::io::RawFd) -> std::io::Result<String> {
+    static CANDADO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _g = CANDADO.lock().unwrap_or_else(|e| e.into_inner());
+    // SAFETY: ptsname devuelve NULL o una cadena terminada en NUL válida hasta la
+    // próxima llamada, que el mutex impide mientras se copia.
+    let p = unsafe { libc::ptsname(fd) };
+    if p.is_null() {
+        return Err(std::io::Error::last_os_error());
+    }
+    let c = unsafe { std::ffi::CStr::from_ptr(p) };
     Ok(c.to_string_lossy().into_owned())
 }
 
@@ -344,6 +397,8 @@ pub fn bytes_de_tecla(t: Tecla) -> Vec<u8> {
 }
 
 #[cfg(test)]
+// En Windows sólo corren las pruebas que no necesitan sh.
+#[cfg_attr(not(unix), allow(dead_code, unused_imports))]
 mod tests {
     use super::*;
     use std::time::{Duration, Instant};
@@ -360,6 +415,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn ejecuta_comando_y_muestra_salida() {
         let dir = tempfile::tempdir().unwrap();
         let mut deck = Deck::iniciar(
@@ -381,6 +437,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn shell_interactivo_recibe_teclas() {
         let dir = tempfile::tempdir().unwrap();
         let mut deck = Deck::iniciar(Some("sh"), &[], dir.path(), 10, 40, || {}).unwrap();
@@ -395,6 +452,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn pty_inferior_tiene_ruta() {
         let pty = PtyInferior::abrir(5, 20, || {}).unwrap();
         assert!(pty.ruta().starts_with("/dev/"));
