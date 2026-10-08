@@ -183,7 +183,7 @@ TOML, ver [`docs/integraciones.md`](docs/integraciones.md)):
 - **F1** explica el hallazgo con la herramienta que lo informó (`gaff explain`,
   `kaneda explain`…) y muestra el enlace al apunte.
 - **Herramientas (Alt+H)**: `gaff fix`, `gaff explain-syntax`, `corbel check` y
-  `corbel scaffold`,
+  `corbel scaffold`, hal (segfaults), vasquez (fallos inyectados), holden (mocks),
   daedalus, `tetsuo run` (sanitizers), motoko (opacidad de TDAs) y callahan (contratos
   ACSL), sobre el archivo activo.
 - **Herramientas → Integraciones** muestra cuáles están activas y permite apagarlas; un

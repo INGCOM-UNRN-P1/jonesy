@@ -1,7 +1,7 @@
 # Integraciones con el ecosistema
 
 jonesy usa las herramientas de la cátedra (ripley, gaff, kaneda, spunkmeyer, corbel,
-daedalus, tetsuo, motoko, callahan…) como **plugins declarativos**: cada una se describe
+daedalus, tetsuo, motoko, callahan, hal, vasquez, holden) como **plugins declarativos**: cada una se describe
 con un manifiesto TOML que dice cuándo correrla, cómo leer su salida y qué acciones suma
 al menú **Herramientas**. No hace falta tocar jonesy para integrar una herramienta nueva.
 
@@ -85,6 +85,13 @@ resuelven contra la raíz del proyecto; un hallazgo sin archivo se asigna al ana
 | `recargar` | la herramienta modifica el archivo en disco; el buffer toma el contenido nuevo como una edición que Ctrl+Z deshace |
 | `diagnosticos` | interpreta la salida con el `formato` de la integración y la muestra en Problemas |
 
+## Modo examen
+
+Una integración con `examen = false` no corre en examen (callahan). Dentro de las que sí
+corren, una **acción** se permite salvo que modifique el código (`modo = "recargar"`:
+`gaff fix`, `corbel scaffold`), porque haría el trabajo por el alumno; el manifiesto puede
+fijarlo con `examen = true` o `false` en la acción.
+
 ## Duplicados
 
 Varias herramientas informan lo mismo (ripley incluye reglas de gaff y de kaneda). jonesy
@@ -106,6 +113,21 @@ archivos = ["*.c"]
 comando = "cppcheck --enable=warning,style --template=gcc --quiet {archivo} 2>&1"
 formato = "gcc"
 ```
+
+## ¿Integración o plugin Python?
+
+jonesy tiene dos formas de extenderse; conviven y sirven para cosas distintas:
+
+| | Integración (este documento) | Plugin Python (`.jonesy/plugins/*.py`) |
+|---|---|---|
+| Qué es | un comando externo descrito en TOML | código Python que corre en un proceso aparte (worker JSON-RPC) |
+| Para qué | usar una herramienta que ya existe (de la cátedra o no) | lógica propia chica: un chequeo puntual, un comando de la paleta |
+| Recibe | la ruta del archivo (lo lee del disco) | el texto del buffer (aunque no esté guardado) |
+| Devuelve | hallazgos en JSON (yutani), salida de gcc, o lo que muestre en un visor | diagnósticos y texto para la paleta |
+| En examen | todas salvo `examen = false` y las acciones que corrigen | sólo los plugins con SHA-256 en `[examen] plugins_permitidos` |
+
+Si la herramienta existe como CLI, conviene una integración. Si es un chequeo de pocas
+líneas propio de una materia o un TP, un plugin (ver `docs/plugin-ejemplo.py`).
 
 ## Para quien mantiene una herramienta del ecosistema
 
