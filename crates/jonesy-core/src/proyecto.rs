@@ -566,6 +566,29 @@ mod tests {
             p3.comando_compilar(Some(&main)).unwrap(),
             "make -C libs/memoria && make -C libs/arreglos && make -C ejercicios/ej1"
         );
+        // mem-trace del ejercicio: su main.c, sus fuentes y los de las bibliotecas.
+        std::fs::write(ej.join("lista.c"), "").unwrap();
+        std::fs::write(dir.path().join("libs/arreglos/arreglos.c"), "").unwrap();
+        let mt = crate::catscan::comando_memtrace(&p3, &main, &p3.raiz.join(".jonesy/memtrace"))
+            .unwrap();
+        assert!(mt.starts_with("mem-trace run ejercicios/ej1/main.c -I ejercicios/ej1 --cc-arg=ejercicios/ej1/lista.c"), "{mt}");
+        assert!(
+            mt.contains("-I libs/memoria") && mt.contains("--cc-arg=libs/arreglos/arreglos.c"),
+            "{mt}"
+        );
+        assert_eq!(
+            p.comando_ejecutar(Some(&main)).unwrap(),
+            "make -C ejercicios/ej1 run"
+        );
+        assert_eq!(
+            p.programa_a_depurar(Some(&main)).unwrap(),
+            p.raiz.join("ejercicios/ej1/programa")
+        );
+        // Fuera de un módulo, el Makefile de la raíz.
+        assert_eq!(
+            p.comando_compilar(Some(&p.raiz.join("notas.md"))).unwrap(),
+            "make"
+        );
     }
 
     #[test]

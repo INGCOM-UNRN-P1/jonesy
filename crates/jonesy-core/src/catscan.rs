@@ -8,7 +8,7 @@
 //! flechas `──►` ruteadas por carriles verticales entre ambos. Los punteros a bloques
 //! liberados se marcan como colgantes.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -27,6 +27,8 @@ pub struct Meta {
     pub exit_code: Option<i64>,
     pub signal: Option<String>,
     pub warnings: Vec<Value>,
+    /// Estado del heap al terminar: los bloques vivos son fugas.
+    pub final_heap: Heap,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -135,6 +137,182 @@ impl Traza {
                     .find(|&i| self.steps[i].line == linea && self.steps[i].func == funcion)
             })
     }
+}
+
+// ------------------------------------------------------------------ eventos
+
+fn sitio_de(v: &Value) -> String {
+    let archivo = v["file"]
+        .as_str()
+        .and_then(|f| Path::new(f).file_name())
+        .map(|f| f.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match v["line"].as_u64() {
+        Some(l) if !archivo.is_empty() => format!(" en {archivo}:{l}"),
+        _ => String::new(),
+    }
+}
+
+/// Qué pasó con el heap en este paso (malloc, free, realloc), con los problemas en tono
+/// de peligro: free doble, free de un puntero que no vino de malloc, malloc que falló.
+pub fn eventos_del_paso(paso: &Paso) -> Vec<(Tono, String)> {
+    paso.events
+        .iter()
+        .map(|e| {
+            let sitio = sitio_de(&e["site"]);
+            let id = e["id"]
+                .as_u64()
+                .map(|i| format!("#{i}"))
+                .unwrap_or_default();
+            let kind = e["kind"].as_str().unwrap_or("?");
+            match kind {
+                "free" if e["double_free"].as_bool() == Some(true) => (
+                    Tono::Peligro,
+                    format!("⚠ free doble de {id}{sitio}: ese bloque ya se había liberado"),
+                ),
+                "free" if e["unknown"].as_bool() == Some(true) => (
+                    Tono::Peligro,
+                    format!("⚠ free de un puntero que no viene de malloc{sitio}"),
+                ),
+                "free" if e["noop"].as_bool() == Some(true) => {
+                    (Tono::Normal, format!("free(NULL){sitio}: no hace nada"))
+                }
+                "free" => (Tono::Liberado, format!("free({id}){sitio}")),
+                "resize" => (
+                    Tono::Vivo,
+                    format!("realloc {id}{sitio}: el bloque se movió"),
+                ),
+                _ if e["failed"].as_bool() == Some(true) => (
+                    Tono::Peligro,
+                    format!(
+                        "⚠ {kind}({}) devolvió NULL{sitio}",
+                        e["size"].as_u64().unwrap_or(0)
+                    ),
+                ),
+                _ => (
+                    Tono::Vivo,
+                    format!("{kind}({}) → {id}{sitio}", e["size"].as_u64().unwrap_or(0)),
+                ),
+            }
+        })
+        .collect()
+}
+
+/// Cómo terminó el programa: señal, fugas (bloques vivos al final) y avisos de mem-trace.
+pub fn resumen_final(t: &Traza) -> Vec<(Tono, String)> {
+    let mut v = vec![];
+    if let Some(s) = t.meta.signal.as_deref().filter(|s| !s.is_empty()) {
+        v.push((
+            Tono::Peligro,
+            format!("⚠ el programa terminó por la señal {s}"),
+        ));
+    } else if let Some(c) = t.meta.exit_code {
+        v.push((Tono::Normal, format!("el programa terminó con código {c}")));
+    }
+    let fugas: Vec<&Bloque> = t
+        .meta
+        .final_heap
+        .blocks
+        .iter()
+        .filter(|b| b.vivo())
+        .collect();
+    let bytes: u64 = fugas.iter().map(|b| b.size).sum();
+    for b in &fugas {
+        v.push((
+            Tono::Peligro,
+            format!(
+                "⚠ fuga: #{} de {} B reservado en {} nunca se liberó",
+                b.id,
+                b.size,
+                b.site.corto()
+            ),
+        ));
+    }
+    if fugas.is_empty() && !t.meta.final_heap.blocks.is_empty() {
+        v.push((Tono::Vivo, "sin fugas: todo lo reservado se liberó".into()));
+    } else if !fugas.is_empty() {
+        v.push((
+            Tono::Peligro,
+            format!("{} bloque(s) sin liberar, {bytes} B en total", fugas.len()),
+        ));
+    }
+    for w in &t.meta.warnings {
+        let texto = w
+            .as_str()
+            .map(str::to_string)
+            .unwrap_or_else(|| w.to_string());
+        v.push((Tono::Tipo, format!("aviso de mem-trace: {texto}")));
+    }
+    v
+}
+
+/// Comando de mem-trace para el programa del archivo activo: un `.c` suelto, o el
+/// `main.c` de un ejercicio con Makefile junto con los demás fuentes del módulo y los de
+/// las bibliotecas que usa (por `--cc-arg`, con sus `-I`). None si no hay programa.
+pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Option<String> {
+    use crate::proyecto::shell_quote as q;
+    let rel = |x: &Path| p.relativa(x).replace('\\', "/");
+    let fuentes_de = |dir: &Path| -> Vec<PathBuf> {
+        let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+            .map(|it| {
+                it.flatten()
+                    .map(|e| e.path())
+                    .filter(|x| x.extension().is_some_and(|e| e == "c"))
+                    .filter(|x| {
+                        let n = x
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        !matches!(n.as_str(), "main.c" | "prueba.c" | "holden_mocks.c")
+                            && !n.starts_with('.')
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        v.sort();
+        v
+    };
+    let mut args: Vec<String> = vec![];
+    let fuente = match p.modulo_activo(Some(activo)) {
+        Some(m) => {
+            let main = m.dir.join("main.c");
+            if !main.is_file() {
+                return None;
+            }
+            args.push(format!("-I {}", q(&rel(&m.dir))));
+            for f in fuentes_de(&m.dir) {
+                args.push(format!("--cc-arg={}", q(&rel(&f))));
+            }
+            for lib in p.bibliotecas_de(m) {
+                let inc = if lib.dir.join("include").is_dir() {
+                    lib.dir.join("include")
+                } else {
+                    lib.dir.clone()
+                };
+                args.push(format!("-I {}", q(&rel(&inc))));
+                let src = if lib.dir.join("src").is_dir() {
+                    lib.dir.join("src")
+                } else {
+                    lib.dir.clone()
+                };
+                for f in fuentes_de(&src) {
+                    args.push(format!("--cc-arg={}", q(&rel(&f))));
+                }
+            }
+            main
+        }
+        None if activo.extension().is_some_and(|e| e == "c") && p.makefile().is_none() => {
+            activo.to_path_buf()
+        }
+        None => return None,
+    };
+    Some(format!(
+        "mem-trace run {} {} --outdir {} -o {} --max-steps 3000",
+        q(&rel(&fuente)),
+        args.join(" "),
+        q(&rel(salida)),
+        q(&rel(&salida.join("reporte.html")))
+    ))
 }
 
 // ------------------------------------------------------------------ dibujo
@@ -672,6 +850,58 @@ mod tests {
             .iter()
             .flatten()
             .any(|c| c.tono == Tono::Peligro && c.c == '►'));
+    }
+
+    #[test]
+    fn eventos_y_resumen() {
+        let t = traza();
+        let e = eventos_del_paso(&t.steps[1]);
+        assert!(e[0].1.starts_with("malloc(8) → #1 en p.c:5"), "{e:?}");
+        let e = eventos_del_paso(&t.steps[7]);
+        assert_eq!(e[0], (Tono::Liberado, "free(#1) en p.c:9".to_string()));
+        let r = resumen_final(&t);
+        assert!(r.iter().any(|(_, s)| s.contains("sin fugas")), "{r:?}");
+        let mut con_fuga = t.clone();
+        con_fuga.meta.final_heap.blocks[1].status = "alive".into();
+        let r = resumen_final(&con_fuga);
+        assert!(
+            r.iter()
+                .any(|(tono, s)| *tono == Tono::Peligro && s.contains("fuga: #2 de 16 B")),
+            "{r:?}"
+        );
+        let doble = Paso {
+            events: vec![
+                serde_json::json!({"kind": "free", "id": 1, "double_free": true, "site": {"file": "a.c", "line": 7}}),
+            ],
+            ..Default::default()
+        };
+        assert!(eventos_del_paso(&doble)[0]
+            .1
+            .contains("free doble de #1 en a.c:7"));
+    }
+
+    #[test]
+    fn traza_real_con_free_doble_y_fuga() {
+        // mem-trace sobre un ejercicio de plantilla-TP con Makefile.
+        let t = Traza::cargar(
+            &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/datos/trace_doble_free.json"),
+        )
+        .unwrap();
+        let ultimo = t.steps.last().unwrap();
+        let e = eventos_del_paso(ultimo);
+        assert!(
+            e.iter()
+                .any(|(tono, s)| *tono == Tono::Peligro
+                    && s.contains("free doble de #1 en main.c:9")),
+            "{e:?}"
+        );
+        let r = resumen_final(&t);
+        assert!(r.iter().any(|(_, s)| s.contains("señal SIGABRT")), "{r:?}");
+        assert!(
+            r.iter()
+                .any(|(_, s)| s.contains("fuga: #2 de 4 B reservado en main.c:7")),
+            "{r:?}"
+        );
     }
 
     #[test]

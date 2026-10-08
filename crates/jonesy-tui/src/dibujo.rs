@@ -1924,16 +1924,45 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         );
         return;
     };
-    let lienzo = jonesy_core::catscan::dibujar(&t.steps[p], i.width as usize);
+    let paso = &t.steps[p];
+    // Abajo: lo que pasó con el heap en este paso y, en el último, cómo terminó.
+    let mut notas = jonesy_core::catscan::eventos_del_paso(paso);
+    if p + 1 == t.steps.len() {
+        notas.extend(jonesy_core::catscan::resumen_final(t));
+    }
+    let alto_notas = (notas.len() as u16).min(i.height / 3);
+    let lienzo_area = Rect {
+        height: i.height - alto_notas,
+        ..i
+    };
+    let lienzo = jonesy_core::catscan::dibujar(paso, lienzo_area.width as usize);
     let buf = f.buffer_mut();
-    for (fila, celdas) in lienzo.filas.iter().enumerate().take(i.height as usize) {
-        for (col, c) in celdas.iter().enumerate().take(i.width as usize) {
+    for (fila, celdas) in lienzo
+        .filas
+        .iter()
+        .enumerate()
+        .take(lienzo_area.height as usize)
+    {
+        for (col, c) in celdas.iter().enumerate().take(lienzo_area.width as usize) {
             let mut s = [0u8; 4];
             let ch = sim.degradar(c.c);
             buf[(i.x + col as u16, i.y + fila as u16)]
                 .set_symbol(ch.encode_utf8(&mut s))
                 .set_style(tema::tono_catscan(c.tono));
         }
+    }
+    for (n, (tono, texto)) in notas.iter().take(alto_notas as usize).enumerate() {
+        let t: String = texto
+            .chars()
+            .map(|c| sim.degradar(c))
+            .take(i.width as usize)
+            .collect();
+        buf.set_string(
+            i.x,
+            lienzo_area.y + lienzo_area.height + n as u16,
+            t,
+            tema::tono_catscan(*tono),
+        );
     }
     let pie = format!(" paso {}/{} ", p + 1, t.steps.len());
     if i.width as usize > pie.len() && r.height > 1 {

@@ -1963,23 +1963,18 @@ impl App {
     }
 
     /// mem-trace en segundo plano para cat-scan (sólo programas de un archivo).
+    /// mem-trace en segundo plano para cat-scan: un .c suelto o el main.c de un ejercicio
+    /// con Makefile (con sus fuentes y los de sus bibliotecas).
     fn lanzar_memtrace(&mut self) {
         let Some(activo) = self.activo_ruta() else {
             return;
         };
-        if activo.extension().is_none_or(|e| e != "c") || self.proyecto.makefile().is_some() {
-            return;
-        }
         let dir = self.proyecto.dir_estado().join("memtrace");
+        let Some(cmd) = jonesy_core::catscan::comando_memtrace(&self.proyecto, &activo, &dir)
+        else {
+            return;
+        };
         let _ = std::fs::create_dir_all(&dir);
-        let rel = self.proyecto.relativa(&activo);
-        let q = jonesy_core::proyecto::shell_quote;
-        let cmd = format!(
-            "mem-trace run {} --outdir {} -o {} --max-steps 3000",
-            q(&rel),
-            q(&self.proyecto.relativa(&dir)),
-            q(&self.proyecto.relativa(&dir.join("reporte.html")))
-        );
         self.lanzar(
             &cmd,
             Tarea::MemTrace {
