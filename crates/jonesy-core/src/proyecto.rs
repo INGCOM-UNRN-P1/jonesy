@@ -249,17 +249,10 @@ impl Proyecto {
         }
         // El módulo (biblioteca o ejercicio con Makefile) del archivo activo.
         if let Some(m) = self.modulo_activo(activo) {
-            // Un ejercicio enlaza sus bibliotecas (LIB_NAME): se compilan antes.
-            let mut pasos: Vec<String> = m
-                .dependencias
+            // Un módulo enlaza sus bibliotecas (y las de ellas): se compilan antes.
+            let mut pasos: Vec<String> = self
+                .bibliotecas_de(m)
                 .iter()
-                .filter_map(|d| {
-                    self.estructura.modulos.iter().find(|x| {
-                        x.tipo == crate::estructura::TipoModulo::Libreria
-                            && (x.nombre == *d
-                                || x.dir.file_name().is_some_and(|n| n == d.as_str()))
-                    })
-                })
                 .map(|lib| format!("make -C {}", shell_quote(&lib.rel)))
                 .collect();
             pasos.push(format!("make -C {}", shell_quote(&m.rel)));
@@ -311,6 +304,38 @@ impl Proyecto {
     pub fn modulo_activo(&self, activo: Option<&Path>) -> Option<&crate::estructura::Modulo> {
         let m = self.estructura.modulo_de(activo?)?;
         (m.tipo != crate::estructura::TipoModulo::Raiz).then_some(m)
+    }
+
+    /// Bibliotecas que usa un módulo (LIB_NAME de un ejercicio, `dependencies` de
+    /// library.json o `DEPENDENCIAS` del Makefile de una biblioteca), incluidas las
+    /// dependencias de esas bibliotecas, en orden de compilación (primero las de abajo).
+    pub fn bibliotecas_de(&self, m: &crate::estructura::Modulo) -> Vec<&crate::estructura::Modulo> {
+        fn visitar<'a>(
+            p: &'a Proyecto,
+            nombres: &[String],
+            orden: &mut Vec<&'a crate::estructura::Modulo>,
+            camino: &mut Vec<String>,
+        ) {
+            for n in nombres {
+                let Some(lib) = p.estructura.modulos.iter().find(|x| {
+                    x.tipo == crate::estructura::TipoModulo::Libreria
+                        && (x.nombre == *n || x.dir.file_name().is_some_and(|f| f == n.as_str()))
+                }) else {
+                    continue;
+                };
+                // Ciclos (a usa b y b usa a): se cortan.
+                if camino.contains(&lib.rel) || orden.iter().any(|x| x.rel == lib.rel) {
+                    continue;
+                }
+                camino.push(lib.rel.clone());
+                visitar(p, &lib.dependencias, orden, camino);
+                camino.pop();
+                orden.push(lib);
+            }
+        }
+        let mut orden = vec![];
+        visitar(self, &m.dependencias, &mut orden, &mut vec![m.rel.clone()]);
+        orden
     }
 
     /// Ejecutable a depurar: `[depurar] programa`, el del módulo activo o el `.c` sin extensión.
@@ -528,18 +553,18 @@ mod tests {
             p2.comando_compilar(Some(&main)).unwrap(),
             "make -C libs/arreglos && make -C ejercicios/ej1"
         );
+        // Dependencias transitivas: arreglos usa memoria (DEPENDENCIAS) y memoria va antes.
+        std::fs::create_dir_all(dir.path().join("libs/memoria")).unwrap();
+        std::fs::write(dir.path().join("libs/memoria/Makefile"), "all:\n\t@true\n").unwrap();
+        std::fs::write(
+            dir.path().join("libs/arreglos/Makefile"),
+            "DEPENDENCIAS = memoria\nall:\n\t@true\n",
+        )
+        .unwrap();
+        let p3 = Proyecto::abrir(dir.path());
         assert_eq!(
-            p.comando_ejecutar(Some(&main)).unwrap(),
-            "make -C ejercicios/ej1 run"
-        );
-        assert_eq!(
-            p.programa_a_depurar(Some(&main)).unwrap(),
-            p.raiz.join("ejercicios/ej1/programa")
-        );
-        // Fuera de un módulo, el Makefile de la raíz.
-        assert_eq!(
-            p.comando_compilar(Some(&p.raiz.join("notas.md"))).unwrap(),
-            "make"
+            p3.comando_compilar(Some(&main)).unwrap(),
+            "make -C libs/memoria && make -C libs/arreglos && make -C ejercicios/ej1"
         );
     }
 

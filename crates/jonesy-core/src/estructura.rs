@@ -335,13 +335,27 @@ fn leer_modulo(raiz: &Path, dir: &Path) -> Option<Modulo> {
             repositorio = v["repository"].as_str().map(str::to_string);
         }
     }
-    let dependencias = if tipo == TipoModulo::Ejercicio {
-        var("LIB_NAME")
+    // Qué bibliotecas usa: LIB_NAME en un ejercicio; en una biblioteca, DEPENDENCIAS (o
+    // LIB_DEPS) del Makefile y `dependencies` de library.json.
+    let mut dependencias: Vec<String> = match tipo {
+        TipoModulo::Ejercicio => var("LIB_NAME")
             .map(|v| v.split_whitespace().map(str::to_string).collect())
-            .unwrap_or_default()
-    } else {
-        vec![]
+            .unwrap_or_default(),
+        _ => var("DEPENDENCIAS")
+            .or_else(|| var("LIB_DEPS"))
+            .map(|v| v.split_whitespace().map(str::to_string).collect())
+            .unwrap_or_default(),
     };
+    if let Ok(j) = std::fs::read_to_string(dir.join("library.json")) {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&j) {
+            for d in v["dependencies"].as_array().into_iter().flatten() {
+                let n = d.as_str().or_else(|| d["name"].as_str()).unwrap_or("");
+                if !n.is_empty() && !dependencias.iter().any(|x| x == n) {
+                    dependencias.push(n.to_string());
+                }
+            }
+        }
+    }
     Some(Modulo {
         nombre,
         dir: dir.to_path_buf(),
