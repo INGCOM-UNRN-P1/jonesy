@@ -225,6 +225,8 @@ pub enum Confirmacion {
     Entregar,
     /// Abrir el repositorio recién clonado (`App::proyecto_pendiente`).
     AbrirClonado,
+    /// Restaurar las copias de recuperación de un corte anterior (`App::recuperables`).
+    Recuperar,
 }
 
 pub enum Modal {
@@ -480,6 +482,8 @@ pub struct App {
     comando_doc: Option<String>,
     /// Última vista elegida en los diffs (lado a lado o unificada).
     pub preferir_lado_a_lado: bool,
+    /// Copias de recuperación pendientes de restaurar o descartar: (archivo, copia).
+    pub recuperables: Vec<(PathBuf, PathBuf)>,
     /// Destino de un `git clone` en curso en el deck.
     clonando: Option<PathBuf>,
     /// Proyecto a abrir si se confirma (después de clonar).
@@ -640,6 +644,7 @@ impl App {
             doc_modificado: None,
             comando_doc: None,
             preferir_lado_a_lado: true,
+            recuperables: vec![],
             clonando: None,
             proyecto_pendiente: None,
             lateral: None,
@@ -698,6 +703,7 @@ impl App {
         };
         app.cargar_integraciones();
         app.restaurar_sesion(&op.archivos);
+        app.ofrecer_recuperacion();
         app.cargar_doc();
         app.refrescar_git();
         if let Some(e) = app.proyecto.error_config.clone() {
@@ -2630,6 +2636,58 @@ impl App {
             grupos.entry(cat).or_default().push(d);
         }
         grupos.into_iter().collect()
+    }
+
+    // ------------------------------------------------------------ recuperación
+
+    /// Si quedaron copias de un corte (SIGHUP fuera del examen) distintas de los archivos,
+    /// pregunta si restaurarlas (RF-6.3).
+    fn ofrecer_recuperacion(&mut self) {
+        if self.examen.is_some() {
+            return;
+        }
+        self.recuperables = jonesy_core::sesion::copias_recuperacion(
+            &self.proyecto.dir_estado(),
+            &self.proyecto.raiz,
+        );
+        if self.recuperables.is_empty() {
+            return;
+        }
+        let nombres: Vec<String> = self
+            .recuperables
+            .iter()
+            .map(|(a, _)| self.proyecto.relativa(a))
+            .collect();
+        self.modal = Some(Modal::Confirmar {
+            titulo: "Recuperar cambios".into(),
+            mensaje: format!(
+                "La sesión anterior se cortó con cambios sin guardar en {}. ¿Recuperarlos? (s: se abren con esos cambios, sin guardar · n: se descartan)",
+                nombres.join(", ")
+            ),
+            que: Confirmacion::Recuperar,
+        });
+    }
+
+    /// Restaura (o descarta) las copias de recuperación y las borra.
+    pub fn recuperar(&mut self, restaurar: bool) {
+        for (archivo, copia) in std::mem::take(&mut self.recuperables) {
+            if restaurar {
+                if let (Ok(texto), Some(i)) = (
+                    std::fs::read_to_string(&copia),
+                    self.abrir_archivo(&archivo, true),
+                ) {
+                    self.activo = i;
+                    self.editar(|b| b.reemplazar_todo(&texto));
+                }
+            }
+            let _ = std::fs::remove_file(&copia);
+        }
+        if restaurar {
+            self.avisar(
+                "Cambios recuperados: revisalos y guardá con Ctrl+S.",
+                Nivel::Ok,
+            );
+        }
     }
 
     // ------------------------------------------------------------ cambio de proyecto
@@ -4577,13 +4635,20 @@ impl App {
                     Confirmacion::Salir => self.salir = true,
                     Confirmacion::CerrarBuffer => self.cerrar_buffer(true),
                     Confirmacion::Entregar => self.entregar(),
+                    Confirmacion::Recuperar => self.recuperar(true),
                     Confirmacion::AbrirClonado => {
                         if let Some(p) = self.proyecto_pendiente.take() {
                             self.cambiar_proyecto(p);
                         }
                     }
                 },
-                KeyCode::Char('n' | 'N') | KeyCode::Esc => {}
+                KeyCode::Char('n' | 'N') => {
+                    if que == Confirmacion::Recuperar {
+                        self.recuperar(false);
+                    }
+                }
+                // Esc cierra sin decidir: las copias de recuperación quedan para la próxima.
+                KeyCode::Esc => {}
                 _ => {
                     self.modal = Some(Modal::Confirmar {
                         titulo,

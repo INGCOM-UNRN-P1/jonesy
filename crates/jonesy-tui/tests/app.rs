@@ -1044,3 +1044,36 @@ fn enlaces_de_markdown_con_teclado() {
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
     assert_eq!(a.buf().buf.nombre(), "otra.md");
 }
+
+#[test]
+fn recuperacion_tras_un_corte() {
+    let dir = proyecto(&[("main.c", MAIN), ("otro.c", "int otro;\n")]);
+    let estado = dir.path().join(".jonesy");
+    let copia = jonesy_core::sesion::ruta_recuperacion(&estado, "main.c");
+    std::fs::create_dir_all(copia.parent().unwrap()).unwrap();
+    std::fs::write(&copia, "int main(void) { return 42; }\n").unwrap();
+    // Al abrir se ofrece recuperar; con «s» el buffer queda con esos cambios, sin guardar.
+    let (mut a, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("Recuperar cambios") && p.contains("main.c"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.contenido(), "int main(void) { return 42; }\n");
+    assert!(a.buf().buf.modificado());
+    assert!(!copia.exists());
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("main.c")).unwrap(),
+        MAIN,
+        "no se guarda solo"
+    );
+    // Con «n» se descarta; con Esc queda para la próxima.
+    std::fs::write(&copia, "otra cosa\n").unwrap();
+    let (mut b, _rx) = app(dir.path(), false);
+    tecla(&mut b, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(copia.exists());
+    let (mut c, _rx) = app(dir.path(), false);
+    tecla(&mut c, KeyCode::Char('n'), KeyModifiers::NONE);
+    assert!(!copia.exists());
+}

@@ -86,6 +86,33 @@ impl EstadoExamen {
     }
 }
 
+/// Copias de recuperación que todavía sirven: (archivo del proyecto, copia), sólo las
+/// que difieren del archivo en disco (si son iguales no hay nada que recuperar).
+pub fn copias_recuperacion(dir_estado: &Path, raiz: &Path) -> Vec<(PathBuf, PathBuf)> {
+    let Ok(it) = std::fs::read_dir(dir_estado.join("recuperacion")) else {
+        return vec![];
+    };
+    let mut v: Vec<(PathBuf, PathBuf)> = it
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter_map(|copia| {
+            let nombre = copia.file_name()?.to_string_lossy().replace('%', "/");
+            let archivo = raiz.join(nombre);
+            let distinto = std::fs::read(&copia).ok() != std::fs::read(&archivo).ok();
+            if distinto {
+                Some((archivo, copia))
+            } else {
+                // Igual al archivo: la copia sobra.
+                let _ = std::fs::remove_file(&copia);
+                None
+            }
+        })
+        .collect();
+    v.sort();
+    v
+}
+
 /// Copias de recuperación: buffers modificados sin guardar al recibir SIGHUP fuera del
 /// modo examen (en examen se guardan en el lugar).
 pub fn ruta_recuperacion(dir_estado: &Path, relativa: &str) -> PathBuf {
@@ -137,6 +164,27 @@ mod tests {
         assert_eq!(e.restante_s(1060), Some(60));
         assert_eq!(e.restante_s(1200), Some(-80));
         assert_eq!(EstadoExamen::default().restante_s(5), None);
+    }
+
+    #[test]
+    fn copias_que_difieren() {
+        let d = tempfile::tempdir().unwrap();
+        let estado = d.path().join(".jonesy");
+        std::fs::create_dir_all(d.path().join("src")).unwrap();
+        std::fs::write(d.path().join("src/a.c"), "viejo").unwrap();
+        std::fs::write(d.path().join("b.c"), "igual").unwrap();
+        for (rel, texto) in [("src/a.c", "nuevo"), ("b.c", "igual")] {
+            let c = ruta_recuperacion(&estado, rel);
+            std::fs::create_dir_all(c.parent().unwrap()).unwrap();
+            std::fs::write(c, texto).unwrap();
+        }
+        let v = copias_recuperacion(&estado, d.path());
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].0, d.path().join("src/a.c"));
+        assert!(
+            !ruta_recuperacion(&estado, "b.c").exists(),
+            "la copia igual se borra"
+        );
     }
 
     #[test]
