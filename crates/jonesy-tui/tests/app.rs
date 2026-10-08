@@ -632,3 +632,87 @@ fn autoformato_con_clang_format() {
     esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
     assert_eq!(a.buf().buf.contenido(), "int main(void) { return 0; }\n");
 }
+
+#[test]
+#[cfg(unix)] // usa make
+fn documentacion_del_proyecto_a_demanda() {
+    let h = "int suma(const int *v, size_t n);\n";
+    let c = "#include \"arreglos.h\"\nint main(void)\n{\n    return suma(0, 0);\n}\n";
+    let dir = proyecto(&[
+        (
+            "Makefile",
+            "# Genera la documentación\ndoc:\n\t@mkdir -p doc && cp api.fuente doc/api.json\n",
+        ),
+        ("libs/arreglos/Makefile", "all:\n\t@true\n"),
+        ("libs/arreglos/arreglos.h", h),
+        ("ejercicios/ej1/Makefile", "all:\n\t@true\n"),
+        ("ejercicios/ej1/main.c", c),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    // Lo que generaría corbel proyecto, con las fuentes y sus SHA-256.
+    let sha = |rel: &str| jonesy_core::sha256_hex(&std::fs::read(dir.path().join(rel)).unwrap());
+    let api = format!(
+        r#"{{"schema_version": "1.0.0",
+            "fuentes": [{{"archivo": "libs/arreglos/arreglos.h", "sha256": "{}"}}, {{"archivo": "ejercicios/ej1/main.c", "sha256": "{}"}}],
+            "modulos": [{{"nombre": "arreglos", "cabeceras": [{{"archivo": "libs/arreglos/arreglos.h", "funciones": [
+              {{"nombre": "suma", "firma": "int suma(const int *v, size_t n)", "brief": "Suma los n valores de v.",
+                "parametros": [{{"nombre": "v", "descripcion": "los valores"}}, {{"nombre": "n", "descripcion": "cuántos hay"}}],
+                "retorno": "La suma.", "pre": ["v != NULL o n == 0"]}}]}}]}}]}}"#,
+        sha("libs/arreglos/arreglos.h"),
+        sha("ejercicios/ej1/main.c")
+    );
+    std::fs::write(dir.path().join("api.fuente"), api).unwrap();
+
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/main.c"), true);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("[sin doc: make doc]"), "{p}");
+
+    a.accion(jonesy_tui::accion::Accion::GenerarDoc);
+    esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
+    assert_eq!(a.estado_doc, jonesy_core::documentacion::EstadoDoc::AlDia);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(!p.contains("make doc]"), "{p}");
+
+    // El quick-doc muestra la documentación de la biblioteca al llamarla desde el ejercicio.
+    let pos = a.buf().buf.linea_columna_a_pos(3, 15);
+    a.buf_mut().buf.mover_a(pos, false);
+    let (titulo, lineas) = jonesy_tui::dibujo::lineas_quickdoc(&mut a, 60);
+    let texto: Vec<String> = lineas
+        .iter()
+        .map(|l| l.spans.iter().map(|s| s.content.as_ref()).collect())
+        .collect();
+    assert!(titulo.contains("suma"), "{titulo}");
+    assert!(
+        texto.iter().any(|l| l.contains("Suma los n valores de v.")),
+        "{texto:?}"
+    );
+    assert!(
+        texto
+            .iter()
+            .any(|l| l.contains("const int * v — los valores")),
+        "{texto:?}"
+    );
+    assert!(
+        texto.iter().any(|l| l.contains("Pre: v != NULL")),
+        "{texto:?}"
+    );
+    assert!(
+        texto
+            .iter()
+            .any(|l| l.contains("arreglos.h") && l.contains("doc/")),
+        "{texto:?}"
+    );
+
+    // Cambiar la cabecera la deja vieja: se avisa en la barra y en el quick-doc.
+    a.abrir_archivo(&dir.path().join("libs/arreglos/arreglos.h"), true);
+    tecla(&mut a, KeyCode::End, KeyModifiers::CONTROL);
+    escribir(&mut a, "int resta(int a, int b);");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    assert!(matches!(
+        a.estado_doc,
+        jonesy_core::documentacion::EstadoDoc::Desactualizada(_)
+    ));
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("[doc vieja: make doc]"), "{p}");
+}

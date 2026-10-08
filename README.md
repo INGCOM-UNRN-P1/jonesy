@@ -103,6 +103,15 @@ permite ajustarlos con el teclado; los valores iniciales salen de
 paneles y sus tamaños, carpetas desplegadas, breakpoints) se guarda en
 `.jonesy/session.json`.
 
+### Documentación del proyecto
+
+`make doc` (con `corbel proyecto`) genera `doc/` con la documentación de las funciones
+de bibliotecas y ejercicios; no se versiona. jonesy busca `doc/api.json` al abrir el
+proyecto y la usa en el quick-doc (firma, descripción, parámetros, retorno, pre y
+poscondiciones). Si falta o quedó vieja respecto del código (lo sabe por los SHA-256 de
+las fuentes que registra corbel), la barra de estado muestra `[sin doc: make doc]` o
+`[doc vieja: make doc]`: un clic la regenera. Nunca se regenera sola.
+
 ### Proyectos de la cátedra
 
 jonesy no necesita configuración para un TP armado con plantilla-TP: lee el

@@ -437,6 +437,12 @@ pub struct App {
     refrescar_estructura: bool,
     /// Opciones de arranque (para reabrir otro proyecto con las mismas).
     pub opciones: Opciones,
+    /// Documentación del proyecto (`doc/api.json` de corbel) y su vigencia.
+    pub doc: Option<jonesy_core::documentacion::DocProyecto>,
+    pub estado_doc: jonesy_core::documentacion::EstadoDoc,
+    doc_modificado: Option<std::time::SystemTime>,
+    /// Cómo generar la documentación (se recalcula al cargarla y al releer la estructura).
+    comando_doc: Option<String>,
     /// Destino de un `git clone` en curso en el deck.
     clonando: Option<PathBuf>,
     /// Proyecto a abrir si se confirma (después de clonar).
@@ -584,6 +590,10 @@ impl App {
             vista_proyecto: VistaProyecto::default(),
             refrescar_estructura: false,
             opciones: op.clone(),
+            doc: None,
+            estado_doc: jonesy_core::documentacion::EstadoDoc::Ausente,
+            doc_modificado: None,
+            comando_doc: None,
             clonando: None,
             proyecto_pendiente: None,
             lateral: None,
@@ -638,6 +648,7 @@ impl App {
             proyecto,
         };
         app.restaurar_sesion(&op.archivos);
+        app.cargar_doc();
         app.refrescar_git();
         if let Some(e) = app.proyecto.error_config.clone() {
             app.avisar(e, Nivel::Error);
@@ -999,6 +1010,9 @@ impl App {
 
     /// ripley, extensiones nativas y plugins Python tras guardar.
     fn al_guardar(&mut self, ruta: &Path, i: usize) {
+        if ruta.extension().is_some_and(|e| e == "h" || e == "c") && self.doc.is_some() {
+            self.reevaluar_doc();
+        }
         let texto = self.buffers[i].buf.contenido();
         let nativos = self.registro.diagnosticar(ruta, &texto);
         self.diag_plugins.insert(ruta.to_path_buf(), nativos);
@@ -1115,6 +1129,7 @@ impl App {
             return;
         }
         self.ultimo_sondeo_git = Instant::now();
+        self.sondear_doc();
         if let Some(r) = &self.repo {
             let marca = r.marca();
             if marca != self.git_marca {
@@ -2036,6 +2051,7 @@ impl App {
                 self.fin_formateo(archivo, temporal, version, codigo, salida);
             }
             Tarea::Objetivo { comando } => {
+                self.cargar_doc();
                 self.tel(TelemetryEvent::CommandExec {
                     command: comando.clone(),
                     exit_code: codigo,
@@ -2334,6 +2350,93 @@ impl App {
         self.correr_en_deck(cmd);
     }
 
+    // ------------------------------------------------------------ documentación
+
+    fn ruta_api(&self) -> PathBuf {
+        jonesy_core::documentacion::DocProyecto::ruta_api(
+            &self.proyecto.raiz,
+            &self.proyecto.config.documentacion.dir,
+        )
+    }
+
+    /// Busca y carga `doc/api.json` (generado con make doc) y calcula su vigencia.
+    pub fn cargar_doc(&mut self) {
+        use jonesy_core::documentacion::{DocProyecto, EstadoDoc};
+        let ruta = self.ruta_api();
+        self.comando_doc = self.calcular_comando_doc();
+        self.doc_modificado = std::fs::metadata(&ruta).and_then(|m| m.modified()).ok();
+        match DocProyecto::cargar(&ruta) {
+            Ok(d) => {
+                self.doc = Some(d);
+                self.reevaluar_doc();
+            }
+            Err(e) => {
+                self.doc = None;
+                self.estado_doc = if ruta.exists() {
+                    EstadoDoc::Invalida(e)
+                } else {
+                    EstadoDoc::Ausente
+                };
+            }
+        }
+    }
+
+    pub fn reevaluar_doc(&mut self) {
+        if let Some(d) = &self.doc {
+            self.estado_doc = d.estado(&self.proyecto.raiz, &self.proyecto.estructura);
+        }
+    }
+
+    /// Comando que genera la documentación: el objetivo doc del Makefile raíz (o del único
+    /// módulo que lo tenga) o, sin Makefile que lo defina, corbel directamente.
+    pub fn comando_doc(&self) -> Option<String> {
+        self.comando_doc.clone()
+    }
+
+    fn calcular_comando_doc(&self) -> Option<String> {
+        let e = &self.proyecto.estructura;
+        if let Some(r) = e.raiz().filter(|r| r.tiene("doc")) {
+            return Some(r.comando("doc"));
+        }
+        let con_doc: Vec<_> = e.modulos.iter().filter(|m| m.tiene("doc")).collect();
+        if con_doc.len() == 1 {
+            return Some(con_doc[0].comando("doc"));
+        }
+        jonesy_core::proyecto::en_path("corbel").then(|| "corbel proyecto .".to_string())
+    }
+
+    /// Hay que avisar que falta correr make doc (y hay cómo hacerlo).
+    pub fn aviso_doc(&self) -> Option<&'static str> {
+        use jonesy_core::documentacion::EstadoDoc;
+        self.comando_doc()?;
+        match self.estado_doc {
+            EstadoDoc::AlDia => None,
+            EstadoDoc::Ausente => Some("sin doc"),
+            EstadoDoc::Desactualizada(_) => Some("doc vieja"),
+            EstadoDoc::Invalida(_) => Some("doc inválida"),
+        }
+    }
+
+    fn generar_doc(&mut self) {
+        match self.comando_doc() {
+            Some(cmd) => self.correr_en_panel(cmd),
+            None => self.avisar(
+                "No hay objetivo doc en el Makefile ni corbel instalado: corré «./tp.sh sync» o instalá corbel.",
+                Nivel::Aviso,
+            ),
+        }
+    }
+
+    /// Sondeo liviano: si `api.json` cambió (terminó un make doc), se recarga.
+    fn sondear_doc(&mut self) {
+        let actual = std::fs::metadata(self.ruta_api())
+            .and_then(|m| m.modified())
+            .ok();
+        if actual != self.doc_modificado {
+            self.cargar_doc();
+        }
+    }
+
     // ------------------------------------------------------------ barra izquierda
 
     /// Muestra la barra izquierda en la pestaña `p`, o la oculta si ya estaba en ella con foco.
@@ -2372,6 +2475,7 @@ impl App {
             &self.proyecto.config.modulo,
         );
         self.explorador.reconstruir(&self.proyecto.raiz);
+        self.cargar_doc();
     }
 
     /// Corre un objetivo de make: los interactivos (run) en el deck, el resto con la
@@ -2390,6 +2494,12 @@ impl App {
             self.correr_en_deck(comando);
             return;
         }
+        self.correr_en_panel(comando);
+    }
+
+    /// Corre un comando no interactivo con la salida en vivo en el panel y los errores de
+    /// gcc y del enlazador en Problemas.
+    pub fn correr_en_panel(&mut self, comando: String) {
         if self
             .procesos
             .values()
@@ -2896,6 +3006,7 @@ impl App {
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
             Accion::Formatear => self.formatear(),
+            Accion::GenerarDoc => self.generar_doc(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -3055,7 +3166,7 @@ impl App {
         if self.examen.as_ref().is_some_and(|e| !e.estado.entregado) {
             espera = espera.min(Duration::from_secs(1));
         }
-        if self.repo.is_some() {
+        if self.repo.is_some() || self.comando_doc().is_some() || self.doc.is_some() {
             espera = espera.min(SONDEO_GIT);
         }
         if let Some((_, _, t)) = &self.mensaje {

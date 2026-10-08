@@ -936,9 +936,42 @@ fn dibujar_preview(f: &mut Frame, app: &mut App, r: Rect) {
 
 // ------------------------------------------------------------------ quick-doc
 
+/// Función de `doc/api.json` en el formato del quick-doc.
+fn funcion_de_proyecto(f: &jonesy_core::documentacion::FuncionDoc) -> Funcion {
+    let tipos = jonesy_core::documentacion::tipos_de_parametros(&f.firma);
+    let descripcion = match (f.brief.is_empty(), f.descripcion.is_empty()) {
+        (false, false) => format!("{}\n{}", f.brief, f.descripcion),
+        (false, true) => f.brief.clone(),
+        _ => f.descripcion.clone(),
+    };
+    Funcion {
+        nombre: f.nombre.clone(),
+        cabecera: String::new(),
+        firma: f.firma.clone(),
+        descripcion,
+        retorno: f.retorno.clone(),
+        parametros: f
+            .parametros
+            .iter()
+            .enumerate()
+            .map(|(i, (n, d))| jonesy_doc::Parametro {
+                tipo: tipos.get(i).cloned().unwrap_or_default(),
+                nombre: n.clone(),
+                desc: d.clone(),
+            })
+            .collect(),
+        trampas: vec![],
+        reglas: vec![],
+    }
+}
+
 fn funcion_doc<'a>(app: &'a App, nombre: &str) -> Option<std::borrow::Cow<'a, Funcion>> {
     if let Some(f) = Base::embebida().funcion(nombre) {
         return Some(std::borrow::Cow::Borrowed(f));
+    }
+    // Documentación del proyecto generada con make doc (corbel).
+    if let Some(f) = app.doc.as_ref().and_then(|d| d.funciones.get(nombre)) {
+        return Some(std::borrow::Cow::Owned(funcion_de_proyecto(f)));
     }
     app.funciones_usuario
         .as_ref()
@@ -1078,6 +1111,48 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                 format!("Reglas: {}", func.reglas.join(", ")),
                 Style::default().fg(tema::ESTILO),
             ));
+        }
+        // Origen y vigencia de la documentación del proyecto.
+        if Base::embebida().funcion(&func.nombre).is_none() {
+            if let Some(f) = app.doc.as_ref().and_then(|d| d.funciones.get(&func.nombre)) {
+                for p in &f.pre {
+                    l.push(Line::styled(
+                        format!("Pre: {p}"),
+                        Style::default().fg(tema::NOTA),
+                    ));
+                }
+                for p in &f.post {
+                    l.push(Line::styled(
+                        format!("Post: {p}"),
+                        Style::default().fg(tema::NOTA),
+                    ));
+                }
+                if !f.ver.is_empty() {
+                    l.push(Line::styled(format!("Ver: {}", f.ver.join(", ")), atenuado));
+                }
+                if !f.documentada {
+                    l.push(Line::styled(
+                        format!("Sin documentar: corbel scaffold {}", f.cabecera),
+                        Style::default().fg(tema::ADVERTENCIA),
+                    ));
+                }
+                let archivo = f.cabecera.rsplit('/').next().unwrap_or(&f.cabecera);
+                l.push(Line::styled(
+                    format!("#include \"{archivo}\" · {} · doc/", f.modulo),
+                    atenuado,
+                ));
+                if let jonesy_core::documentacion::EstadoDoc::Desactualizada(motivo) =
+                    &app.estado_doc
+                {
+                    l.push(Line::styled(
+                        format!(
+                            "{} Puede estar desactualizada ({motivo}): corré make doc",
+                            if app.sim.ascii { "!" } else { "⚠" }
+                        ),
+                        Style::default().fg(tema::ADVERTENCIA),
+                    ));
+                }
+            }
         }
         let _ = ancho;
         return (format!(" {} ", func.nombre), l);
@@ -1906,6 +1981,10 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         ),
         ("[Terminal]".into(), Accion::Terminal),
     ];
+    // Documentación del proyecto ausente o vieja: botón para regenerarla (no se versiona).
+    if let Some(aviso) = app.aviso_doc() {
+        botones.insert(0, (format!("[{aviso}: make doc]"), Accion::GenerarDoc));
+    }
     let git = app
         .git_estado
         .as_ref()

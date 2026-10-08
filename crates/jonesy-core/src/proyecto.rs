@@ -19,6 +19,14 @@ pub struct Config {
     /// Descripciones o módulos extra para la vista de estructura (`[[modulo]]`).
     pub modulo: Vec<crate::estructura::ModuloConfig>,
     pub formato: Formato,
+    pub documentacion: Documentacion,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Documentacion {
+    /// Directorio donde `make doc` (corbel) deja `api.json` (vacío = `doc`).
+    pub dir: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

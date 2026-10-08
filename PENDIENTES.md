@@ -21,7 +21,7 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 | Más verificaciones en la CI | hecho | matriz Linux/Windows/macOS, MSRV, docs, shellcheck, worker, audit, binarios |
 | Explorador: renombrar y borrar archivos | falta | hoy sólo crea archivos y carpetas |
 | Estructura: dependencias entre bibliotecas | falta | F6 compila las bibliotecas de `LIB_NAME` de un ejercicio, pero no las dependencias de una biblioteca con otra |
-| quick-doc con la documentación del proyecto | falta | leer `doc/api.json` de `corbel proyecto` (ver `corbel/especificacion_documentacion_proyecto.md`, §8) para mostrar `@brief` y parámetros de las funciones de las bibliotecas del TP |
+| quick-doc con la documentación del proyecto | hecho | busca `doc/api.json` (corbel), lo muestra en el quick-doc y avisa con un botón `make doc` si falta o quedó viejo (RF-9 de la especificación de corbel). Falta que corbel implemente `corbel proyecto` y que plantilla-TP tenga el objetivo `doc` |
 | Descripciones de objetivos en la barra | flojo | con 28 columnas se cortan; el pie muestra la completa. Se puede ensanchar la barra |
 
 ## Requisitos de la especificación

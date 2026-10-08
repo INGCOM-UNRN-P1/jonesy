@@ -62,6 +62,7 @@ pub enum Accion {
     AbrirProyecto,
     GitClonar,
     Formatear,
+    GenerarDoc,
 }
 
 pub struct Info {
@@ -126,6 +127,7 @@ impl Accion {
             AbrirProyecto => ("Abrir proyecto o directorio…", ""),
             GitClonar => ("Git: clonar un repositorio…", ""),
             Formatear => ("Autoformato del archivo", "Alt+Shift+F"),
+            GenerarDoc => ("Generar la documentación del proyecto (make doc)", ""),
         };
         Info { titulo, atajo }
     }
@@ -176,6 +178,7 @@ impl Accion {
             GitLog,
             GitClonar,
             Formatear,
+            GenerarDoc,
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
@@ -246,6 +249,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
             "Construir",
             vec![
                 EstructuraProyecto,
+                GenerarDoc,
                 Compilar,
                 Ejecutar,
                 Depurar,

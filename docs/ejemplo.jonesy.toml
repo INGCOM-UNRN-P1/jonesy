@@ -55,6 +55,12 @@ inferior = 10    # filas del panel inferior (problemas, terminal, depurador)
 # "clang-format -i {archivo}".
 comando = ""
 
+[documentacion]
+# Directorio donde «make doc» (corbel proyecto) deja api.json. doc/ no se versiona:
+# jonesy lo busca, lo usa en el quick-doc y avisa en la barra cuando falta o quedó
+# viejo respecto del código, con un botón que corre make doc.
+dir = "doc"
+
 [ripley]
 # Correr "ripley check <archivo> --format json" al guardar archivos C.
 activo = true
