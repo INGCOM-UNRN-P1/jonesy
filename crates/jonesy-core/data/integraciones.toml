@@ -135,3 +135,39 @@ examen = false
   titulo = "Verificar los contratos ACSL (callahan verify)"
   comando = "callahan verify {archivo}"
   modo = "panel"
+
+[[integracion]]
+nombre = "hal"
+descripcion = "Segfaults y core dumps explicados (corre el programa bajo GDB)"
+binario = "hal"
+cuando = "manual"
+archivos = ["*.c"]
+
+  [[integracion.accion]]
+  titulo = "Investigar un segfault (hal check)"
+  comando = "hal check {archivo} --advice"
+  modo = "terminal"
+
+[[integracion]]
+nombre = "vasquez"
+descripcion = "Inyección de fallos: ¿qué pasa si malloc o fopen fallan?"
+binario = "vasquez"
+cuando = "manual"
+archivos = ["*.c"]
+
+  [[integracion.accion]]
+  titulo = "Probar el programa con fallos inyectados (vasquez check)"
+  comando = "vasquez check {archivo}"
+  modo = "terminal"
+
+[[integracion]]
+nombre = "holden"
+descripcion = "Mocks de malloc/fopen para probar el manejo de errores"
+binario = "holden"
+cuando = "manual"
+archivos = ["*.c"]
+
+  [[integracion.accion]]
+  titulo = "Generar mocks que fallan (holden generate)"
+  comando = "holden generate malloc fopen fread fwrite fclose -n 0 -o {dir}/holden_mocks.c"
+  modo = "panel"

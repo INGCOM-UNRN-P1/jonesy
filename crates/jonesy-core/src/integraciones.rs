@@ -67,6 +67,16 @@ pub struct Accion {
     pub modo: Modo,
     /// Globs de archivos (vacío = los de la integración).
     pub archivos: Vec<String>,
+    /// Permitida en modo examen. Sin indicarlo, se permiten todas salvo las que
+    /// modifican el código (modo «recargar»: gaff fix, corbel scaffold), que harían el
+    /// trabajo por el alumno.
+    pub examen: Option<bool>,
+}
+
+impl Accion {
+    pub fn permitida_en_examen(&self) -> bool {
+        self.examen.unwrap_or(self.modo != Modo::Recargar)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -432,12 +442,20 @@ mod tests {
             "tetsuo",
             "motoko",
             "callahan",
+            "hal",
+            "vasquez",
+            "holden",
         ] {
             assert!(nombres.contains(&n), "falta {n}");
         }
         let gaff = v.iter().find(|i| i.nombre == "gaff").unwrap();
         assert_eq!(gaff.cuando, Cuando::Guardar);
         assert_eq!(gaff.acciones[0].modo, Modo::Recargar);
+        assert!(
+            !gaff.acciones[0].permitida_en_examen(),
+            "gaff fix corrige por el alumno"
+        );
+        assert!(gaff.acciones[1].permitida_en_examen());
         assert!(!v.iter().find(|i| i.nombre == "callahan").unwrap().examen);
         let corbel = v.iter().find(|i| i.nombre == "corbel").unwrap();
         assert_eq!(corbel.cuando, Cuando::Manual);

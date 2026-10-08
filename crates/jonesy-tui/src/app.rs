@@ -1268,12 +1268,13 @@ impl App {
         let Some(ruta) = self.activo_ruta() else {
             return vec![];
         };
+        let examen = self.examen.is_some();
         self.integraciones_activas()
             .flat_map(|x| {
                 x.acciones
                     .iter()
                     .enumerate()
-                    .filter(|(_, a)| a.aplica_a(x, &ruta))
+                    .filter(|(_, a)| a.aplica_a(x, &ruta) && (!examen || a.permitida_en_examen()))
                     .map(|(n, a)| (x.nombre.clone(), n, a.titulo.clone()))
                     .collect::<Vec<_>>()
             })
@@ -1298,6 +1299,13 @@ impl App {
         let Some(a) = x.acciones.get(n).cloned() else {
             return;
         };
+        if self.examen.is_some() && !a.permitida_en_examen() {
+            self.avisar(
+                format!("«{}» no está permitida en modo examen.", a.titulo),
+                Nivel::Aviso,
+            );
+            return;
+        }
         if a.modo == Modo::Recargar && self.buf().buf.solo_lectura {
             self.avisar("Archivo de solo lectura.", Nivel::Aviso);
             return;
