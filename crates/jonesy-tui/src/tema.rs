@@ -40,7 +40,7 @@ impl Simbolos {
             vineta: "• ",
             tarea: ["☐ ", "☑ "],
             salto: "↵",
-            rama: "",
+            rama: "⎇",
             reloj: "⏱",
         }
     }
