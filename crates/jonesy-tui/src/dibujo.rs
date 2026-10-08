@@ -1276,15 +1276,12 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
         .skip(base)
         .take(alto)
         .map(|(i, d)| {
-            let ubic = format!(
-                "{}:{}:{}",
-                d.archivo
-                    .as_deref()
-                    .map(|a| app.proyecto.relativa(a))
-                    .unwrap_or_default(),
-                d.linea,
-                d.columna
-            );
+            // Los del enlazador no tienen archivo ni línea.
+            let ubic = match d.archivo.as_deref() {
+                Some(a) => format!("{}:{}:{}", app.proyecto.relativa(a), d.linea, d.columna),
+                None => "—".to_string(),
+            };
+            let sugerencia = d.sugerencia.as_deref().filter(|_| d.archivo.is_none());
             let fondo = if i == app.sel_problema {
                 tema::FONDO_SELECCION
             } else {
@@ -1307,6 +1304,10 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                     Style::default().fg(tema::ATENUADO).bg(fondo),
                 ),
                 Span::styled(d.mensaje.clone(), Style::default().bg(fondo)),
+                Span::styled(
+                    sugerencia.map(|t| format!(" — {t}")).unwrap_or_default(),
+                    Style::default().fg(tema::NOTA).bg(fondo),
+                ),
                 Span::styled(
                     d.codigo
                         .as_deref()

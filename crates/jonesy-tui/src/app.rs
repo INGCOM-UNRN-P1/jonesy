@@ -1958,10 +1958,17 @@ impl App {
                         format!("[la compilación falló: código {}]", codigo.unwrap_or(-1)),
                         true,
                     ));
-                    self.avisar(format!("La compilación falló: {errores} error(es). Enter en Problemas salta al error."), Nivel::Error);
-                    if !self.diag_compilador.is_empty() {
+                    if errores > 0 {
+                        self.avisar(format!("La compilación falló: {errores} error(es). Enter en Problemas salta al error."), Nivel::Error);
                         self.pestana = Pestana::Problemas;
                         self.sel_problema = 0;
+                    } else {
+                        // Sin errores reconocibles (make, un comando que no existe...): la salida explica.
+                        self.avisar(
+                            "La compilación falló: mirá la pestaña Salida.",
+                            Nivel::Error,
+                        );
+                        self.pestana = Pestana::Salida;
                     }
                 }
             }

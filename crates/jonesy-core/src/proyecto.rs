@@ -239,7 +239,21 @@ impl Proyecto {
         }
         // El módulo (biblioteca o ejercicio con Makefile) del archivo activo.
         if let Some(m) = self.modulo_activo(activo) {
-            return Some(format!("make -C {}", shell_quote(&m.rel)));
+            // Un ejercicio enlaza sus bibliotecas (LIB_NAME): se compilan antes.
+            let mut pasos: Vec<String> = m
+                .dependencias
+                .iter()
+                .filter_map(|d| {
+                    self.estructura.modulos.iter().find(|x| {
+                        x.tipo == crate::estructura::TipoModulo::Libreria
+                            && (x.nombre == *d
+                                || x.dir.file_name().is_some_and(|n| n == d.as_str()))
+                    })
+                })
+                .map(|lib| format!("make -C {}", shell_quote(&lib.rel)))
+                .collect();
+            pasos.push(format!("make -C {}", shell_quote(&m.rel)));
+            return Some(pasos.join(" && "));
         }
         if self.makefile().is_some() {
             return Some("make".into());
@@ -489,6 +503,19 @@ mod tests {
         assert_eq!(
             p.comando_compilar(Some(&main)).unwrap(),
             "make -C ejercicios/ej1"
+        );
+        // Con LIB_NAME, primero las bibliotecas que usa.
+        std::fs::create_dir_all(dir.path().join("libs/arreglos")).unwrap();
+        std::fs::write(dir.path().join("libs/arreglos/Makefile"), "all:\n\t@true\n").unwrap();
+        std::fs::write(
+            ej.join("Makefile"),
+            "LIB_NAME ?= arreglos\nPROG_TARGET = programa\nall:\n\t@true\nrun:\n\t./programa\n",
+        )
+        .unwrap();
+        let p2 = Proyecto::abrir(dir.path());
+        assert_eq!(
+            p2.comando_compilar(Some(&main)).unwrap(),
+            "make -C libs/arreglos && make -C ejercicios/ej1"
         );
         assert_eq!(
             p.comando_ejecutar(Some(&main)).unwrap(),

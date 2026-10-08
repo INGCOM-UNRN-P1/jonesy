@@ -77,7 +77,9 @@ pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
             }
             continue;
         }
-        if let Some(d) = parsear_linea_gcc(linea, pila.last().unwrap()) {
+        if let Some(d) =
+            parsear_linea_gcc(linea, pila.last().unwrap()).or_else(|| parsear_enlazador(linea))
+        {
             diags.push(d);
         }
     }
@@ -97,6 +99,45 @@ fn directorio_de_make(linea: &str, frase: &str) -> Option<PathBuf> {
         .rfind(['\'', '»', '"', '’', '”'])
         .unwrap_or(resto.len());
     Some(PathBuf::from(&resto[..fin]))
+}
+
+/// Errores del enlazador, que no tienen archivo:línea: «ld: cannot find -lx» y
+/// «undefined reference to `f'». «collect2: error: ld returned…» se omite (repite).
+fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
+    let l = linea.trim();
+    let mensaje = if let Some(i) = l.find("undefined reference to") {
+        // «main.c:(.text+0x1a): undefined reference to `f'» o «/usr/bin/ld: main.o: in function…»
+        l[i..].to_string()
+    } else {
+        let (prefijo, resto) = l.split_once(": ")?;
+        let es_ld = prefijo.ends_with("ld")
+            || prefijo.ends_with("ld.bfd")
+            || prefijo.ends_with("ld.gold")
+            || prefijo.ends_with("ld.lld")
+            || prefijo.ends_with("ld.exe");
+        // «ld: main.o: in function `main':» es contexto de la línea siguiente.
+        if !es_ld || resto.starts_with("warning") || resto.contains(": in function") {
+            return None;
+        }
+        resto.to_string()
+    };
+    let explicacion = if mensaje.starts_with("cannot find -l") {
+        Some("la biblioteca no está compilada o falta su ruta (-L): compilala primero")
+    } else if mensaje.starts_with("undefined reference") {
+        Some("la función se declaró pero su definición no se compiló ni enlazó")
+    } else {
+        None
+    };
+    Some(Diagnostico {
+        archivo: None,
+        linea: 0,
+        columna: 0,
+        severidad: Severidad::Error,
+        mensaje: format!("enlazador: {mensaje}"),
+        codigo: None,
+        sugerencia: explicacion.map(str::to_string),
+        origen: Origen::Compilador,
+    })
 }
 
 fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
@@ -249,6 +290,21 @@ mod tests {
         assert_eq!((d[0].linea, d[0].columna), (4, 10));
         assert_eq!(d[0].severidad, Severidad::Error);
         assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/main.c")));
+    }
+
+    #[test]
+    fn errores_del_enlazador() {
+        let salida = "/usr/bin/ld.bfd: cannot find -larreglos: No such file or directory\n\
+                      collect2: error: ld returned 1 exit status\n\
+                      /usr/bin/ld: main.o: in function `main':\n\
+                      main.c:(.text+0x1a): undefined reference to `lista_crear'\n";
+        let d = parsear_gcc(salida, Path::new("/tp"));
+        assert_eq!(d.len(), 2, "{d:?}");
+        assert!(d[0].mensaje.contains("cannot find -larreglos") && d[0].archivo.is_none());
+        assert_eq!(d[0].severidad, Severidad::Error);
+        assert!(d[1]
+            .mensaje
+            .contains("undefined reference to `lista_crear'"));
     }
 
     #[test]
