@@ -122,6 +122,8 @@ pub enum QuePaleta {
     Objetivo(usize, String),
     /// Comando de tp.sh por índice.
     Tp(usize),
+    /// Acción de una integración: (nombre, índice de la acción).
+    Herramienta(String, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -286,6 +288,10 @@ pub enum Modal {
         desplazamiento: usize,
         lado_a_lado: bool,
     },
+    /// Herramientas → Integraciones: fila elegida.
+    Integraciones {
+        sel: usize,
+    },
     /// Ver → Tamaños de paneles: fila elegida.
     Paneles {
         sel: usize,
@@ -312,12 +318,23 @@ enum Tarea {
     Compilar {
         luego: Luego,
     },
-    Ripley {
+    /// Integración que corre al guardar (ripley, gaff, kaneda…).
+    Integracion {
+        nombre: String,
         archivo: PathBuf,
+    },
+    /// Acción del menú Herramientas que termina en un visor, en diagnósticos o recargando
+    /// el archivo.
+    AccionHerramienta {
+        integracion: String,
+        titulo: String,
+        archivo: PathBuf,
+        modo: jonesy_core::integraciones::Modo,
     },
     Verificar,
     Explicar {
         codigo: String,
+        enlace: Option<String>,
     },
     MemTrace {
         traza: PathBuf,
@@ -467,16 +484,21 @@ pub struct App {
     pub busqueda: String,
 
     pub diag_compilador: Vec<Diagnostico>,
-    pub diag_ripley: HashMap<PathBuf, Vec<Diagnostico>>,
+    /// Hallazgos de las integraciones: (herramienta, archivo) → diagnósticos.
+    pub diag_herramientas: HashMap<(String, PathBuf), Vec<Diagnostico>>,
+    /// Herramientas del ecosistema integradas como plugins (de fábrica, usuario, proyecto).
+    pub integraciones: Vec<jonesy_core::integraciones::Integracion>,
+    pub errores_integraciones: Vec<String>,
     pub diag_plugins: HashMap<PathBuf, Vec<Diagnostico>>,
     pub sel_problema: usize,
     pub sel_regla: usize,
     pub salida: Vec<(String, bool)>,
     pub titulo_salida: String,
     pub salida_desplazamiento: usize,
-    ripley_disponible: bool,
-    /// Archivos guardados mientras ripley ya los analizaba: se repite una vez al terminar.
-    ripley_pendiente: BTreeSet<PathBuf>,
+    /// Integraciones que no se pudieron lanzar (código 127): no se reintentan.
+    integraciones_ausentes: BTreeSet<String>,
+    /// Archivos guardados mientras una integración ya los analizaba: se repite una vez.
+    integraciones_pendientes: BTreeSet<(String, PathBuf)>,
 
     pub terminal: Option<Deck>,
     pub ejecucion: Option<Deck>,
@@ -616,15 +638,17 @@ impl App {
             portapapeles: String::new(),
             busqueda: String::new(),
             diag_compilador: vec![],
-            diag_ripley: HashMap::new(),
+            diag_herramientas: HashMap::new(),
+            integraciones: vec![],
+            errores_integraciones: vec![],
             diag_plugins: HashMap::new(),
             sel_problema: 0,
             sel_regla: 0,
             salida: vec![],
             titulo_salida: String::new(),
             salida_desplazamiento: 0,
-            ripley_disponible: proyecto.config.ripley.activo,
-            ripley_pendiente: BTreeSet::new(),
+            integraciones_ausentes: BTreeSet::new(),
+            integraciones_pendientes: BTreeSet::new(),
             terminal: None,
             ejecucion: None,
             depuracion: None,
@@ -657,6 +681,7 @@ impl App {
             inicio: Instant::now(),
             proyecto,
         };
+        app.cargar_integraciones();
         app.restaurar_sesion(&op.archivos);
         app.cargar_doc();
         app.refrescar_git();
@@ -713,6 +738,11 @@ impl App {
                 self.explorador
                     .expandidos
                     .insert(self.proyecto.raiz.join(rel));
+            }
+            for (nombre, activa) in &s.integraciones {
+                if let Some(x) = self.integraciones.iter_mut().find(|x| x.nombre == *nombre) {
+                    x.activa = *activa;
+                }
             }
             self.preview_markdown = s.preview_markdown;
             for (rel, linea) in s.breakpoints {
@@ -800,6 +830,11 @@ impl App {
                 .iter()
                 .map(|p| self.proyecto.relativa(p))
                 .collect(),
+            integraciones: self
+                .integraciones
+                .iter()
+                .map(|x| (x.nombre.clone(), x.activa))
+                .collect(),
         };
         let _ = s.guardar(&dir);
     }
@@ -863,9 +898,30 @@ impl App {
         let mut v: Vec<&Diagnostico> = self
             .diag_compilador
             .iter()
-            .chain(self.diag_ripley.values().flatten())
+            .chain(self.diag_herramientas.values().flatten())
             .chain(self.diag_plugins.values().flatten())
             .collect();
+        // Varias herramientas informan lo mismo (ripley incluye las reglas de gaff y de
+        // kaneda): la misma regla en la misma línea se muestra una vez, prefiriendo la
+        // versión con categoría y enlace al apunte.
+        let clave = |d: &Diagnostico| d.codigo.clone().unwrap_or_else(|| d.mensaje.clone());
+        v.sort_by(|a, b| {
+            (
+                &a.archivo,
+                a.linea,
+                clave(a),
+                a.enlace.is_none(),
+                a.categoria.is_none(),
+            )
+                .cmp(&(
+                    &b.archivo,
+                    b.linea,
+                    clave(b),
+                    b.enlace.is_none(),
+                    b.categoria.is_none(),
+                ))
+        });
+        v.dedup_by(|b, a| a.archivo == b.archivo && a.linea == b.linea && clave(a) == clave(b));
         v.sort_by(|a, b| {
             (&a.archivo, a.linea, a.severidad).cmp(&(&b.archivo, b.linea, b.severidad))
         });
@@ -1032,51 +1088,327 @@ impl App {
                 texto,
             });
         }
-        let es_c = matches!(self.buffers[i].buf.lenguaje, Lenguaje::C);
-        if es_c && self.ripley_disponible {
-            self.lanzar_ripley(ruta);
+        let al_guardar: Vec<String> = self
+            .integraciones_activas()
+            .filter(|x| x.cuando == jonesy_core::integraciones::Cuando::Guardar && x.aplica_a(ruta))
+            .map(|x| x.nombre.clone())
+            .collect();
+        for nombre in al_guardar {
+            self.lanzar_integracion(&nombre, ruta);
         }
         self.refrescar_git();
     }
 
-    /// ripley tarda varios segundos (compila y aplica todas las reglas): si ya está
-    /// analizando el archivo, se encola una sola repetición en lugar de otra instancia.
-    fn lanzar_ripley(&mut self, ruta: &Path) {
-        let en_curso = self
-            .procesos
-            .values()
-            .any(|t| matches!(t, Tarea::Ripley { archivo } if archivo == ruta));
+    // ------------------------------------------------------------ integraciones
+
+    /// Carga las integraciones (de fábrica, del usuario y del proyecto) y les aplica la
+    /// configuración de `.jonesy.toml` (incluida la sección `[ripley]` de antes).
+    pub fn cargar_integraciones(&mut self) {
+        let (mut v, errores) = jonesy_core::integraciones::cargar(
+            &self.proyecto.dir_estado(),
+            &self.proyecto.config.integraciones,
+        );
+        let r = &self.proyecto.config.ripley;
+        if let Some(x) = v.iter_mut().find(|x| x.nombre == "ripley") {
+            if !r.activo {
+                x.activa = false;
+            }
+            if !r.comando.trim().is_empty() && r.comando != "ripley" {
+                x.binario = r
+                    .comando
+                    .split_whitespace()
+                    .next()
+                    .unwrap_or("")
+                    .to_string();
+                x.comando = x.comando.replacen("ripley", &r.comando, 1);
+                x.explicar = x.explicar.replacen("ripley", &r.comando, 1);
+            }
+        }
+        self.integraciones = v;
+        self.errores_integraciones = errores;
+    }
+
+    /// Las que corren: activas, con su binario instalado y permitidas en examen.
+    pub fn integraciones_activas(
+        &self,
+    ) -> impl Iterator<Item = &jonesy_core::integraciones::Integracion> {
+        let examen = self.examen.is_some();
+        self.integraciones.iter().filter(move |x| {
+            x.activa
+                && (!examen || x.examen)
+                && !self.integraciones_ausentes.contains(&x.nombre)
+                && x.disponible()
+        })
+    }
+
+    /// Algunas herramientas tardan varios segundos (ripley compila y aplica todas las
+    /// reglas): si ya está analizando el archivo, se encola una sola repetición.
+    fn lanzar_integracion(&mut self, nombre: &str, ruta: &Path) {
+        let en_curso = self.procesos.values().any(
+            |t| matches!(t, Tarea::Integracion { nombre: n, archivo } if n == nombre && archivo == ruta),
+        );
         if en_curso {
-            self.ripley_pendiente.insert(ruta.to_path_buf());
+            self.integraciones_pendientes
+                .insert((nombre.to_string(), ruta.to_path_buf()));
             return;
         }
-        let rel = self.proyecto.relativa(ruta);
-        let cmd = format!(
-            "{} check {} --format json",
-            self.proyecto.config.ripley.comando,
-            jonesy_core::proyecto::shell_quote(&rel)
+        let Some(x) = self.integraciones.iter().find(|x| x.nombre == nombre) else {
+            return;
+        };
+        let modulo = self
+            .proyecto
+            .estructura
+            .modulo_de(ruta)
+            .map(|m| m.dir.clone());
+        let cmd = jonesy_core::integraciones::expandir(
+            &x.comando,
+            &self.proyecto.raiz,
+            Some(ruta),
+            modulo.as_deref(),
+            None,
         );
         self.lanzar(
             &cmd,
-            Tarea::Ripley {
+            Tarea::Integracion {
+                nombre: nombre.to_string(),
                 archivo: ruta.to_path_buf(),
             },
         );
     }
 
+    fn fin_integracion(
+        &mut self,
+        nombre: String,
+        archivo: PathBuf,
+        codigo: Option<i32>,
+        salida: String,
+    ) {
+        if codigo == Some(127) {
+            // No está instalada (o el comando configurado no existe): no se insiste.
+            self.integraciones_ausentes.insert(nombre);
+            return;
+        }
+        if self
+            .integraciones_pendientes
+            .remove(&(nombre.clone(), archivo.clone()))
+        {
+            // Se guardó de nuevo mientras analizaba: este resultado ya es viejo.
+            self.lanzar_integracion(&nombre, &archivo);
+            return;
+        }
+        let Some(x) = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == nombre)
+            .cloned()
+        else {
+            return;
+        };
+        match jonesy_core::integraciones::interpretar(&x, &salida, &archivo, &self.proyecto.raiz) {
+            Ok(d) => {
+                self.diag_herramientas.insert((nombre, archivo), d);
+            }
+            Err(e) => {
+                self.diag_herramientas.remove(&(nombre.clone(), archivo));
+                self.avisar(
+                    format!("{nombre}: no se pudo leer su salida ({e})."),
+                    Nivel::Aviso,
+                );
+            }
+        }
+    }
+
+    /// Acciones de las integraciones activas que aplican al archivo activo:
+    /// (integración, índice de la acción, título).
+    pub fn acciones_disponibles(&self) -> Vec<(String, usize, String)> {
+        let Some(ruta) = self.activo_ruta() else {
+            return vec![];
+        };
+        self.integraciones_activas()
+            .flat_map(|x| {
+                x.acciones
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, a)| a.aplica_a(x, &ruta))
+                    .map(|(n, a)| (x.nombre.clone(), n, a.titulo.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect()
+    }
+
+    /// Corre una acción del menú Herramientas sobre el archivo activo.
+    pub fn correr_accion_herramienta(&mut self, integracion: &str, n: usize) {
+        use jonesy_core::integraciones::Modo;
+        let Some(ruta) = self.activo_ruta() else {
+            self.avisar("Abrí un archivo para usar las herramientas.", Nivel::Aviso);
+            return;
+        };
+        let Some(x) = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == integracion)
+            .cloned()
+        else {
+            return;
+        };
+        let Some(a) = x.acciones.get(n).cloned() else {
+            return;
+        };
+        if a.modo == Modo::Recargar && self.buf().buf.solo_lectura {
+            self.avisar("Archivo de solo lectura.", Nivel::Aviso);
+            return;
+        }
+        // Las herramientas leen el archivo del disco.
+        self.guardar_todo();
+        let modulo = self
+            .proyecto
+            .estructura
+            .modulo_de(&ruta)
+            .map(|m| m.dir.clone());
+        let cmd = jonesy_core::integraciones::expandir(
+            &a.comando,
+            &self.proyecto.raiz,
+            Some(&ruta),
+            modulo.as_deref(),
+            None,
+        );
+        self.tel(TelemetryEvent::CommandExec {
+            command: format!("{integracion}: {}", a.titulo),
+            exit_code: None,
+        });
+        match a.modo {
+            Modo::Terminal => self.correr_en_deck(cmd),
+            Modo::Panel => self.correr_en_panel(cmd),
+            Modo::Visor | Modo::Recargar | Modo::Diagnosticos => {
+                self.avisar(format!("{}…", a.titulo), Nivel::Info);
+                self.lanzar(
+                    &cmd,
+                    Tarea::AccionHerramienta {
+                        integracion: integracion.to_string(),
+                        titulo: a.titulo,
+                        archivo: ruta,
+                        modo: a.modo,
+                    },
+                );
+            }
+        }
+    }
+
+    fn fin_accion_herramienta(
+        &mut self,
+        integracion: String,
+        titulo: String,
+        archivo: PathBuf,
+        modo: jonesy_core::integraciones::Modo,
+        codigo: Option<i32>,
+        salida: String,
+    ) {
+        use jonesy_core::integraciones::Modo;
+        match modo {
+            Modo::Recargar => {
+                if codigo != Some(0) {
+                    let detalle = salida
+                        .lines()
+                        .rev()
+                        .find(|l| !l.trim().is_empty())
+                        .unwrap_or("")
+                        .to_string();
+                    self.avisar(format!("{titulo}: falló ({detalle})"), Nivel::Error);
+                    return;
+                }
+                self.recargar_desde_disco(&archivo, &titulo);
+            }
+            Modo::Diagnosticos => {
+                let Some(x) = self
+                    .integraciones
+                    .iter()
+                    .find(|x| x.nombre == integracion)
+                    .cloned()
+                else {
+                    return;
+                };
+                match jonesy_core::integraciones::interpretar(
+                    &x,
+                    &salida,
+                    &archivo,
+                    &self.proyecto.raiz,
+                ) {
+                    Ok(d) => {
+                        let n = d.len();
+                        self.diag_herramientas.insert((integracion, archivo), d);
+                        self.panel_inferior = true;
+                        self.pestana = Pestana::Problemas;
+                        self.avisar(
+                            format!("{titulo}: {n} hallazgo(s)."),
+                            if n == 0 { Nivel::Ok } else { Nivel::Aviso },
+                        );
+                    }
+                    Err(e) => self.avisar(format!("{titulo}: {e}"), Nivel::Error),
+                }
+            }
+            _ => {
+                let ancho = self.tam.0.saturating_sub(8).clamp(40, 120);
+                let mut lineas = crate::vt::ansi_a_lineas(&salida, ancho);
+                if lineas.is_empty() {
+                    lineas.push(Line::from(format!(
+                        "(sin salida; código {})",
+                        codigo.map(|c| c.to_string()).unwrap_or("?".into())
+                    )));
+                }
+                self.modal = Some(Modal::Visor {
+                    titulo,
+                    lineas,
+                    desplazamiento: 0,
+                });
+            }
+        }
+    }
+
+    /// Después de una herramienta que modificó el archivo en disco (gaff fix, corbel
+    /// scaffold), el buffer toma el contenido nuevo como una edición (Ctrl+Z la deshace).
+    fn recargar_desde_disco(&mut self, archivo: &Path, titulo: &str) {
+        let Ok(nuevo) = std::fs::read_to_string(archivo) else {
+            return;
+        };
+        let Some(i) = self
+            .buffers
+            .iter()
+            .position(|b| b.buf.ruta.as_deref() == Some(archivo))
+        else {
+            return;
+        };
+        if self.buffers[i].buf.contenido() == nuevo {
+            self.avisar(format!("{titulo}: no hubo cambios."), Nivel::Info);
+            return;
+        }
+        let anterior = self.activo;
+        self.activo = i;
+        let (l, c) = self.buf().buf.linea_columna();
+        self.editar(|b| {
+            let d = b.reemplazar_todo(&nuevo);
+            let pos = b.linea_columna_a_pos(l, c);
+            b.mover_a(pos, false);
+            b.marcar_guardado();
+            d
+        });
+        self.activo = anterior;
+        self.avisar(format!("{titulo}: listo (Ctrl+Z lo deshace)."), Nivel::Ok);
+    }
+
     /// Nombres de las tareas en segundo plano, para la barra de estado.
-    pub fn tareas_en_curso(&self) -> Vec<&'static str> {
-        let mut v: Vec<&'static str> = self
+    pub fn tareas_en_curso(&self) -> Vec<String> {
+        let mut v: Vec<String> = self
             .procesos
             .values()
             .map(|t| match t {
-                Tarea::Compilar { .. } => "compilando",
-                Tarea::Ripley { .. } => "ripley",
-                Tarea::Verificar => "verificando",
-                Tarea::Explicar { .. } => "ripley explain",
-                Tarea::MemTrace { .. } => "mem-trace",
-                Tarea::Objetivo { .. } => "make",
-                Tarea::Formatear { .. } => "formateando",
+                Tarea::Compilar { .. } => "compilando".into(),
+                Tarea::Integracion { nombre, .. } => nombre.clone(),
+                Tarea::AccionHerramienta { integracion, .. } => integracion.clone(),
+                Tarea::Verificar => "verificando".into(),
+                Tarea::Explicar { .. } => "explicando".into(),
+                Tarea::MemTrace { .. } => "mem-trace".into(),
+                Tarea::Objetivo { .. } => "make".into(),
+                Tarea::Formatear { .. } => "formateando".into(),
             })
             .collect();
         v.sort();
@@ -2058,30 +2390,15 @@ impl App {
                     }
                 }
             }
-            Tarea::Ripley { archivo } => {
-                if codigo == Some(127) {
-                    self.ripley_disponible = false;
-                    return;
-                }
-                if self.ripley_pendiente.remove(&archivo) {
-                    // Se guardó de nuevo mientras analizaba: este resultado ya es viejo.
-                    self.lanzar_ripley(&archivo);
-                    return;
-                }
-                match diagnostico::parsear_ripley(&salida, &self.proyecto.raiz) {
-                    Ok(mut d) => {
-                        for x in &mut d {
-                            if x.archivo.is_none() {
-                                x.archivo = Some(archivo.clone());
-                            }
-                        }
-                        self.diag_ripley.insert(archivo, d);
-                    }
-                    Err(_) => {
-                        self.diag_ripley.remove(&archivo);
-                    }
-                }
+            Tarea::Integracion { nombre, archivo } => {
+                self.fin_integracion(nombre, archivo, codigo, salida)
             }
+            Tarea::AccionHerramienta {
+                integracion,
+                titulo,
+                archivo,
+                modo,
+            } => self.fin_accion_herramienta(integracion, titulo, archivo, modo, codigo, salida),
             Tarea::Verificar => {
                 let comando = self
                     .salida
@@ -2099,15 +2416,26 @@ impl App {
                 };
                 self.finalizar_entrega(Some(v));
             }
-            Tarea::Explicar { codigo: regla } => {
+            Tarea::Explicar {
+                codigo: regla,
+                enlace,
+            } => {
                 let ancho = self.tam.0.saturating_sub(8).clamp(40, 100);
-                let lineas = if codigo == Some(0) && !salida.trim().is_empty() {
+                let mut lineas = if codigo == Some(0) && !salida.trim().is_empty() {
                     crate::vt::ansi_a_lineas(&salida, ancho)
                 } else {
-                    vec![Line::from(format!(
-                        "ripley no tiene una explicación para {regla}."
-                    ))]
+                    vec![Line::from(format!("No hay una explicación para {regla}."))]
                 };
+                if let Some(e) = enlace {
+                    lineas.insert(0, Line::raw(""));
+                    lineas.insert(
+                        0,
+                        Line::styled(
+                            format!("Apunte: {e}"),
+                            ratatui::style::Style::default().fg(tema::NOTA),
+                        ),
+                    );
+                }
                 self.modal = Some(Modal::Visor {
                     titulo: format!("Regla {regla}"),
                     lineas,
@@ -2193,50 +2521,89 @@ impl App {
         }
     }
 
+    /// F1: explica el código del diagnóstico elegido (en Problemas, en el panel de reglas o
+    /// en la línea del cursor) con el comando `explicar` de la herramienta que lo informó.
     fn explicar_regla(&mut self) {
-        let codigo = match self.foco {
+        let d: Option<Diagnostico> = match self.foco {
             Foco::Inferior if self.pestana == Pestana::Problemas => self
                 .diagnosticos()
                 .get(self.sel_problema)
-                .and_then(|d| d.codigo.clone()),
+                .map(|d| (*d).clone()),
             Foco::Lateral if self.lateral == Some(Lateral::Reglas) => self
                 .reglas_agrupadas()
                 .into_iter()
                 .flat_map(|(_, v)| v)
                 .nth(self.sel_regla)
-                .and_then(|d| d.codigo.clone()),
+                .cloned(),
             _ => self.activo_ruta().and_then(|r| {
                 let (l, _) = self.buf().buf.linea_columna();
                 self.diagnosticos_linea(&r, l)
                     .into_iter()
-                    .find_map(|d| d.codigo.clone())
+                    .find(|d| d.codigo.is_some())
+                    .cloned()
             }),
         };
-        match codigo {
-            Some(c) => {
-                let cmd = format!(
-                    "{} explain {}",
-                    self.proyecto.config.ripley.comando,
-                    jonesy_core::proyecto::shell_quote(&c)
-                );
-                self.lanzar(&cmd, Tarea::Explicar { codigo: c });
+        let Some(d) = d.filter(|d| d.codigo.is_some()) else {
+            self.abrir_paleta();
+            return;
+        };
+        let codigo = d.codigo.clone().unwrap_or_default();
+        let herramienta = d.herramienta.clone().unwrap_or_else(|| "ripley".into());
+        let plantilla = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == herramienta)
+            .map(|x| x.explicar.clone())
+            .unwrap_or_default();
+        if plantilla.is_empty() {
+            // Sin comando para explicar: el mensaje, la sugerencia y el apunte.
+            let mut texto = format!("# {herramienta}: {codigo}\n\n{}\n", d.mensaje);
+            if let Some(s) = &d.sugerencia {
+                texto.push_str(&format!("\n**Sugerencia:** {s}\n"));
             }
-            None => self.abrir_paleta(),
+            if let Some(e) = &d.enlace {
+                texto.push_str(&format!("\n**Apunte:** {e}\n"));
+                if self.proyecto.config.interfaz.osc52 {
+                    sistema::osc52(e);
+                }
+            }
+            let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
+            self.modal = Some(Modal::Visor {
+                titulo: codigo,
+                lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
+                desplazamiento: 0,
+            });
+            return;
         }
+        let cmd = jonesy_core::integraciones::expandir(
+            &plantilla,
+            &self.proyecto.raiz,
+            None,
+            None,
+            Some(&codigo),
+        );
+        self.lanzar(
+            &cmd,
+            Tarea::Explicar {
+                codigo,
+                enlace: d.enlace.clone(),
+            },
+        );
     }
 
-    /// Diagnósticos de ripley agrupados por categoría (panel de reglas, RF-3.4).
-    pub fn reglas_agrupadas(&self) -> Vec<(&'static str, Vec<&Diagnostico>)> {
-        let mut grupos: BTreeMap<&'static str, Vec<&Diagnostico>> = BTreeMap::new();
+    /// Hallazgos de las herramientas agrupados por la categoría común del ecosistema
+    /// (memoria, punteros, estilo…; panel de reglas, RF-3.4).
+    pub fn reglas_agrupadas(&self) -> Vec<(String, Vec<&Diagnostico>)> {
+        let mut grupos: BTreeMap<String, Vec<&Diagnostico>> = BTreeMap::new();
         for d in self.diagnosticos() {
             if d.origen == Origen::Compilador {
                 continue;
             }
-            let cat = d
-                .codigo
-                .as_deref()
-                .map(diagnostico::categoria_regla)
-                .unwrap_or("Extensiones");
+            let cat = match (&d.categoria, &d.codigo) {
+                (Some(c), _) => jonesy_core::integraciones::titulo_categoria(c).to_string(),
+                (None, Some(c)) => diagnostico::categoria_regla(c).to_string(),
+                _ => "Extensiones".to_string(),
+            };
             grupos.entry(cat).or_default().push(d);
         }
         grupos.into_iter().collect()
@@ -2856,6 +3223,13 @@ impl App {
                 });
             }
         }
+        for (nombre, n, titulo) in self.acciones_disponibles() {
+            opciones.push(OpcionPaleta {
+                titulo: format!("{nombre}: {titulo}"),
+                atajo: "herramienta".into(),
+                que: QuePaleta::Herramienta(nombre, n),
+            });
+        }
         for (i, c) in self.proyecto.estructura.tp_sh.iter().enumerate() {
             opciones.push(OpcionPaleta {
                 titulo: format!("tp.sh: {} — {}", c.uso, c.descripcion),
@@ -3088,6 +3462,27 @@ impl App {
             Accion::Formatear => self.formatear(),
             Accion::GenerarDoc => self.generar_doc(),
             Accion::DiffArchivo => self.diff_archivo(),
+            Accion::Herramientas => {
+                let opciones: Vec<OpcionPaleta> = self
+                    .acciones_disponibles()
+                    .into_iter()
+                    .map(|(nombre, n, titulo)| OpcionPaleta {
+                        titulo,
+                        atajo: nombre.clone(),
+                        que: QuePaleta::Herramienta(nombre, n),
+                    })
+                    .collect();
+                if opciones.is_empty() {
+                    self.avisar("No hay herramientas para este archivo (Herramientas → Integraciones muestra cuáles están instaladas).", Nivel::Aviso);
+                    return;
+                }
+                self.modal = Some(Modal::Paleta {
+                    filtro: String::new(),
+                    sel: 0,
+                    opciones,
+                });
+            }
+            Accion::Integraciones => self.modal = Some(Modal::Integraciones { sel: 0 }),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -3509,6 +3904,7 @@ impl App {
             (KeyCode::F(12), _, _, _) => Some(Accion::Entregar),
             (KeyCode::Char('g'), false, true, _) => Some(Accion::PanelGit),
             (KeyCode::Char('e'), false, true, _) => Some(Accion::Explorador),
+            (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
@@ -4238,6 +4634,45 @@ impl App {
                     lado_a_lado,
                 });
             }
+            Modal::Integraciones { mut sel } => {
+                let n = self.integraciones.len().max(1);
+                match k.code {
+                    KeyCode::Esc | KeyCode::Enter => {
+                        self.guardar_sesion();
+                        return;
+                    }
+                    KeyCode::Up => sel = (sel + n - 1) % n,
+                    KeyCode::Down => sel = (sel + 1) % n,
+                    KeyCode::Char(' ') => {
+                        if let Some(x) = self.integraciones.get_mut(sel) {
+                            x.activa = !x.activa;
+                            if !x.activa {
+                                let nombre = x.nombre.clone();
+                                self.diag_herramientas.retain(|(h, _), _| *h != nombre);
+                            }
+                        }
+                    }
+                    KeyCode::Char('r') => {
+                        // Relee los manifiestos (después de editar .jonesy/integraciones).
+                        let estado: Vec<(String, bool)> = self
+                            .integraciones
+                            .iter()
+                            .map(|x| (x.nombre.clone(), x.activa))
+                            .collect();
+                        self.cargar_integraciones();
+                        for (nombre, activa) in estado {
+                            if let Some(x) =
+                                self.integraciones.iter_mut().find(|x| x.nombre == nombre)
+                            {
+                                x.activa = activa;
+                            }
+                        }
+                        self.integraciones_ausentes.clear();
+                    }
+                    _ => {}
+                }
+                self.modal = Some(Modal::Integraciones { sel });
+            }
             Modal::Paneles { mut sel } => {
                 let n = CAMPOS_PANELES.len();
                 match k.code {
@@ -4290,6 +4725,7 @@ impl App {
             QuePaleta::Accion(a) => self.accion(a),
             QuePaleta::Objetivo(m, o) => self.correr_objetivo(m, &o),
             QuePaleta::Tp(i) => self.correr_tp(i),
+            QuePaleta::Herramienta(nombre, n) => self.correr_accion_herramienta(&nombre, n),
             QuePaleta::Plugin(c) => {
                 if let Some(p) = &self.plugins {
                     let b = &self.buf().buf;

@@ -1717,17 +1717,17 @@ fn botones_fila(
 }
 
 fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
-    let b = bloque_app(app, " Reglas (ripley) ", foco);
+    let b = bloque_app(app, " Hallazgos por tema ", foco);
     let i = b.inner(r);
     f.render_widget(b, r);
-    let grupos: Vec<(&'static str, Vec<jonesy_core::Diagnostico>)> = app
+    let grupos: Vec<(String, Vec<jonesy_core::Diagnostico>)> = app
         .reglas_agrupadas()
         .into_iter()
         .map(|(c, v)| (c, v.into_iter().cloned().collect()))
         .collect();
     if grupos.is_empty() {
         f.render_widget(
-            Paragraph::new("Sin observaciones. ripley corre al guardar un archivo .c (F1 sobre una línea marcada explica la regla).")
+            Paragraph::new("Sin observaciones. Las herramientas del ecosistema (ripley, gaff, kaneda…) corren al guardar; F1 sobre un hallazgo lo explica y Herramientas → Integraciones muestra cuáles están activas.")
                 .style(Style::default().fg(tema::ATENUADO))
                 .wrap(Wrap { trim: true }),
             i,
@@ -2550,6 +2550,81 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 (titulo.clone(), *desplazamiento, *lado_a_lado);
             let filas = filas.clone();
             dibujar_diff(f, app, area, &titulo, &filas, desplazamiento, lado_a_lado);
+            None
+        }
+        Modal::Integraciones { sel } => {
+            let sel = *sel;
+            let examen = app.examen.is_some();
+            let n = app.integraciones.len();
+            let r = centrado(area, 100, (n as u16 + 6).min(area.height.saturating_sub(2)));
+            f.render_widget(Clear, r);
+            let b = bloque(
+                " Integraciones con el ecosistema · Espacio activa/apaga · r relee · Enter cierra ",
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let mut lineas: Vec<Line> = vec![];
+            for (k, x) in app.integraciones.iter().enumerate() {
+                let (estado, color) = if !x.disponible() {
+                    ("no instalada", tema::ATENUADO)
+                } else if examen && !x.examen {
+                    ("no en examen", tema::ATENUADO)
+                } else if x.activa {
+                    ("activa", tema::OK)
+                } else {
+                    ("apagada", tema::ADVERTENCIA)
+                };
+                let cuando = match x.cuando {
+                    jonesy_core::integraciones::Cuando::Guardar => "al guardar",
+                    jonesy_core::integraciones::Cuando::Manual => "a mano",
+                };
+                let fondo = if k == sel {
+                    tema::FONDO_SELECCION
+                } else {
+                    Color::Reset
+                };
+                let st = Style::default().bg(fondo);
+                let acciones = if x.acciones.is_empty() {
+                    String::new()
+                } else {
+                    format!(" · {} acción(es)", x.acciones.len())
+                };
+                lineas.push(Line::from(vec![
+                    Span::styled(
+                        format!(" {:<12}", x.nombre),
+                        st.add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(format!("{estado:<13}"), st.fg(color)),
+                    Span::styled(format!("{cuando:<11}"), st.fg(tema::NOTA)),
+                    Span::styled(format!("{}{acciones}", x.descripcion), st),
+                ]));
+            }
+            lineas.push(Line::raw(""));
+            let ayuda = match app.integraciones.get(sel) {
+                Some(x) => format!(
+                    " {} · {}",
+                    x.origen,
+                    if x.comando.is_empty() {
+                        "sólo acciones"
+                    } else {
+                        x.comando.as_str()
+                    }
+                ),
+                None => String::new(),
+            };
+            lineas.push(Line::styled(ayuda, Style::default().fg(tema::ATENUADO)));
+            for e in &app.errores_integraciones {
+                lineas.push(Line::styled(
+                    format!(" ⚠ {e}"),
+                    Style::default().fg(tema::ERROR),
+                ));
+            }
+            lineas.push(Line::styled(
+                " Agregá o reemplazá integraciones en .jonesy/integraciones/*.toml o ~/.config/jonesy/integraciones/ (ver docs/integraciones.md).",
+                Style::default().fg(tema::ATENUADO),
+            ));
+            f.render_widget(Paragraph::new(lineas).wrap(Wrap { trim: false }), i);
             None
         }
         Modal::Paneles { sel } => {

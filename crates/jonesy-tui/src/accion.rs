@@ -64,6 +64,8 @@ pub enum Accion {
     Formatear,
     GenerarDoc,
     DiffArchivo,
+    Herramientas,
+    Integraciones,
 }
 
 pub struct Info {
@@ -133,6 +135,8 @@ impl Accion {
                 "Comparar con la versión de git (diff lado a lado)",
                 "Alt+Shift+D",
             ),
+            Herramientas => ("Herramientas del ecosistema para este archivo…", "Alt+H"),
+            Integraciones => ("Integraciones: qué herramientas corren y cuándo…", ""),
         };
         Info { titulo, atajo }
     }
@@ -185,6 +189,8 @@ impl Accion {
             Formatear,
             GenerarDoc,
             DiffArchivo,
+            Herramientas,
+            Integraciones,
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
@@ -283,6 +289,16 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
     if examen {
         m.push(("Examen", vec![Entregar]));
     }
+    m.push((
+        "Herramientas",
+        vec![
+            Herramientas,
+            Formatear,
+            GenerarDoc,
+            ExplicarRegla,
+            Integraciones,
+        ],
+    ));
     m.push(("Ayuda", vec![Paleta, ExplicarRegla, Atajos, AcercaDe]));
     m
 }
@@ -299,6 +315,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Ir a línea | Ctrl+G |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |
 | Diff del archivo contra git (lado a lado; s alterna, n/p cambio) | Alt+Shift+D |
+| Herramientas del ecosistema (gaff fix, tetsuo, motoko…) | Alt+H |
 | Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
 | Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |

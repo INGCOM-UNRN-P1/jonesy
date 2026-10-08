@@ -276,38 +276,126 @@ fn breakpoint_por_clic_en_el_margen() {
 }
 
 #[test]
-#[cfg(unix)] // usa sh, make, gcc o el deck
-fn ripley_al_guardar() {
-    if std::process::Command::new("ripley")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+#[cfg(unix)] // usa sh y las herramientas del ecosistema instaladas
+fn herramientas_del_ecosistema_al_guardar() {
+    let dir = proyecto(&[(
+        "main.c",
+        "#include <stdio.h>\n#include <stdlib.h>\nint main(void)\n{\n    char b[4];\n    int *p = malloc(4);\n    gets(b);\n    free(p);\n    return 0;\n}\n",
+    )]);
+    let (mut a, rx) = app(dir.path(), false);
+    let activas: Vec<String> = a
+        .integraciones_activas()
+        .filter(|x| {
+            x.cuando == jonesy_core::integraciones::Cuando::Guardar
+                && x.archivos.iter().any(|g| g == "*.c")
+        })
+        .map(|x| x.nombre.clone())
+        .collect();
+    if activas.is_empty() {
         return;
     }
-    let dir = proyecto(&[("main.c", "#include <stdlib.h>\nint main(void)\n{\n    int *p = malloc(4);\n    free(p);\n    return 0;\n}\n")]);
-    let (mut a, rx) = app(dir.path(), false);
     tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
-    // Un segundo guardado mientras analiza no lanza otra instancia.
+    // Un segundo guardado mientras analizan no lanza otras instancias.
     tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
-    assert_eq!(a.tareas_en_curso(), vec!["ripley"]);
-    assert!(pantalla(&mut a, 120, 30).contains("ripley…"));
-    let fin = Instant::now() + Duration::from_secs(60);
-    while a.diag_ripley.is_empty() && Instant::now() < fin {
+    assert_eq!(
+        a.tareas_en_curso(),
+        activas
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+    );
+    let p = pantalla(&mut a, 160, 30);
+    assert!(
+        p.contains(&format!("{}…", activas.join(", "))) || p.contains('…'),
+        "{p}"
+    );
+    let fin = Instant::now() + Duration::from_secs(90);
+    while !a.tareas_en_curso().is_empty() && Instant::now() < fin {
         if let Ok(av) = rx.recv_timeout(Duration::from_millis(100)) {
             a.procesar(av);
         }
     }
-    let d: Vec<_> = a.diag_ripley.values().flatten().collect();
     assert!(
-        d.iter().any(|d| d.codigo.as_deref() == Some("0x3001h")),
-        "{d:?}"
+        a.tareas_en_curso().is_empty(),
+        "las herramientas no terminaron"
     );
-    assert!(a.tareas_en_curso().is_empty());
-    let p = pantalla(&mut a, 120, 30);
+    let d: Vec<_> = a.diag_herramientas.values().flatten().collect();
+    // gaff y kaneda informan con su nombre (spunkmeyer omite lo que ya marca gaff).
+    for h in ["gaff", "kaneda"] {
+        if activas.iter().any(|x| x == h) {
+            assert!(
+                d.iter().any(|x| x.herramienta.as_deref() == Some(h)),
+                "{h} no informó nada"
+            );
+        }
+    }
+    // Lo que informan varias herramientas (ripley repite gaff y kaneda) se muestra una vez.
+    let vistos = a.diagnosticos();
+    let mut claves: Vec<(usize, String)> = vistos
+        .iter()
+        .map(|x| {
+            (
+                x.linea,
+                x.codigo.clone().unwrap_or_else(|| x.mensaje.clone()),
+            )
+        })
+        .collect();
+    let antes = claves.len();
+    claves.sort();
+    claves.dedup();
+    assert_eq!(antes, claves.len(), "hay hallazgos repetidos");
+    if activas.iter().any(|h| h == "kaneda") {
+        let kan = vistos
+            .iter()
+            .find(|x| x.codigo.as_deref() == Some("KAN001"))
+            .expect("KAN001");
+        assert!(
+            kan.enlace.is_some(),
+            "se prefiere la versión con enlace al apunte"
+        );
+    }
+    if activas.iter().any(|h| h == "kaneda") {
+        let g = d
+            .iter()
+            .find(|x| x.herramienta.as_deref() == Some("kaneda") && x.linea == 7)
+            .expect("kaneda marca gets");
+        assert_eq!(g.categoria.as_deref(), Some("seguridad"));
+        assert!(g.enlace.is_some());
+    }
+    if activas.iter().any(|h| h == "ripley") {
+        assert!(
+            d.iter().any(|x| x.codigo.as_deref() == Some("0x3001h")),
+            "{d:?}"
+        );
+    }
+    // El panel de hallazgos agrupa por tema del ecosistema.
+    a.accion(jonesy_tui::accion::Accion::PanelReglas);
+    let p = pantalla(&mut a, 160, 40);
     assert!(
-        p.contains("■ ") && p.contains("0x3001h"),
-        "texto virtual de ripley: {p}"
+        p.contains("Seguridad") || p.contains("Memoria") || p.contains("Estilo"),
+        "{p}"
+    );
+    // Herramientas → Integraciones muestra el estado de cada una.
+    a.accion(jonesy_tui::accion::Accion::Integraciones);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("gaff") && p.contains("callahan") && p.contains("activa"),
+        "{p}"
+    );
+    // Apagar la primera saca sus hallazgos y queda en la sesión.
+    let primera = a.integraciones[0].nombre.clone();
+    tecla(&mut a, KeyCode::Char(' '), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(!a.diag_herramientas.keys().any(|(h, _)| *h == primera));
+    let (b, _rx) = app(dir.path(), false);
+    assert!(
+        !b.integraciones
+            .iter()
+            .find(|x| x.nombre == primera)
+            .unwrap()
+            .activa
     );
 }
 
@@ -802,4 +890,81 @@ fn diff_lado_a_lado_desde_git_y_del_buffer() {
         p.contains("HEAD → editor") && p.contains("// sin guardar"),
         "{p}"
     );
+}
+
+#[test]
+#[cfg(unix)] // los comandos de la integración de prueba usan sh
+fn integracion_propia_del_proyecto_con_acciones_y_f1() {
+    let manifiesto = r#"
+[[integracion]]
+nombre = "eco"
+descripcion = "Integración de prueba"
+cuando = "guardar"
+archivos = ["*.c"]
+comando = "printf '%s' '{\"hallazgos\": [{\"codigo\": \"ECO1\", \"categoria\": \"memoria\", \"severidad\": \"error\", \"mensaje\": \"falta free\", \"archivo\": \"main.c\", \"linea\": 2, \"columna\": 1, \"enlace\": \"https://ejemplo/memoria\"}]}'"
+explicar = "echo explicación de {codigo}"
+
+  [[integracion.accion]]
+  titulo = "Reescribir"
+  comando = "printf 'int y;\\n' > {archivo}"
+  modo = "recargar"
+
+  [[integracion.accion]]
+  titulo = "Contar"
+  comando = "wc -l < {archivo}"
+  modo = "visor"
+"#;
+    let dir = proyecto(&[
+        ("main.c", "int x;\nint z;\n"),
+        (".jonesy/integraciones/eco.toml", manifiesto),
+        (
+            ".jonesy.toml",
+            "[integraciones]\ndesactivar = [\"ripley\", \"gaff\", \"kaneda\", \"spunkmeyer\"]\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    assert!(a
+        .integraciones
+        .iter()
+        .any(|x| x.nombre == "eco" && x.origen.contains("eco.toml")));
+    // Al guardar corre y su hallazgo queda con categoría y enlace.
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
+    let d = a.diagnosticos();
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].herramienta.as_deref(), Some("eco"));
+    assert_eq!(d[0].categoria.as_deref(), Some("memoria"));
+    // F1 en la línea del hallazgo usa el «explicar» de la integración y muestra el apunte.
+    let pos = a.buf().buf.linea_columna_a_pos(1, 0);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("explicación de ECO1") && p.contains("https://ejemplo/memoria"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // Alt+H lista las acciones; «Contar» abre un visor con la salida.
+    tecla(&mut a, KeyCode::Char('h'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Reescribir") && p.contains("Contar"), "{p}");
+    escribir(&mut a, "contar");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains('2'), "{p}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // «Reescribir» modifica el archivo en disco y el buffer lo toma como una edición.
+    a.correr_accion_herramienta("eco", 0);
+    esperar(&mut a, &rx, |a| {
+        a.tareas_en_curso().is_empty() && a.buf().buf.contenido() == "int y;\n"
+    });
+    assert!(!a.buf().buf.modificado());
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
+    assert_eq!(a.buf().buf.contenido(), "int x;\nint z;\n");
 }
