@@ -535,6 +535,30 @@ fn dibujar_consigna(f: &mut Frame, app: &mut App, r: Rect) {
         .cloned()
         .collect();
     f.render_widget(Paragraph::new(lineas), interior);
+    if foco {
+        resaltar_enlace(f.buffer_mut(), interior, doc, c.desplazamiento, c.enlace);
+    }
+}
+
+/// Invierte las celdas del enlace elegido con Tab (si está a la vista).
+fn resaltar_enlace(
+    buf: &mut ratatui::buffer::Buffer,
+    area: Rect,
+    doc: &markdown::Documento,
+    desp: usize,
+    sel: Option<usize>,
+) {
+    let Some(e) = sel.and_then(|i| doc.enlaces.get(i)) else {
+        return;
+    };
+    if e.linea < desp || e.linea >= desp + area.height as usize {
+        return;
+    }
+    let y = area.y + (e.linea - desp) as u16;
+    for x in e.ini..e.fin.min(area.width as usize) {
+        let celda = &mut buf[(area.x + x as u16, y)];
+        celda.set_style(celda.style().add_modifier(Modifier::REVERSED));
+    }
 }
 
 // ------------------------------------------------------------------ editor
@@ -902,7 +926,13 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
 }
 
 fn dibujar_preview(f: &mut Frame, app: &mut App, r: Rect) {
-    let b = bloque_app(app, " Vista previa ", false);
+    let foco_preview = app.foco == Foco::Preview && app.modal.is_none();
+    let titulo = if foco_preview {
+        " Vista previa · Tab enlaces · Enter abre "
+    } else {
+        " Vista previa "
+    };
+    let b = bloque_app(app, titulo, foco_preview);
     let interior = b.inner(r);
     f.render_widget(b, r);
     app.zonas.preview = Some(interior);
@@ -931,6 +961,15 @@ fn dibujar_preview(f: &mut Frame, app: &mut App, r: Rect) {
             .cloned()
             .collect();
         f.render_widget(Paragraph::new(lineas), interior);
+        if foco_preview {
+            resaltar_enlace(
+                f.buffer_mut(),
+                interior,
+                doc,
+                ba.preview_desplazamiento,
+                ba.preview_enlace,
+            );
+        }
     }
 }
 

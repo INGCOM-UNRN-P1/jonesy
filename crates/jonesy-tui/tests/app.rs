@@ -991,3 +991,56 @@ fn reposo_sin_redibujos() {
     a.avisar("hola", jonesy_tui::app::Nivel::Info);
     assert_ne!(antes, a.firma_visible());
 }
+
+#[test]
+fn enlaces_de_markdown_con_teclado() {
+    let mut consigna = String::from(
+        "# Ejercicio\n\nUsá [la lista](lista.c) y mirá [las entregas](#entregas).\n\n",
+    );
+    for i in 0..40 {
+        consigna.push_str(&format!("Párrafo {i}.\n\n"));
+    }
+    consigna.push_str("## Entregas\n\nEl viernes.\n");
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("lista.c", "int lista;\n"),
+        ("consigna.md", &consigna),
+        ("notas.md", "Ver [otra](otra.md).\n"),
+        ("otra.md", "# Otra\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    pantalla(&mut a, 160, 40);
+    tecla(&mut a, KeyCode::F(7), KeyModifiers::NONE);
+    assert_eq!(a.foco, Foco::Consigna);
+    // Tab elige el primer enlace y Enter lo abre en el editor.
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    pantalla(&mut a, 160, 40);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.nombre(), "lista.c");
+    // El segundo es un ancla: desplaza la consigna hasta «Entregas».
+    tecla(&mut a, KeyCode::F(7), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Entregas") && p.contains("El viernes."), "{p}");
+    assert!(a.consigna.as_ref().unwrap().desplazamiento > 40);
+    // Vista previa: clic para darle foco, Tab al enlace, Enter abre otra.md.
+    a.abrir_archivo(&dir.path().join("notas.md"), true);
+    tecla(&mut a, KeyCode::Char('p'), KeyModifiers::CONTROL);
+    std::thread::sleep(Duration::from_millis(150));
+    pantalla(&mut a, 160, 40);
+    let r = a.zonas.preview.expect("vista previa visible");
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    a.evento(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: r.x + r.width - 2,
+        row: r.y + r.height - 1,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert_eq!(a.foco, Foco::Preview);
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Tab enlaces"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.nombre(), "otra.md");
+}

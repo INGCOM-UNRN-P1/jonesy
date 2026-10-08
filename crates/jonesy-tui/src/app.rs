@@ -65,6 +65,8 @@ pub enum Foco {
     Lateral,
     Doc,
     Navegador,
+    /// La vista previa de Markdown (para recorrer sus enlaces con el teclado).
+    Preview,
 }
 
 impl Foco {
@@ -76,6 +78,7 @@ impl Foco {
             Foco::Lateral => "lateral",
             Foco::Doc => "quickdoc",
             Foco::Navegador => "navegador",
+            Foco::Preview => "vista previa",
         }
     }
 }
@@ -360,6 +363,8 @@ pub struct BufferAbierto {
     /// Vista previa de Markdown: (versión renderizada, ancho, documento).
     pub preview: Option<(u64, u16, Documento)>,
     pub preview_desplazamiento: usize,
+    /// Enlace elegido con Tab en la vista previa.
+    pub preview_enlace: Option<usize>,
     pub ultimo_cambio: Instant,
 }
 
@@ -370,6 +375,7 @@ impl BufferAbierto {
             cache: Default::default(),
             preview: None,
             preview_desplazamiento: 0,
+            preview_enlace: None,
             ultimo_cambio: Instant::now(),
         }
     }
@@ -380,6 +386,8 @@ pub struct Consigna {
     pub fuente: String,
     pub doc: Option<(u16, Documento)>,
     pub desplazamiento: usize,
+    /// Enlace elegido con Tab (RF-8.3).
+    pub enlace: Option<usize>,
 }
 
 pub struct Depuracion {
@@ -609,6 +617,7 @@ impl App {
                 fuente,
                 doc: None,
                 desplazamiento: 0,
+                enlace: None,
             })
         });
         let mut app = App {
@@ -4013,28 +4022,115 @@ impl App {
             Foco::Lateral => self.tecla_lateral(k),
             Foco::Consigna => self.tecla_consigna(k),
             Foco::Navegador => self.tecla_navegador(k),
+            Foco::Preview => self.tecla_preview(k),
             _ => self.tecla_editor(k),
         }
     }
 
     fn tecla_consigna(&mut self, k: KeyEvent) {
-        let Some(c) = &mut self.consigna else {
-            self.foco = Foco::Editor;
-            return;
-        };
         let alto = self
             .areas
             .consigna
             .map(|r| r.height.saturating_sub(2) as usize)
-            .unwrap_or(10);
+            .unwrap_or(10)
+            .max(1);
+        let Some(c) = &mut self.consigna else {
+            self.foco = Foco::Editor;
+            return;
+        };
+        let doc = c.doc.as_ref().map(|(_, d)| d);
         match k.code {
             KeyCode::Up => c.desplazamiento = c.desplazamiento.saturating_sub(1),
             KeyCode::Down => c.desplazamiento += 1,
             KeyCode::PageUp => c.desplazamiento = c.desplazamiento.saturating_sub(alto),
             KeyCode::PageDown | KeyCode::Char(' ') => c.desplazamiento += alto,
             KeyCode::Home => c.desplazamiento = 0,
+            // Tab / Shift+Tab recorren los enlaces; sin enlaces, Tab vuelve al editor.
+            KeyCode::Tab | KeyCode::BackTab if doc.is_some_and(|d| !d.enlaces.is_empty()) => {
+                let d = doc.unwrap();
+                c.enlace = siguiente_enlace(d, c.enlace, k.code == KeyCode::Tab);
+                if let Some(e) = c.enlace.and_then(|i| d.enlaces.get(i)) {
+                    c.desplazamiento = a_la_vista(e.linea, c.desplazamiento, alto);
+                }
+            }
+            KeyCode::Enter => {
+                let destino = c
+                    .enlace
+                    .and_then(|i| doc.and_then(|d| d.enlaces.get(i)))
+                    .map(|e| e.destino.clone());
+                let base = c.ruta.parent().map(Path::to_path_buf).unwrap_or_default();
+                if let Some(d) = destino {
+                    if let Some(l) = d
+                        .strip_prefix('#')
+                        .and_then(|ancla| doc.and_then(|x| linea_de_ancla(x, ancla)))
+                    {
+                        c.desplazamiento = l;
+                    } else {
+                        self.abrir_enlace(&base, &d);
+                    }
+                }
+            }
             KeyCode::Esc | KeyCode::Tab => self.cambiar_foco(Foco::Editor),
             _ => self.tecla_editor(k),
+        }
+    }
+
+    /// Vista previa de Markdown con foco: desplazamiento y enlaces con el teclado.
+    fn tecla_preview(&mut self, k: KeyEvent) {
+        let alto = self
+            .zonas
+            .preview
+            .map(|r| r.height as usize)
+            .unwrap_or(10)
+            .max(1);
+        let ba = &mut self.buffers[self.activo];
+        let Some((_, _, doc)) = &ba.preview else {
+            self.foco = Foco::Editor;
+            return;
+        };
+        match k.code {
+            KeyCode::Up => ba.preview_desplazamiento = ba.preview_desplazamiento.saturating_sub(1),
+            KeyCode::Down => ba.preview_desplazamiento += 1,
+            KeyCode::PageUp => {
+                ba.preview_desplazamiento = ba.preview_desplazamiento.saturating_sub(alto)
+            }
+            KeyCode::PageDown | KeyCode::Char(' ') => ba.preview_desplazamiento += alto,
+            KeyCode::Home => ba.preview_desplazamiento = 0,
+            KeyCode::Tab | KeyCode::BackTab if !doc.enlaces.is_empty() => {
+                ba.preview_enlace =
+                    siguiente_enlace(doc, ba.preview_enlace, k.code == KeyCode::Tab);
+                if let Some(e) = ba.preview_enlace.and_then(|i| doc.enlaces.get(i)) {
+                    ba.preview_desplazamiento =
+                        a_la_vista(e.linea, ba.preview_desplazamiento, alto);
+                }
+            }
+            KeyCode::Enter => {
+                let destino = ba
+                    .preview_enlace
+                    .and_then(|i| doc.enlaces.get(i))
+                    .map(|e| e.destino.clone());
+                let ancla = destino
+                    .as_deref()
+                    .and_then(|d| d.strip_prefix('#'))
+                    .and_then(|a| linea_de_ancla(doc, a));
+                if let Some(l) = ancla {
+                    ba.preview_desplazamiento = l;
+                } else if let Some(d) = destino {
+                    let base = ba
+                        .buf
+                        .ruta
+                        .as_ref()
+                        .and_then(|p| p.parent().map(Path::to_path_buf))
+                        .unwrap_or_default();
+                    self.abrir_enlace(&base, &d);
+                }
+            }
+            _ => {
+                self.cambiar_foco(Foco::Editor);
+                if k.code != KeyCode::Esc {
+                    self.tecla_editor(k);
+                }
+            }
         }
     }
 
@@ -5153,6 +5249,7 @@ impl App {
         }
         if let Some(r) = self.zonas.preview {
             if dentro(r) {
+                self.cambiar_foco(Foco::Preview);
                 let b = self.buf();
                 let linea = b.preview_desplazamiento + (y - r.y) as usize;
                 let col = (x - r.x) as usize;
@@ -5259,6 +5356,15 @@ impl App {
     }
 
     fn abrir_enlace(&mut self, base: &Path, destino: &str) {
+        // Enlace a una sección de la misma consigna (#ancla).
+        if let Some(ancla) = destino.strip_prefix('#') {
+            if let Some(c) = &mut self.consigna {
+                if let Some(l) = c.doc.as_ref().and_then(|(_, d)| linea_de_ancla(d, ancla)) {
+                    c.desplazamiento = l;
+                    return;
+                }
+            }
+        }
         if !markdown::es_enlace_local(destino) {
             self.avisar(format!("Enlace externo: {destino}"), Nivel::Info);
             return;
@@ -5417,6 +5523,55 @@ pub fn nombre_de_repo(url: &str) -> String {
     } else {
         n.to_string()
     }
+}
+
+/// Índice del enlace siguiente (o anterior) al elegido, circular.
+pub fn siguiente_enlace(d: &Documento, actual: Option<usize>, adelante: bool) -> Option<usize> {
+    let n = d.enlaces.len();
+    if n == 0 {
+        return None;
+    }
+    Some(match (actual, adelante) {
+        (None, true) => 0,
+        (None, false) => n - 1,
+        (Some(i), true) => (i + 1) % n,
+        (Some(i), false) => (i + n - 1) % n,
+    })
+}
+
+/// Desplazamiento que deja `linea` a la vista.
+fn a_la_vista(linea: usize, desplazamiento: usize, alto: usize) -> usize {
+    if linea < desplazamiento {
+        linea
+    } else if linea >= desplazamiento + alto {
+        linea + 1 - alto
+    } else {
+        desplazamiento
+    }
+}
+
+/// Ancla de un encabezado como la arma GitHub: minúsculas, espacios a guiones, sin
+/// puntuación.
+pub fn ancla_de(titulo: &str) -> String {
+    titulo
+        .trim()
+        .to_lowercase()
+        .chars()
+        .filter_map(|c| match c {
+            ' ' => Some('-'),
+            c if c.is_alphanumeric() || c == '-' || c == '_' => Some(c),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Línea del encabezado cuya ancla es `ancla`.
+pub fn linea_de_ancla(d: &Documento, ancla: &str) -> Option<usize> {
+    let buscada = ancla_de(ancla);
+    d.encabezados
+        .iter()
+        .find(|(_, t)| ancla_de(t) == buscada)
+        .map(|(l, _)| *l)
 }
 
 /// Ruta escrita en un campo: `~/x`, absoluta o relativa a `base`. None si está vacía.
