@@ -66,7 +66,7 @@ dir = "doc"
 # (ripley, gaff, kaneda, spunkmeyer al guardar; corbel, daedalus, tetsuo, motoko y
 # callahan desde Herramientas) se activan solas si están instaladas.
 desactivar = []          # p. ej. ["spunkmeyer"]
-activar = []             # p. ej. ["corbel"] para revisar la documentación al guardar
+activar = []             # para encender una que un manifiesto propio trae apagada
 # Integraciones propias del proyecto: .jonesy/integraciones/*.toml
 
 [ripley]

@@ -439,7 +439,9 @@ mod tests {
         assert_eq!(gaff.cuando, Cuando::Guardar);
         assert_eq!(gaff.acciones[0].modo, Modo::Recargar);
         assert!(!v.iter().find(|i| i.nombre == "callahan").unwrap().examen);
-        assert!(!v.iter().find(|i| i.nombre == "corbel").unwrap().activa);
+        let corbel = v.iter().find(|i| i.nombre == "corbel").unwrap();
+        assert_eq!(corbel.cuando, Cuando::Manual);
+        assert_eq!(corbel.acciones[0].modo, Modo::Diagnosticos);
     }
 
     #[test]
@@ -469,7 +471,10 @@ mod tests {
             .iter()
             .any(|i| i.nombre == "cppcheck" && i.formato == Formato::Gcc));
         assert!(!v.iter().find(|i| i.nombre == "kaneda").unwrap().activa);
-        assert!(v.iter().find(|i| i.nombre == "corbel").unwrap().activa);
+        assert!(
+            v.iter().find(|i| i.nombre == "daedalus").unwrap().activa,
+            "activar gana sobre desactivar"
+        );
     }
 
     #[test]

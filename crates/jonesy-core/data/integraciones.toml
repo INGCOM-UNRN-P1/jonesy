@@ -61,15 +61,23 @@ explicar = "spunkmeyer explain {codigo}"
 # spunkmeyer marca los hallazgos que gaff ya informa: no se repiten.
 omitir_si = "tambien_en_gaff"
 
+# corbel no corre al guardar (marcaría cada función mientras se escribe): sus acciones
+# están en Herramientas. Para revisar la documentación al guardar, un proyecto puede
+# reemplazar este manifiesto con cuando = "guardar".
 [[integracion]]
 nombre = "corbel"
 descripcion = "Documentación de funciones y tipos"
 binario = "corbel"
-cuando = "guardar"
+cuando = "manual"
 archivos = ["*.h"]
 comando = "corbel check {archivo} --json"
 formato = "corbel"
-activa = false
+
+  [[integracion.accion]]
+  titulo = "Ver qué falta documentar (corbel check)"
+  comando = "corbel check {archivo} --json"
+  modo = "diagnosticos"
+  archivos = ["*.h", "*.c"]
 
   [[integracion.accion]]
   titulo = "Generar el esqueleto de documentación (corbel scaffold)"

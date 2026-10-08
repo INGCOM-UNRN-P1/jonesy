@@ -20,7 +20,7 @@ Cada una se activa sola si su `binario` está en el `PATH`. En `.jonesy.toml`:
 ```toml
 [integraciones]
 desactivar = ["spunkmeyer"]   # no correrlas en este proyecto
-activar = ["corbel"]          # encender las que vienen apagadas
+activar = ["mi-linter"]       # encender las que un manifiesto trae con activa = false
 ```
 
 Dentro del IDE, *Herramientas → Integraciones* muestra el estado de cada una y permite
