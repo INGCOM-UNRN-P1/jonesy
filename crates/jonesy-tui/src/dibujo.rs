@@ -2210,7 +2210,6 @@ fn celda_diff(
 /// de cada línea resaltado.
 fn dibujar_diff(
     f: &mut Frame,
-    app: &mut App,
     area: Rect,
     titulo: &str,
     filas: &[jonesy_core::diff::FilaDiff],
@@ -2263,7 +2262,6 @@ fn dibujar_diff(
     );
     let i = b.inner(r);
     f.render_widget(b, r);
-    let _ = app;
     // Las filas lógicas se expanden a filas de pantalla (en unificado un cambio son dos).
     let mut pantalla: Vec<(&FilaDiff, Option<bool>)> = vec![];
     for fila in filas.iter().skip(desplazamiento) {
@@ -2695,16 +2693,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 (titulo.clone(), *desplazamiento, *lado_a_lado);
             let filas = filas.clone();
             let ctx = (*lenguaje, *desplazamiento_h);
-            dibujar_diff(
-                f,
-                app,
-                area,
-                &titulo,
-                &filas,
-                desplazamiento,
-                lado_a_lado,
-                ctx,
-            );
+            dibujar_diff(f, area, &titulo, &filas, desplazamiento, lado_a_lado, ctx);
             None
         }
         Modal::Integraciones { sel } => {
