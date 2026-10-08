@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 mod bench;
+mod verificar;
 
 const AYUDA: &str = "\
 jonesy — IDE de terminal para Programación I
@@ -11,7 +12,7 @@ jonesy — IDE de terminal para Programación I
 Uso:
   jonesy [opciones] [directorio | archivos...]
   jonesy replay <telemetry.log> [--resumen | --json]
-  jonesy verificar <telemetry.log>
+  jonesy verificar <telemetry.log | entrega.tar> [--json]
   jonesy doctor [--json] [directorio]   herramientas del entorno y del ecosistema
 
 Opciones:
@@ -158,8 +159,46 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
         }
         Some("verificar") => {
             let Some(log) = args.get(1) else {
-                anyhow::bail!("uso: jonesy verificar <telemetry.log>")
+                anyhow::bail!("uso: jonesy verificar <telemetry.log | entrega.tar> [--json]")
             };
+            // Un paquete de entrega: hash, archivos, bitácora y sello.
+            if log.ends_with(".tar") {
+                let informe = verificar::verificar_paquete(Path::new(log))?;
+                if tiene("--json") {
+                    println!("{}", serde_json::to_string_pretty(&informe)?);
+                } else {
+                    println!(
+                        "Entrega de {} · {}",
+                        informe.usuario.as_deref().unwrap_or("?"),
+                        informe.paquete
+                    );
+                    for c in &informe.chequeos {
+                        println!(
+                            "{} {}: {}",
+                            if c.ok { "✓" } else { "✗" },
+                            c.nombre,
+                            c.detalle
+                        );
+                    }
+                    println!(
+                        "Pegados: {} ({} caracteres)",
+                        informe.pegados, informe.caracteres_pegados
+                    );
+                    println!(
+                        "{}",
+                        if informe.ok {
+                            "La entrega es íntegra."
+                        } else {
+                            "La entrega NO es íntegra."
+                        }
+                    );
+                }
+                return Ok(if informe.ok {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::from(1)
+                });
+            }
             let v = jonesy_telemetry::verificar(Path::new(log))?;
             match &v.error {
                 None => println!(
