@@ -129,6 +129,7 @@ pub fn estilo_clase(c: Clase) -> Style {
         Clase::Clave => s.fg(Color::Rgb(224, 108, 117)),
         Clase::Enlace => s.fg(NOTA).add_modifier(Modifier::UNDERLINED),
         Clase::Cita => s.fg(ATENUADO).add_modifier(Modifier::ITALIC),
+        Clase::Invalido => s.bg(ERROR).fg(Color::Black),
     }
 }
 

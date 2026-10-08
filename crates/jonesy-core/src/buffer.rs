@@ -34,11 +34,21 @@ pub enum Lenguaje {
     Markdown,
     Yaml,
     Toml,
+    /// Makefile, makefile, GNUmakefile y *.mk.
+    Makefile,
     Texto,
 }
 
 impl Lenguaje {
     pub fn de_ruta(ruta: &Path) -> Lenguaje {
+        let nombre = ruta
+            .file_name()
+            .map(|n| n.to_string_lossy().to_ascii_lowercase())
+            .unwrap_or_default();
+        if matches!(nombre.as_str(), "makefile" | "gnumakefile") || nombre.starts_with("makefile.")
+        {
+            return Lenguaje::Makefile;
+        }
         match ruta
             .extension()
             .and_then(|e| e.to_str())
@@ -49,6 +59,7 @@ impl Lenguaje {
             Some("md" | "markdown") => Lenguaje::Markdown,
             Some("yaml" | "yml") => Lenguaje::Yaml,
             Some("toml") => Lenguaje::Toml,
+            Some("mk") => Lenguaje::Makefile,
             _ => Lenguaje::Texto,
         }
     }
@@ -401,6 +412,10 @@ impl Buffer {
         if self.lenguaje == Lenguaje::C && antes.trim_end().ends_with('{') {
             extra.push_str("    ");
         }
+        // Makefile: después de «objetivo: prerrequisitos» viene la receta, que exige TAB.
+        if self.lenguaje == Lenguaje::Makefile && sangria.is_empty() && es_regla_make(&antes) {
+            extra.push('\t');
+        }
         self.insertar(&format!("\n{sangria}{extra}"))
     }
 
@@ -523,6 +538,19 @@ fn es_palabra(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
+/// Línea de regla de un Makefile (`objetivo: prerrequisitos`), no una asignación.
+fn es_regla_make(linea: &str) -> bool {
+    let l = linea.trim_end();
+    if l.is_empty() || l.starts_with('#') || l.starts_with(char::is_whitespace) {
+        return false;
+    }
+    match (l.find(':'), l.find('=')) {
+        (Some(d), Some(e)) => d < e && !l[d..].starts_with(":=") && !l[d..].starts_with("::="),
+        (Some(_), None) => true,
+        _ => false,
+    }
+}
+
 /// Escritura atómica: `.<nombre>.jonesy-tmp` + fsync + rename (+ fsync del directorio).
 pub fn guardar_atomico(ruta: &Path, datos: &[u8]) -> std::io::Result<usize> {
     let dir = ruta
@@ -552,6 +580,40 @@ pub fn guardar_atomico(ruta: &Path, datos: &[u8]) -> std::io::Result<usize> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn makefile_enter_tras_regla_agrega_tab() {
+        let mut b = Buffer::desde_texto("programa: main.o");
+        b.lenguaje = Lenguaje::Makefile;
+        b.mover_a(b.largo(), false);
+        b.nueva_linea();
+        assert_eq!(b.contenido(), "programa: main.o\n\t");
+        b.insertar("gcc -o $@ $^");
+        b.nueva_linea();
+        assert_eq!(
+            b.contenido(),
+            "programa: main.o\n\tgcc -o $@ $^\n\t",
+            "la receta sigue con TAB"
+        );
+        let mut v = Buffer::desde_texto("CC := gcc");
+        v.lenguaje = Lenguaje::Makefile;
+        v.mover_a(v.largo(), false);
+        v.nueva_linea();
+        assert_eq!(
+            v.contenido(),
+            "CC := gcc\n",
+            "una asignación no abre receta"
+        );
+        assert_eq!(
+            Lenguaje::de_ruta(Path::new("libs/a/Makefile")),
+            Lenguaje::Makefile
+        );
+        assert_eq!(
+            Lenguaje::de_ruta(Path::new("reglas.mk")),
+            Lenguaje::Makefile
+        );
+    }
+
     use super::*;
 
     #[test]

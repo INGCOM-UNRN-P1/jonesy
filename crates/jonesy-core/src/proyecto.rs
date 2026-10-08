@@ -416,7 +416,8 @@ pub fn es_editable(ruta: &Path) -> bool {
             .map(|e| e.to_ascii_lowercase())
             .as_deref(),
         Some(
-            "c" | "h"
+            "mk" | "c"
+                | "h"
                 | "md"
                 | "txt"
                 | "toml"

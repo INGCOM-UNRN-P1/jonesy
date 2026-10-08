@@ -3650,7 +3650,15 @@ impl App {
             KeyCode::Enter => self.editar(|b| b.nueva_linea()),
             KeyCode::Backspace => self.editar(|b| b.borrar_atras()),
             KeyCode::Delete => self.editar(|b| b.borrar_adelante()),
-            KeyCode::Tab => self.editar(|b| b.insertar("    ")),
+            // En un Makefile las recetas exigen un TAB real; en el resto, 4 espacios.
+            KeyCode::Tab => self.editar(|b| {
+                let t = if b.lenguaje == Lenguaje::Makefile {
+                    "\t"
+                } else {
+                    "    "
+                };
+                b.insertar(t)
+            }),
             KeyCode::BackTab => self.editar(desindentar),
             KeyCode::Char(c) if !ctrl => {
                 let mut s = [0u8; 4];

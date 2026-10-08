@@ -21,6 +21,8 @@ pub enum Clase {
     Clave,
     Enlace,
     Cita,
+    /// Error visible (en Makefiles: receta sangrada con espacios en vez de TAB).
+    Invalido,
 }
 
 /// Estado al inicio de una línea.
@@ -28,6 +30,10 @@ pub enum Clase {
 pub struct Estado {
     pub comentario_bloque: bool,
     pub cercado: bool,
+    /// Makefile: la línea anterior fue una regla o una receta (siguen recetas).
+    pub en_regla: bool,
+    /// La línea anterior terminó en `\` (continuación).
+    pub continua: bool,
 }
 
 /// Tramos (inicio, fin) en índices de carácter.
@@ -411,6 +417,188 @@ fn resaltar_markdown(cs: &[char], estado: &mut Estado) -> Tramos {
     t
 }
 
+const DIRECTIVAS_MAKE: &[&str] = &[
+    "include", "-include", "sinclude", "ifeq", "ifneq", "ifdef", "ifndef", "else", "endif",
+    "define", "endef", "export", "unexport", "override", "vpath", "undefine", "private",
+];
+
+/// Fin de una referencia `$(...)` / `${...}` que empieza en `i` (con anidamiento).
+fn fin_referencia(cs: &[char], i: usize) -> usize {
+    let (abre, cierra) = match cs.get(i + 1) {
+        Some('(') => ('(', ')'),
+        Some('{') => ('{', '}'),
+        // $@ $< $^ $? $* $+ $% y $X de un carácter; $$ es un $ para la shell.
+        Some(_) => return (i + 2).min(cs.len()),
+        None => return cs.len(),
+    };
+    let mut nivel = 0;
+    let mut j = i + 1;
+    while j < cs.len() {
+        if cs[j] == abre {
+            nivel += 1;
+        } else if cs[j] == cierra {
+            nivel -= 1;
+            if nivel == 0 {
+                return j + 1;
+            }
+        }
+        j += 1;
+    }
+    cs.len()
+}
+
+/// Referencias a variables, cadenas y comentarios en `cs[desde..]` (valores, recetas y
+/// prerrequisitos). En recetas además se resaltan palabras clave de la shell.
+fn tramos_make_resto(cs: &[char], desde: usize, receta: bool, t: &mut Tramos) {
+    let mut i = desde;
+    while i < cs.len() {
+        let c = cs[i];
+        if c == '#' && (i == 0 || cs[i - 1] != '\\') {
+            t.push((i, cs.len(), Clase::Comentario));
+            return;
+        }
+        if c == '$' {
+            let f = fin_referencia(cs, i);
+            let clase = if cs.get(i + 1) == Some(&'$') {
+                Clase::Clave
+            } else {
+                Clase::Tipo
+            };
+            t.push((i, f, clase));
+            i = f;
+            continue;
+        }
+        if receta && (c == '"' || c == '\'') {
+            let f = literal(cs, i, c);
+            t.push((i, f, Clase::Cadena));
+            i = f;
+            continue;
+        }
+        if receta && es_ident(c) && (i == 0 || !es_ident(cs[i - 1])) {
+            let mut f = i;
+            while f < cs.len() && (es_ident(cs[f]) || cs[f] == '-') {
+                f += 1;
+            }
+            let w: String = cs[i..f].iter().collect();
+            if PALABRAS_BASH.contains(&w.as_str()) {
+                t.push((i, f, Clase::Palabra));
+            }
+            i = f;
+            continue;
+        }
+        i += 1;
+    }
+}
+
+/// Makefile: directivas, asignaciones, reglas (objetivos y prerrequisitos), recetas con
+/// sus prefijos `@`/`-`/`+`, referencias `$(VAR)` y comentarios. Una receta sangrada con
+/// espacios en lugar de TAB (el «missing separator» de make) se marca como inválida.
+fn resaltar_make(cs: &[char], e: &mut Estado) -> Tramos {
+    let mut t = vec![];
+    let continuacion = e.continua;
+    e.continua = cs.last() == Some(&'\\');
+    let vacia = cs.iter().all(|c| c.is_whitespace());
+    if vacia {
+        return t;
+    }
+    // Continuación de la línea anterior: mismo tratamiento que un valor.
+    if continuacion {
+        tramos_make_resto(cs, 0, e.en_regla, &mut t);
+        return t;
+    }
+    let primero = cs.iter().position(|c| !c.is_whitespace()).unwrap_or(0);
+    if cs[0] == '\t' {
+        if cs[primero] == '#' {
+            t.push((0, cs.len(), Clase::Comentario));
+            return t;
+        }
+        if e.en_regla {
+            let mut i = primero;
+            while i < cs.len() && matches!(cs[i], '@' | '-' | '+') {
+                i += 1;
+            }
+            if i > primero {
+                t.push((primero, i, Clase::Palabra));
+            }
+            tramos_make_resto(cs, i, true, &mut t);
+            return t;
+        }
+    } else if primero > 0 && e.en_regla && cs[primero] != '#' {
+        // Sangría con espacios donde make espera un TAB.
+        t.push((0, primero, Clase::Invalido));
+        tramos_make_resto(cs, primero, true, &mut t);
+        return t;
+    }
+    if cs[primero] == '#' {
+        t.push((primero, cs.len(), Clase::Comentario));
+        return t;
+    }
+    // Directiva (ifeq, include, define…).
+    let mut f = primero;
+    while f < cs.len() && !cs[f].is_whitespace() && cs[f] != '(' {
+        f += 1;
+    }
+    let palabra: String = cs[primero..f].iter().collect();
+    if DIRECTIVAS_MAKE.contains(&palabra.as_str()) {
+        t.push((primero, f, Clase::Preproc));
+        tramos_make_resto(cs, f, false, &mut t);
+        e.en_regla = false;
+        return t;
+    }
+    // Asignación: NOMBRE = | := | ::= | ?= | += | != valor (antes de cualquier ':' de regla).
+    let texto: String = cs.iter().collect();
+    let asignacion = texto.char_indices().find_map(|(b, c)| match c {
+        '=' => Some(b),
+        ':' if !texto[b..].starts_with(":=") && !texto[b..].starts_with("::=") => Some(usize::MAX),
+        _ => None,
+    });
+    if let Some(b) = asignacion.filter(|b| *b != usize::MAX) {
+        let i = texto[..b].chars().count();
+        let mut fin_nombre = i;
+        while fin_nombre > primero
+            && matches!(cs[fin_nombre - 1], ':' | '?' | '+' | '!' | ' ' | '\t')
+        {
+            fin_nombre -= 1;
+        }
+        t.push((primero, fin_nombre, Clase::Clave));
+        tramos_make_resto(cs, i + 1, false, &mut t);
+        e.en_regla = false;
+        return t;
+    }
+    // Regla: objetivos: prerrequisitos [; receta]
+    if let Some(dos) = cs.iter().position(|&c| c == ':') {
+        let mut i = primero;
+        while i < dos {
+            if cs[i] == '$' {
+                let f = fin_referencia(cs, i).min(dos);
+                t.push((i, f, Clase::Tipo));
+                i = f;
+                continue;
+            }
+            if !cs[i].is_whitespace() {
+                let mut f = i;
+                while f < dos && !cs[f].is_whitespace() && cs[f] != '$' {
+                    f += 1;
+                }
+                let clase = if cs[i] == '.' {
+                    Clase::Palabra
+                } else {
+                    Clase::Funcion
+                };
+                t.push((i, f, clase));
+                i = f;
+                continue;
+            }
+            i += 1;
+        }
+        tramos_make_resto(cs, dos + 1, false, &mut t);
+        e.en_regla = true;
+        return t;
+    }
+    tramos_make_resto(cs, primero, false, &mut t);
+    t
+}
+
 /// Tramos de una línea. Para Markdown con bloque cercado, los bloques se colorean como código.
 pub fn resaltar(lenguaje: Lenguaje, linea: &[char], estado: &mut Estado) -> Tramos {
     match lenguaje {
@@ -418,6 +606,7 @@ pub fn resaltar(lenguaje: Lenguaje, linea: &[char], estado: &mut Estado) -> Tram
         Lenguaje::Markdown => resaltar_markdown(linea, estado),
         Lenguaje::Yaml => resaltar_clave_valor(linea, ':'),
         Lenguaje::Toml => resaltar_clave_valor(linea, '='),
+        Lenguaje::Makefile => resaltar_make(linea, estado),
         Lenguaje::Texto => vec![],
     }
 }
@@ -429,6 +618,7 @@ pub fn resaltar_etiqueta(etiqueta: &str, linea: &[char], estado: &mut Estado) ->
         "bash" | "sh" | "shell" | "console" | "zsh" => resaltar_bash(linea),
         "yaml" | "yml" => resaltar_clave_valor(linea, ':'),
         "toml" | "ini" => resaltar_clave_valor(linea, '='),
+        "make" | "makefile" | "mk" => resaltar_make(linea, estado),
         _ => vec![],
     }
 }
@@ -528,6 +718,50 @@ mod tests {
         assert_eq!(r[0], ("comando ".into(), Clase::Clave));
         assert_eq!(r[1].1, Clase::Cadena);
         assert_eq!(clases(Lenguaje::Yaml, "activo: true")[1].1, Clase::Palabra);
+    }
+
+    #[test]
+    fn makefile() {
+        let mut e = Estado::default();
+        let mut linea = |s: &str| {
+            let cs: Vec<char> = s.chars().collect();
+            resaltar(Lenguaje::Makefile, &cs, &mut e)
+                .into_iter()
+                .map(|(a, b, c)| (cs[a..b].iter().collect::<String>(), c))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            linea("CFLAGS ?= -Wall $(EXTRA) # opciones"),
+            vec![
+                ("CFLAGS".into(), Clase::Clave),
+                ("$(EXTRA)".into(), Clase::Tipo),
+                ("# opciones".into(), Clase::Comentario),
+            ]
+        );
+        assert_eq!(
+            linea(".PHONY: run"),
+            vec![(".PHONY".into(), Clase::Palabra),]
+        );
+        assert_eq!(
+            linea("$(PROG): main.o $(OBJS)"),
+            vec![
+                ("$(PROG)".into(), Clase::Tipo),
+                ("$(OBJS)".into(), Clase::Tipo),
+            ]
+        );
+        let r = linea("\t@echo \"hola $@\" && ./$(PROG)");
+        assert_eq!(r[0], ("@".into(), Clase::Palabra));
+        assert_eq!(r[1], ("echo".into(), Clase::Palabra));
+        assert_eq!(r[2].1, Clase::Cadena);
+        assert!(r.contains(&("$(PROG)".into(), Clase::Tipo)));
+        // Receta sangrada con espacios: inválida.
+        let r = linea("    rm -f *.o");
+        assert_eq!(r[0], ("    ".into(), Clase::Invalido));
+        assert_eq!(linea("ifneq ($(X),)")[0], ("ifneq".into(), Clase::Preproc));
+        assert_eq!(linea("all: prog")[0], ("all".into(), Clase::Funcion));
+        // Continuación con barra: no es un error de sangría.
+        linea("SRCS = a.c \\");
+        assert_eq!(linea("    b.c $(X)"), vec![("$(X)".into(), Clase::Tipo)]);
     }
 
     #[test]

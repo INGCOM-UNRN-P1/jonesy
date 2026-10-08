@@ -846,7 +846,13 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             }
             let celda = &mut buf[(texto.x + x as u16, y)];
             if c == '\t' {
-                celda.set_symbol(" ").set_style(estilo);
+                // En Makefiles el TAB importa: se muestra para distinguirlo de los espacios.
+                if lenguaje == Lenguaje::Makefile {
+                    let marca = if sim.ascii { ">" } else { "→" };
+                    celda.set_symbol(marca).set_style(estilo.fg(tema::ATENUADO));
+                } else {
+                    celda.set_symbol(" ").set_style(estilo);
+                }
             } else {
                 let mut s = [0u8; 4];
                 celda.set_symbol(c.encode_utf8(&mut s)).set_style(estilo);
