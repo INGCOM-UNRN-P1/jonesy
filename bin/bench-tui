@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+# Benchmarks de §10 de la especificación sobre un proyecto de prueba.
+#
+#   bin/bench-tui [proyecto]
+#
+# Sin argumento arma un proyecto típico en un directorio temporal: main.c, una
+# consigna Markdown con tabla y bloque de código, y 500 archivos en un repo git.
+# Sale con código 1 si alguna medición excede su presupuesto.
+set -euo pipefail
+
+raiz="$(cd "$(dirname "$0")/.." && pwd)"
+jonesy="${JONESY:-$raiz/target/release/jonesy}"
+if [[ ! -x "$jonesy" ]]; then
+    (cd "$raiz" && cargo build --release --quiet)
+fi
+
+proyecto="${1:-}"
+if [[ -z "$proyecto" ]]; then
+    proyecto="$(mktemp -d)"
+    trap 'rm -rf "$proyecto"' EXIT
+    cat > "$proyecto/main.c" <<'C'
+#include <stdio.h>
+#include <stdlib.h>
+
+int main(void)
+{
+    int *v = malloc(sizeof(int) * 10);
+    if (v == NULL) {
+        return 1;
+    }
+    free(v);
+    return 0;
+}
+C
+    cat > "$proyecto/consigna.md" <<'MD'
+# Ejercicio
+
+Implementá `lista_crear` y **verificá** el retorno de `malloc`.
+
+| Función | Retorno |
+|---|---|
+| `lista_crear` | `lista_t *` |
+
+```c
+lista_t *l = lista_crear();
+```
+MD
+    for i in $(seq 1 500); do echo "dato $i" > "$proyecto/dato$i.txt"; done
+    git -C "$proyecto" init -q
+    git -C "$proyecto" -c user.name=bench -c user.email=bench@localhost add -A
+    git -C "$proyecto" -c user.name=bench -c user.email=bench@localhost commit -qm inicial
+    echo cambio >> "$proyecto/dato1.txt"
+fi
+
+fallas=0
+correr() {
+    echo "── $*"
+    "$jonesy" "$@" || fallas=$((fallas + 1))
+}
+
+correr --headless --benchmark-startup "$proyecto"
+correr --benchmark-doc-lookup malloc
+correr --benchmark-telemetry-write
+correr --benchmark-git-status "$proyecto"
+correr --benchmark-markdown "$proyecto/consigna.md"
+if command -v python3 > /dev/null; then
+    correr --benchmark-python-plugins "$proyecto"
+fi
+correr --benchmark-session "$proyecto" --segundos "${SEGUNDOS:-10}"
+
+if [[ -x /usr/bin/time ]]; then
+    echo "── RSS máximo medido por /usr/bin/time (sesión de 3 s)"
+    /usr/bin/time -v "$jonesy" --benchmark-session "$proyecto" --segundos 3 2>&1 | grep 'Maximum resident' || true
+fi
+tam=$(stat -c %s "$jonesy")
+echo "── tamaño del binario: $((tam / 1024)) KiB (presupuesto ≤ 25 MiB)"
+if (( tam > 25 * 1024 * 1024 )); then fallas=$((fallas + 1)); fi
+
+if (( fallas > 0 )); then
+    echo "✗ $fallas medición(es) exceden el presupuesto"
+    exit 1
+fi
+echo "✓ todas las mediciones dentro del presupuesto"
