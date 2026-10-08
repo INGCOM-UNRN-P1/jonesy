@@ -16,6 +16,8 @@ pub struct Config {
     pub examen: Examen,
     pub interfaz: Interfaz,
     pub ripley: Ripley,
+    /// Descripciones o módulos extra para la vista de estructura (`[[modulo]]`).
+    pub modulo: Vec<crate::estructura::ModuloConfig>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -106,6 +108,8 @@ pub struct Proyecto {
     pub config: Config,
     /// Error al leer `.jonesy.toml`, para mostrarlo en la barra de estado.
     pub error_config: Option<String>,
+    /// Módulos con Makefile (bibliotecas, ejercicios) y comandos de `tp.sh`.
+    pub estructura: crate::estructura::Estructura,
 }
 
 impl Proyecto {
@@ -120,10 +124,12 @@ impl Proyecto {
             },
             Err(_) => (Config::default(), None),
         };
+        let estructura = crate::estructura::Estructura::descubrir(&raiz, &config.modulo);
         Proyecto {
             raiz,
             config,
             error_config,
+            estructura,
         }
     }
 
@@ -169,6 +175,10 @@ impl Proyecto {
         if !self.config.compilar.comando.trim().is_empty() {
             return Some(self.config.compilar.comando.clone());
         }
+        // El módulo (biblioteca o ejercicio con Makefile) del archivo activo.
+        if let Some(m) = self.modulo_activo(activo) {
+            return Some(format!("make -C {}", shell_quote(&m.rel)));
+        }
         if self.makefile().is_some() {
             return Some("make".into());
         }
@@ -188,6 +198,19 @@ impl Proyecto {
             return Some(self.config.ejecutar.comando.clone());
         }
         let compilar = self.comando_compilar(activo)?;
+        if let Some(m) = self.modulo_activo(activo) {
+            if m.tiene("run") {
+                return Some(m.comando("run"));
+            }
+            if let Some(p) = &m.programa {
+                // Desde el directorio del módulo, para que encuentre sus archivos de datos.
+                return Some(format!(
+                    "{compilar} && cd {} && ./{}",
+                    shell_quote(&m.rel),
+                    shell_quote(p)
+                ));
+            }
+        }
         if self.makefile().is_some() {
             if self.objetivos_make().iter().any(|o| o == "run") {
                 return Some("make run".into());
@@ -196,6 +219,30 @@ impl Proyecto {
         }
         let stem = activo?.file_stem()?.to_string_lossy().into_owned();
         Some(format!("{compilar} && ./{}", shell_quote(&stem)))
+    }
+
+    /// Módulo con Makefile que contiene al archivo activo (no la raíz).
+    pub fn modulo_activo(&self, activo: Option<&Path>) -> Option<&crate::estructura::Modulo> {
+        let m = self.estructura.modulo_de(activo?)?;
+        (m.tipo != crate::estructura::TipoModulo::Raiz).then_some(m)
+    }
+
+    /// Ejecutable a depurar: `[depurar] programa`, el del módulo activo o el `.c` sin extensión.
+    pub fn programa_a_depurar(&self, activo: Option<&Path>) -> Option<PathBuf> {
+        let cfg = &self.config.depurar.programa;
+        if !cfg.trim().is_empty() {
+            return Some(self.raiz.join(cfg));
+        }
+        if let Some(p) = self.modulo_activo(activo).and_then(|m| m.ruta_programa()) {
+            return Some(p);
+        }
+        let activo = activo?;
+        let stem = activo.file_stem()?.to_string_lossy().into_owned();
+        let dir = activo.parent().unwrap_or(&self.raiz);
+        [dir.join(&stem), self.raiz.join(&stem)]
+            .into_iter()
+            .find(|p| p.is_file())
+            .or(Some(dir.join(stem)))
     }
 
     /// Comando que verifica la entrega del examen.
@@ -303,6 +350,39 @@ pub fn shell_quote(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compilar_y_ejecutar_por_modulo() {
+        let dir = tempfile::tempdir().unwrap();
+        let ej = dir.path().join("ejercicios/ej1");
+        std::fs::create_dir_all(&ej).unwrap();
+        std::fs::write(dir.path().join("Makefile"), "all:\n\t@true\n").unwrap();
+        std::fs::write(
+            ej.join("Makefile"),
+            "PROG_TARGET = programa\nall:\n\t@true\nrun:\n\t./programa\n",
+        )
+        .unwrap();
+        std::fs::write(ej.join("main.c"), "int main(void) { return 0; }\n").unwrap();
+        let p = Proyecto::abrir(dir.path());
+        let main = p.raiz.join("ejercicios/ej1/main.c");
+        assert_eq!(
+            p.comando_compilar(Some(&main)).unwrap(),
+            "make -C ejercicios/ej1"
+        );
+        assert_eq!(
+            p.comando_ejecutar(Some(&main)).unwrap(),
+            "make -C ejercicios/ej1 run"
+        );
+        assert_eq!(
+            p.programa_a_depurar(Some(&main)).unwrap(),
+            p.raiz.join("ejercicios/ej1/programa")
+        );
+        // Fuera de un módulo, el Makefile de la raíz.
+        assert_eq!(
+            p.comando_compilar(Some(&p.raiz.join("notas.md"))).unwrap(),
+            "make"
+        );
+    }
 
     #[test]
     fn compilar_sin_makefile_usa_gcc_con_el_archivo_activo() {

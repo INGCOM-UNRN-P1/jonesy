@@ -7,6 +7,7 @@ pub mod buffer;
 pub mod catscan;
 pub mod diagnostico;
 pub mod entrega;
+pub mod estructura;
 pub mod gdb;
 pub mod proceso;
 pub mod proyecto;

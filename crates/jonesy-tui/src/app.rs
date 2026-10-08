@@ -1247,14 +1247,8 @@ impl App {
     }
 
     fn programa_a_depurar(&self) -> Option<PathBuf> {
-        let cfg = &self.proyecto.config.depurar.programa;
-        if !cfg.trim().is_empty() {
-            return Some(self.proyecto.raiz.join(cfg));
-        }
-        let activo = self.activo_ruta()?;
-        let stem = activo.file_stem()?.to_string_lossy().into_owned();
-        let candidato = self.proyecto.raiz.join(&stem);
-        candidato.is_file().then_some(candidato)
+        let activo = self.activo_ruta();
+        self.proyecto.programa_a_depurar(activo.as_deref()).filter(|p| p.is_file())
     }
 
     fn iniciar_depuracion(&mut self) {
