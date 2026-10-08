@@ -11,3 +11,11 @@ path = "src/main.rs"
 
 [dependencies]
 anyhow.workspace = true
+ratatui.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+jonesy-core = { path = "../jonesy-core" }
+jonesy-git = { path = "../jonesy-git" }
+jonesy-plugins = { path = "../jonesy-plugins" }
+jonesy-telemetry = { path = "../jonesy-telemetry" }
+jonesy-tui = { path = "../jonesy-tui" }

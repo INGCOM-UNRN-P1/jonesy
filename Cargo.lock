@@ -354,6 +354,14 @@ name = "jonesy-bin"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "jonesy-core",
+ "jonesy-git",
+ "jonesy-plugins",
+ "jonesy-telemetry",
+ "jonesy-tui",
+ "ratatui",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
