@@ -25,8 +25,8 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
 - **Explorador de archivos**, pestañas con cierre y desborde, paneles que se
   redimensionan con el mouse o desde las opciones, archivo nuevo, abrir otro
   proyecto (con recientes) y autoformato con `gaff` o `clang-format`.
-- **Git** desde el panel lateral: stage, diff, commit, log y clonar
-  repositorios.
+- **Git** desde el panel lateral: stage, commit, log y clonar repositorios,
+  con diff lado a lado (o unificado) de archivos, commits y del buffer sin guardar.
 - **Modo examen**: consigna de solo lectura, cronómetro, autoguardado,
   telemetría forense encadenada con SHA-256 y entrega asistida con paquete y
   hash; `jonesy replay` para auditar la sesión.
@@ -73,6 +73,7 @@ jonesy verificar .jonesy/telemetry.log         # código 1 si la cadena está ro
 | Nuevo archivo · autoformato | Ctrl+N · Alt+Shift+F |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+W; clic del medio o × cierra |
 | Explorador · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna dentro de la barra) |
+| Diff del archivo contra git, lado a lado | Alt+Shift+D (s alterna con unificado, n/p salta entre cambios) |
 | Paleta de comandos | Ctrl+K o F1 (F1 sobre un diagnóstico explica la regla) |
 | Menú | F10 (fuera de la depuración), Alt+letra o clic |
 | Compilar · ejecutar | F6 · Ctrl+F5 |

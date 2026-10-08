@@ -2035,6 +2035,213 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
 
 // ------------------------------------------------------------------ modales
 
+// ------------------------------------------------------------------ diff
+
+const FONDO_BORRADO: Color = Color::Rgb(62, 28, 30);
+const FONDO_BORRADO_FUERTE: Color = Color::Rgb(125, 40, 45);
+const FONDO_AGREGADO: Color = Color::Rgb(26, 56, 34);
+const FONDO_AGREGADO_FUERTE: Color = Color::Rgb(40, 110, 55);
+
+/// Escribe una celda de diff (número + texto) en `x..x+ancho` de la fila `y`.
+fn celda_diff(
+    buf: &mut ratatui::buffer::Buffer,
+    x: u16,
+    y: u16,
+    ancho: u16,
+    celda: Option<&jonesy_core::diff::Celda>,
+    izquierda: bool,
+    marca: Option<char>,
+) {
+    use jonesy_core::diff::Tipo;
+    let (fondo, fuerte) = if izquierda {
+        (FONDO_BORRADO, FONDO_BORRADO_FUERTE)
+    } else {
+        (FONDO_AGREGADO, FONDO_AGREGADO_FUERTE)
+    };
+    let Some(c) = celda else {
+        // Sin línea de este lado: relleno tenue.
+        for i in 0..ancho {
+            buf[(x + i, y)]
+                .set_symbol("╱")
+                .set_style(Style::default().fg(Color::Rgb(55, 58, 64)));
+        }
+        return;
+    };
+    let fondo = if c.tipo == Tipo::Igual {
+        Color::Reset
+    } else {
+        fondo
+    };
+    let base = Style::default().bg(fondo);
+    for i in 0..ancho {
+        buf[(x + i, y)].set_symbol(" ").set_style(base);
+    }
+    let num = format!("{:>4} ", c.num);
+    buf.set_string(x, y, &num, base.fg(tema::ATENUADO));
+    let mut col = x + 5;
+    if let Some(m) = marca {
+        buf.set_string(
+            col,
+            y,
+            m.to_string(),
+            base.fg(if izquierda { tema::ERROR } else { tema::OK }),
+        );
+        col += 2;
+    }
+    let fin = x + ancho;
+    for (i, ch) in c.texto.chars().enumerate() {
+        let w = unicode_width::UnicodeWidthChar::width(ch)
+            .unwrap_or(1)
+            .max(1) as u16;
+        if col + w > fin {
+            break;
+        }
+        let resaltado = c.resaltes.iter().any(|(a, b)| i >= *a && i < *b);
+        let estilo = if resaltado {
+            base.bg(fuerte).add_modifier(Modifier::BOLD)
+        } else {
+            base
+        };
+        let mut b = [0u8; 4];
+        buf[(col, y)]
+            .set_symbol(ch.encode_utf8(&mut b))
+            .set_style(estilo);
+        col += w;
+    }
+}
+
+/// Modal de diferencias: lado a lado (vieja | nueva) o unificado, con el tramo cambiado
+/// de cada línea resaltado.
+fn dibujar_diff(
+    f: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    titulo: &str,
+    filas: &[jonesy_core::diff::FilaDiff],
+    desplazamiento: usize,
+    lado_a_lado: bool,
+) {
+    use jonesy_core::diff::{FilaDiff, Tipo};
+    let r = Rect::new(
+        area.x + 1,
+        area.y + 1,
+        area.width.saturating_sub(2),
+        area.height.saturating_sub(2),
+    );
+    f.render_widget(Clear, r);
+    let (agregadas, borradas) = jonesy_core::diff::estadistica(filas);
+    // En terminales angostas el lado a lado no entra: se muestra unificado.
+    let lado_a_lado = lado_a_lado && r.width >= 70;
+    let vista = if lado_a_lado {
+        "lado a lado"
+    } else {
+        "unificado"
+    };
+    let b = bloque(
+        Line::from(vec![
+            Span::raw(format!(" {titulo} ")),
+            Span::styled(format!("+{agregadas} "), Style::default().fg(tema::OK)),
+            Span::styled(format!("−{borradas} "), Style::default().fg(tema::ERROR)),
+            Span::styled(
+                format!("· {vista} · s alterna · n/p cambio · Esc cierra "),
+                Style::default().fg(tema::ATENUADO),
+            ),
+        ]),
+        true,
+    );
+    let i = b.inner(r);
+    f.render_widget(b, r);
+    let _ = app;
+    // Las filas lógicas se expanden a filas de pantalla (en unificado un cambio son dos).
+    let mut pantalla: Vec<(&FilaDiff, Option<bool>)> = vec![];
+    for fila in filas.iter().skip(desplazamiento) {
+        if pantalla.len() >= i.height as usize {
+            break;
+        }
+        match fila {
+            FilaDiff::Par { izq, der } if !lado_a_lado => {
+                let igual = izq.as_ref().is_some_and(|c| c.tipo == Tipo::Igual);
+                if igual {
+                    pantalla.push((fila, None));
+                } else {
+                    if izq.is_some() {
+                        pantalla.push((fila, Some(true)));
+                    }
+                    if der.is_some() {
+                        pantalla.push((fila, Some(false)));
+                    }
+                }
+            }
+            _ => pantalla.push((fila, None)),
+        }
+    }
+    let mitad = i.width / 2;
+    let buf = f.buffer_mut();
+    for (n, (fila, lado)) in pantalla.into_iter().take(i.height as usize).enumerate() {
+        let y = i.y + n as u16;
+        match fila {
+            FilaDiff::Archivo(nombre) => {
+                let t = format!(" {nombre} ");
+                buf.set_string(
+                    i.x,
+                    y,
+                    "━".repeat(i.width as usize),
+                    Style::default().fg(tema::ACENTO),
+                );
+                buf.set_string(
+                    i.x + 2,
+                    y,
+                    &t,
+                    Style::default()
+                        .fg(tema::ACENTO)
+                        .add_modifier(Modifier::BOLD),
+                );
+            }
+            FilaDiff::Bloque(b) => {
+                let t: String = b.chars().take(i.width as usize).collect();
+                buf.set_string(i.x, y, t, Style::default().fg(tema::NOTA));
+            }
+            FilaDiff::Par { izq, der } if lado_a_lado => {
+                celda_diff(
+                    buf,
+                    i.x,
+                    y,
+                    mitad.saturating_sub(1),
+                    izq.as_ref(),
+                    true,
+                    None,
+                );
+                buf[(i.x + mitad - 1, y)]
+                    .set_symbol("│")
+                    .set_style(Style::default().fg(tema::ATENUADO));
+                celda_diff(
+                    buf,
+                    i.x + mitad,
+                    y,
+                    i.width - mitad,
+                    der.as_ref(),
+                    false,
+                    None,
+                );
+            }
+            FilaDiff::Par { izq, der } => match lado {
+                None => celda_diff(buf, i.x, y, i.width, izq.as_ref(), true, Some(' ')),
+                Some(true) => celda_diff(buf, i.x, y, i.width, izq.as_ref(), true, Some('-')),
+                Some(false) => celda_diff(buf, i.x, y, i.width, der.as_ref(), false, Some('+')),
+            },
+        }
+    }
+    if filas.len() > i.height as usize {
+        let pie = format!(" {}/{} ", desplazamiento + 1, filas.len());
+        buf.set_string(
+            r.x + r.width.saturating_sub(pie.chars().count() as u16 + 2),
+            r.y + r.height - 1,
+            pie,
+            Style::default().fg(tema::ATENUADO),
+        );
+    }
+}
+
 fn centrado(area: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(area.width);
     let h = h.min(area.height);
@@ -2330,6 +2537,18 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 dir.display()
             );
             lista_modal(f, app, area, &titulo, &filtro, &items, sel)
+        }
+        Modal::Diff {
+            titulo,
+            filas,
+            desplazamiento,
+            lado_a_lado,
+        } => {
+            let (titulo, desplazamiento, lado_a_lado) =
+                (titulo.clone(), *desplazamiento, *lado_a_lado);
+            let filas = filas.clone();
+            dibujar_diff(f, app, area, &titulo, &filas, desplazamiento, lado_a_lado);
+            None
         }
         Modal::Paneles { sel } => {
             let sel = *sel;

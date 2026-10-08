@@ -716,3 +716,90 @@ fn documentacion_del_proyecto_a_demanda() {
     let p = pantalla(&mut a, 160, 40);
     assert!(p.contains("[doc vieja: make doc]"), "{p}");
 }
+
+#[test]
+fn diff_lado_a_lado_desde_git_y_del_buffer() {
+    let dir = proyecto(&[(
+        "main.c",
+        "int main(void)\n{\n    int x = 1;\n    return x;\n}\n",
+    )]);
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=p",
+                "-c",
+                "user.email=p@x",
+                "-c",
+                "init.defaultBranch=main",
+                "-c",
+                "commit.gpgsign=false",
+            ])
+            .args(args)
+            .current_dir(dir.path())
+            .output()
+            .unwrap()
+    };
+    if git(&["init", "-q"]).status.code() != Some(0) {
+        return;
+    }
+    git(&["add", "-A"]);
+    git(&["commit", "-qm", "inicial"]);
+    std::fs::write(
+        dir.path().join("main.c"),
+        "int main(void)\n{\n    int x = 2;\n    return x;\n}\n",
+    )
+    .unwrap();
+
+    let (mut a, _rx) = app(dir.path(), false);
+    a.refrescar_git();
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(matches!(
+        a.modal,
+        Some(Modal::Diff {
+            lado_a_lado: true,
+            ..
+        })
+    ));
+    let p = pantalla(&mut a, 140, 30);
+    // La versión vieja y la nueva en la misma fila.
+    let fila = p
+        .lines()
+        .find(|l| l.contains("int x = 1;"))
+        .expect("falta la línea vieja");
+    assert!(fila.contains("int x = 2;"), "{fila}");
+    assert!(p.contains("+1") && p.contains("−1"), "{p}");
+    // s pasa a unificado: la vieja y la nueva en filas distintas, con - y +.
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 30);
+    let vieja = p.lines().find(|l| l.contains("int x = 1;")).unwrap();
+    assert!(
+        vieja.contains('-') && !vieja.contains("int x = 2;"),
+        "{vieja}"
+    );
+    assert!(
+        p.lines()
+            .any(|l| l.contains('+') && l.contains("int x = 2;")),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+
+    // Comparar el buffer sin guardar contra HEAD (la vista elegida se recuerda).
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::End, KeyModifiers::CONTROL);
+    escribir(&mut a, "// sin guardar");
+    a.accion(jonesy_tui::accion::Accion::DiffArchivo);
+    assert!(matches!(
+        a.modal,
+        Some(Modal::Diff {
+            lado_a_lado: false,
+            ..
+        })
+    ));
+    let p = pantalla(&mut a, 140, 30);
+    assert!(
+        p.contains("HEAD → editor") && p.contains("// sin guardar"),
+        "{p}"
+    );
+}

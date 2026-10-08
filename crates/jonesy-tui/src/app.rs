@@ -279,6 +279,13 @@ pub enum Modal {
         sel: usize,
         entradas: Vec<EntradaDir>,
     },
+    /// Diferencias entre dos versiones, lado a lado o unificadas (s alterna).
+    Diff {
+        titulo: String,
+        filas: Vec<jonesy_core::diff::FilaDiff>,
+        desplazamiento: usize,
+        lado_a_lado: bool,
+    },
     /// Ver → Tamaños de paneles: fila elegida.
     Paneles {
         sel: usize,
@@ -443,6 +450,8 @@ pub struct App {
     doc_modificado: Option<std::time::SystemTime>,
     /// Cómo generar la documentación (se recalcula al cargarla y al releer la estructura).
     comando_doc: Option<String>,
+    /// Última vista elegida en los diffs (lado a lado o unificada).
+    pub preferir_lado_a_lado: bool,
     /// Destino de un `git clone` en curso en el deck.
     clonando: Option<PathBuf>,
     /// Proyecto a abrir si se confirma (después de clonar).
@@ -594,6 +603,7 @@ impl App {
             estado_doc: jonesy_core::documentacion::EstadoDoc::Ausente,
             doc_modificado: None,
             comando_doc: None,
+            preferir_lado_a_lado: true,
             clonando: None,
             proyecto_pendiente: None,
             lateral: None,
@@ -1210,44 +1220,105 @@ impl App {
         self.refrescar_git();
     }
 
+    /// Enter en el panel de git: el diff del archivo o del commit, lado a lado.
     fn git_mostrar(&mut self) {
         let Some(repo) = self.repo.clone() else {
             return;
         };
-        let (titulo, texto) = if let Some(log) = &self.git.log {
-            let Some(c) = log.get(self.git.sel_log) else {
+        if let Some(log) = &self.git.log {
+            let Some(c) = log.get(self.git.sel_log).cloned() else {
                 return;
             };
-            (format!("git show {}", c.hash), repo.mostrar(&c.hash))
-        } else {
-            let Some(e) = self
-                .git_estado
-                .as_ref()
-                .and_then(|e| e.entradas.get(self.git.sel))
-                .cloned()
-            else {
-                return;
-            };
-            if e.tipo == jonesy_git::TipoEntrada::SinSeguimiento {
-                let ruta = repo.dir.join(&e.ruta);
-                if ruta.is_file() {
-                    self.abrir_archivo(&ruta, true);
+            match repo.mostrar(&c.hash) {
+                Ok(t) => {
+                    let filas = jonesy_core::diff::desde_unificado(&t);
+                    if filas.is_empty() {
+                        // Commits sin cambios de texto (merge, binarios): el texto tal cual.
+                        self.modal = Some(Modal::Visor {
+                            titulo: format!("git show {}", c.hash),
+                            lineas: lineas_diff(&t),
+                            desplazamiento: 0,
+                        });
+                    } else {
+                        self.abrir_diff(format!("{} {}", c.hash, c.resumen), filas);
+                    }
                 }
-                return;
+                Err(e) => self.avisar(e.to_string(), Nivel::Error),
             }
-            let en_stage = e.en_stage() && !e.sin_stage();
-            (format!("diff {}", e.ruta), repo.diff(&e.ruta, en_stage))
-        };
-        match texto {
-            Ok(t) => {
-                self.modal = Some(Modal::Visor {
-                    titulo,
-                    lineas: lineas_diff(&t),
-                    desplazamiento: 0,
-                })
-            }
-            Err(e) => self.avisar(e.to_string(), Nivel::Error),
+            return;
         }
+        let Some(e) = self
+            .git_estado
+            .as_ref()
+            .and_then(|e| e.entradas.get(self.git.sel))
+            .cloned()
+        else {
+            return;
+        };
+        let actual = std::fs::read_to_string(repo.dir.join(&e.ruta)).unwrap_or_default();
+        // Sólo en el stage: HEAD contra el índice. Con cambios sin stage: índice contra el
+        // árbol de trabajo (lo que mostraría git diff). Nuevo: vacío contra el archivo.
+        let (titulo, viejo, nuevo) = if e.en_stage() && !e.sin_stage() {
+            (
+                format!("{} (HEAD → stage)", e.ruta),
+                repo.contenido(&e.ruta, false).unwrap_or_default(),
+                repo.contenido(&e.ruta, true).unwrap_or_default(),
+            )
+        } else {
+            let base = repo
+                .contenido(&e.ruta, true)
+                .or_else(|| repo.contenido(&e.ruta, false))
+                .unwrap_or_default();
+            (format!("{} (stage → archivo)", e.ruta), base, actual)
+        };
+        let filas = jonesy_core::diff::comparar(&viejo, &nuevo, 3);
+        if filas.is_empty() {
+            self.avisar(
+                format!("{}: sin diferencias de texto.", e.ruta),
+                Nivel::Info,
+            );
+            return;
+        }
+        self.abrir_diff(titulo, filas);
+    }
+
+    /// Compara el buffer activo (aunque no esté guardado) con su versión en git (HEAD) o,
+    /// fuera de un repositorio, con el archivo en disco.
+    fn diff_archivo(&mut self) {
+        let Some(ruta) = self.activo_ruta() else {
+            self.avisar("Este buffer no tiene archivo.", Nivel::Aviso);
+            return;
+        };
+        let actual = self.buf().buf.contenido();
+        let en_git = self
+            .repo
+            .as_ref()
+            .and_then(|r| r.relativa(&ruta).and_then(|rel| r.contenido(&rel, false)));
+        let (titulo, viejo) = match en_git {
+            Some(head) => (
+                format!("{} (HEAD → editor)", self.proyecto.relativa(&ruta)),
+                head,
+            ),
+            None => (
+                format!("{} (disco → editor)", self.proyecto.relativa(&ruta)),
+                std::fs::read_to_string(&ruta).unwrap_or_default(),
+            ),
+        };
+        let filas = jonesy_core::diff::comparar(&viejo, &actual, 3);
+        if filas.is_empty() {
+            self.avisar("Sin cambios.", Nivel::Info);
+            return;
+        }
+        self.abrir_diff(titulo, filas);
+    }
+
+    fn abrir_diff(&mut self, titulo: String, filas: Vec<jonesy_core::diff::FilaDiff>) {
+        self.modal = Some(Modal::Diff {
+            titulo,
+            filas,
+            desplazamiento: 0,
+            lado_a_lado: self.preferir_lado_a_lado,
+        });
     }
 
     fn git_commit(&mut self, mensaje: &str) {
@@ -3016,6 +3087,7 @@ impl App {
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
             Accion::Formatear => self.formatear(),
             Accion::GenerarDoc => self.generar_doc(),
+            Accion::DiffArchivo => self.diff_archivo(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -3441,6 +3513,9 @@ impl App {
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
                 Some(Accion::Formatear)
+            }
+            (KeyCode::Char('D'), false, true, _) | (KeyCode::Char('d'), false, true, true) => {
+                Some(Accion::DiffArchivo)
             }
             (KeyCode::Char('r'), false, true, _) => Some(Accion::PanelReglas),
             (KeyCode::Char('p'), false, true, _) => Some(Accion::Problemas),
@@ -4123,6 +4198,46 @@ impl App {
                     entradas,
                 });
             }
+            Modal::Diff {
+                titulo,
+                filas,
+                mut desplazamiento,
+                mut lado_a_lado,
+            } => {
+                let alto = self.tam.1.saturating_sub(6) as usize;
+                let cambios = jonesy_core::diff::inicios_de_cambios(&filas);
+                match k.code {
+                    KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return,
+                    KeyCode::Up => desplazamiento = desplazamiento.saturating_sub(1),
+                    KeyCode::Down => desplazamiento += 1,
+                    KeyCode::PageUp => desplazamiento = desplazamiento.saturating_sub(alto),
+                    KeyCode::PageDown | KeyCode::Char(' ') => desplazamiento += alto,
+                    KeyCode::Home => desplazamiento = 0,
+                    KeyCode::End => desplazamiento = filas.len(),
+                    KeyCode::Char('n') => {
+                        if let Some(&i) = cambios.iter().find(|&&i| i > desplazamiento) {
+                            desplazamiento = i;
+                        }
+                    }
+                    KeyCode::Char('p') => {
+                        if let Some(&i) = cambios.iter().rev().find(|&&i| i < desplazamiento) {
+                            desplazamiento = i;
+                        }
+                    }
+                    KeyCode::Char('s') | KeyCode::Char('u') | KeyCode::Tab => {
+                        lado_a_lado = !lado_a_lado;
+                        self.preferir_lado_a_lado = lado_a_lado;
+                    }
+                    _ => {}
+                }
+                let desplazamiento = desplazamiento.min(filas.len().saturating_sub(1));
+                self.modal = Some(Modal::Diff {
+                    titulo,
+                    filas,
+                    desplazamiento,
+                    lado_a_lado,
+                });
+            }
             Modal::Paneles { mut sel } => {
                 let n = CAMPOS_PANELES.len();
                 match k.code {
@@ -4211,6 +4326,17 @@ impl App {
                 } else {
                     3
                 };
+                if let Some(Modal::Diff {
+                    desplazamiento,
+                    filas,
+                    ..
+                }) = &mut self.modal
+                {
+                    *desplazamiento = (*desplazamiento as isize + delta)
+                        .clamp(0, filas.len().saturating_sub(1) as isize)
+                        as usize;
+                    return;
+                }
                 if let Some(Modal::Visor {
                     desplazamiento,
                     lineas,

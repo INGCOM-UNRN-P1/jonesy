@@ -344,6 +344,32 @@ impl Repo {
         self.ejecutar(&["show", "--stat", "--patch", "--no-color", hash])
     }
 
+    /// Contenido de `ruta` (relativa al repositorio) en el índice (`en_indice`) o en
+    /// HEAD. None si no existe ahí (archivo nuevo, repositorio sin commits).
+    pub fn contenido(&self, ruta: &str, en_indice: bool) -> Option<String> {
+        let ruta = ruta.replace('\\', "/");
+        let spec = if en_indice {
+            format!(":{ruta}")
+        } else {
+            format!("HEAD:{ruta}")
+        };
+        match self.git(&["show", &spec]) {
+            Ok((0, salida, _)) => Some(salida),
+            _ => None,
+        }
+    }
+
+    /// Ruta de `archivo` relativa a la raíz del repositorio, con `/`.
+    pub fn relativa(&self, archivo: &Path) -> Option<String> {
+        let dir = self.dir.canonicalize().unwrap_or_else(|_| self.dir.clone());
+        let a = archivo
+            .canonicalize()
+            .unwrap_or_else(|_| archivo.to_path_buf());
+        a.strip_prefix(&dir)
+            .ok()
+            .map(|r| r.to_string_lossy().replace('\\', "/"))
+    }
+
     /// Diff de un archivo: del árbol de trabajo o, con `en_stage`, del índice.
     pub fn diff(&self, ruta: &str, en_stage: bool) -> Result<String, ErrorGit> {
         if en_stage {
@@ -443,6 +469,17 @@ mod tests {
         assert!(repo.mostrar(&log[0].hash).unwrap().contains("int x;"));
         std::fs::write(d.join("lista.c"), "int y;\n").unwrap();
         assert!(repo.diff("lista.c", false).unwrap().contains("+int y;"));
+        assert_eq!(
+            repo.contenido("lista.c", false).as_deref(),
+            Some("int x;\n")
+        );
+        repo.agregar("lista.c").unwrap();
+        assert_eq!(repo.contenido("lista.c", true).as_deref(), Some("int y;\n"));
+        assert_eq!(repo.contenido("no-existe.c", false), None);
+        assert_eq!(
+            repo.relativa(&d.join("lista.c")).as_deref(),
+            Some("lista.c")
+        );
     }
 
     #[test]

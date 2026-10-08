@@ -63,6 +63,7 @@ pub enum Accion {
     GitClonar,
     Formatear,
     GenerarDoc,
+    DiffArchivo,
 }
 
 pub struct Info {
@@ -128,6 +129,10 @@ impl Accion {
             GitClonar => ("Git: clonar un repositorio…", ""),
             Formatear => ("Autoformato del archivo", "Alt+Shift+F"),
             GenerarDoc => ("Generar la documentación del proyecto (make doc)", ""),
+            DiffArchivo => (
+                "Comparar con la versión de git (diff lado a lado)",
+                "Alt+Shift+D",
+            ),
         };
         Info { titulo, atajo }
     }
@@ -179,6 +184,7 @@ impl Accion {
             GitClonar,
             Formatear,
             GenerarDoc,
+            DiffArchivo,
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
@@ -264,6 +270,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
         (
             "Git",
             vec![
+                DiffArchivo,
                 GitClonar,
                 PanelGit,
                 GitStageTodo,
@@ -291,6 +298,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Ir a línea | Ctrl+G |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |
+| Diff del archivo contra git (lado a lado; s alterna, n/p cambio) | Alt+Shift+D |
 | Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
 | Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
