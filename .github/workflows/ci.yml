@@ -5,28 +5,144 @@ on:
     branches: [main, master]
   pull_request:
 
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
 jobs:
-  test:
-    name: Compilación y pruebas
+  formato:
+    name: rustfmt
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - name: Herramientas de las pruebas de integración (gcc, gdb, git, python3)
-        run: sudo apt-get update && sudo apt-get install -y gdb
-      - run: cargo build --workspace --locked
-      - run: cargo test --workspace --locked
+          components: rustfmt
       - run: cargo fmt --all --check
+
+  clippy:
+    name: clippy (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
-  benchmarks:
-    name: Presupuestos de §10
+  pruebas:
+    name: pruebas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Herramientas de las pruebas de integración (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gdb clang-format
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: cargo build --workspace --locked
+      - run: cargo test --workspace --locked
+
+  msrv:
+    name: MSRV (rust-version del workspace)
     runs-on: ubuntu-24.04
-    needs: test
+    steps:
+      - uses: actions/checkout@v7
+      - name: Leer rust-version
+        id: msrv
+        run: echo "version=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - run: cargo check --workspace --all-targets --locked
+
+  documentacion:
+    name: cargo doc
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  scripts:
+    name: shellcheck y Python
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: shellcheck bin/bench-tui
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: El worker y el plugin de ejemplo compilan
+        run: python -m py_compile tools/jonesy-worker-py/jonesy_worker.py docs/plugin-ejemplo.py
+      - name: Smoke test del worker por JSON-RPC
+        run: |
+          respuesta=$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"cargar","params":{"rutas":["docs/plugin-ejemplo.py"]}}' \
+            '{"jsonrpc":"2.0","id":2,"method":"al_guardar","params":{"archivo":"a.c","texto":"// TODO\n"}}' \
+            | python -I tools/jonesy-worker-py/jonesy_worker.py)
+          echo "$respuesta"
+          echo "$respuesta" | grep -q '"queda un TODO por resolver"'
+
+  auditoria:
+    name: cargo audit (avisos de seguridad)
+    runs-on: ubuntu-24.04
+    # Un aviso nuevo en una dependencia no debe frenar los cambios propios: se informa.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - run: cargo audit
+
+  binarios:
+    name: binario release (${{ matrix.os }})
+    needs: [pruebas, clippy]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            binario: target/release/jonesy
+          - os: windows-latest
+            binario: target/release/jonesy.exe
+          - os: macos-latest
+            binario: target/release/jonesy
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release --locked
+      - name: El binario arranca
+        run: ${{ matrix.binario }} --version
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jonesy-${{ runner.os }}
+          path: ${{ matrix.binario }}
+
+  presupuestos:
+    name: presupuestos de §10
+    needs: pruebas
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo build --release --locked
       - run: bin/bench-tui
+        env:
+          SEGUNDOS: "3"
+          SHELL: /bin/sh
