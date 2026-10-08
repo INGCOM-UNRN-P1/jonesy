@@ -16,7 +16,7 @@ use jonesy_core::proceso::{self, Salida};
 use jonesy_core::sesion::{ArchivoAbierto, EstadoExamen, Sesion};
 use jonesy_core::{
     diagnostico, entrega, Buffer, Delta, Diagnostico, Lenguaje, Origen, PosicionDoc, Proyecto,
-    Severidad,
+    Severidad, TamPaneles,
 };
 use jonesy_git::{Commit, Repo};
 use jonesy_plugins::{
@@ -167,6 +167,10 @@ pub enum Modal {
         indice: usize,
         sel: usize,
     },
+    /// Ver → Tamaños de paneles: fila elegida.
+    Paneles {
+        sel: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -288,8 +292,8 @@ pub struct App {
     pub foco: Foco,
     pub pestana: Pestana,
     pub panel_inferior: bool,
-    pub alto_inferior: u16,
-    pub ancho_consigna: Option<u16>,
+    /// Tamaños de los paneles (mouse, Ver → Tamaños de paneles, `.jonesy.toml`).
+    pub paneles: TamPaneles,
     pub lateral: Option<Lateral>,
     pub quickdoc_visible: bool,
     pub quickdoc_posicion: PosicionDoc,
@@ -355,8 +359,7 @@ pub struct App {
 #[derive(Clone, Copy)]
 enum Arrastre {
     Seleccion,
-    SeparadorVertical,
-    SeparadorHorizontal,
+    Separador(crate::layout::Separador),
 }
 
 impl App {
@@ -428,8 +431,7 @@ impl App {
             foco: Foco::Editor,
             pestana: Pestana::Problemas,
             panel_inferior: false,
-            alto_inferior: 10,
-            ancho_consigna: None,
+            paneles: proyecto.config.interfaz.paneles.acotar(),
             lateral: None,
             quickdoc_visible: true,
             quickdoc_posicion: proyecto.config.interfaz.quickdoc,
@@ -528,6 +530,9 @@ impl App {
                 self.quickdoc_posicion = p;
             }
             self.vista = Vista::de_nombre(&s.vista_compacta);
+            if let Some(p) = s.paneles {
+                self.paneles = p.acotar();
+            }
             self.preview_markdown = s.preview_markdown;
             for (rel, linea) in s.breakpoints {
                 self.breakpoints
@@ -606,6 +611,9 @@ impl App {
                 .iter()
                 .map(|(p, l)| (self.proyecto.relativa(p), *l))
                 .collect(),
+            paneles: Some(self.paneles),
+            izquierdo: None,
+            expandidos: vec![],
         };
         let _ = s.guardar(&dir);
     }
@@ -1182,7 +1190,7 @@ impl App {
         match self.areas.inferior {
             Some(r) => (r.height.saturating_sub(2).max(4), r.width.max(20)),
             None => (
-                self.alto_inferior.saturating_sub(2).max(4),
+                self.paneles.inferior.saturating_sub(2).max(4),
                 self.tam.0.max(20),
             ),
         }
@@ -1248,7 +1256,9 @@ impl App {
 
     fn programa_a_depurar(&self) -> Option<PathBuf> {
         let activo = self.activo_ruta();
-        self.proyecto.programa_a_depurar(activo.as_deref()).filter(|p| p.is_file())
+        self.proyecto
+            .programa_a_depurar(activo.as_deref())
+            .filter(|p| p.is_file())
     }
 
     fn iniciar_depuracion(&mut self) {
@@ -2167,6 +2177,7 @@ impl App {
                 });
             }
             Accion::Paleta => self.abrir_paleta(),
+            Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
         }
     }
 
@@ -3035,6 +3046,24 @@ impl App {
                     desplazamiento,
                 });
             }
+            Modal::Paneles { mut sel } => {
+                let n = CAMPOS_PANELES.len();
+                match k.code {
+                    KeyCode::Esc | KeyCode::Enter => {
+                        self.guardar_sesion();
+                        return;
+                    }
+                    KeyCode::Up => sel = (sel + n - 1) % n,
+                    KeyCode::Down => sel = (sel + 1) % n,
+                    KeyCode::Left | KeyCode::Char('-') => ajustar_panel(&mut self.paneles, sel, -1),
+                    KeyCode::Right | KeyCode::Char('+') => ajustar_panel(&mut self.paneles, sel, 1),
+                    KeyCode::Char('r') => {
+                        self.paneles = self.proyecto.config.interfaz.paneles.acotar()
+                    }
+                    _ => {}
+                }
+                self.modal = Some(Modal::Paneles { sel });
+            }
             Modal::Menu {
                 mut indice,
                 mut sel,
@@ -3167,17 +3196,7 @@ impl App {
                         self.buf_mut().buf.mover_a(p, true);
                     }
                 }
-                Some(Arrastre::SeparadorVertical) => {
-                    let ancho = self.tam.0.max(1);
-                    self.ancho_consigna =
-                        Some(((x as u32 * 100 / ancho as u32) as u16).clamp(15, 60));
-                }
-                Some(Arrastre::SeparadorHorizontal) => {
-                    let alto_total = self.tam.1.saturating_sub(2);
-                    self.alto_inferior = alto_total
-                        .saturating_sub(y.saturating_sub(1))
-                        .clamp(4, alto_total.saturating_sub(6).max(4));
-                }
+                Some(Arrastre::Separador(sep)) => sep.aplicar(x, y, &mut self.paneles),
                 None => {}
             },
             MouseEventKind::Down(MouseButton::Middle) => {
@@ -3192,7 +3211,12 @@ impl App {
                     self.cerrar_pestana(i);
                 }
             }
-            MouseEventKind::Up(_) => self.arrastre = None,
+            MouseEventKind::Up(_) => {
+                if matches!(self.arrastre, Some(Arrastre::Separador(_))) {
+                    self.guardar_sesion();
+                }
+                self.arrastre = None;
+            }
             _ => {}
         }
     }
@@ -3302,21 +3326,15 @@ impl App {
             }
             return;
         }
-        // Separadores arrastrables.
-        if self
+        // Separadores arrastrables entre paneles.
+        if let Some(sep) = self
             .areas
-            .sep_vertical
-            .is_some_and(|sx| x == sx || x + 1 == sx)
-            && self
-                .areas
-                .consigna
-                .is_some_and(|c| y >= c.y && y < c.y + c.height)
+            .separadores
+            .iter()
+            .find(|s| s.toca(x, y))
+            .copied()
         {
-            self.arrastre = Some(Arrastre::SeparadorVertical);
-            return;
-        }
-        if self.areas.sep_horizontal.is_some_and(|sy| y == sy) {
-            self.arrastre = Some(Arrastre::SeparadorHorizontal);
+            self.arrastre = Some(Arrastre::Separador(sep));
             return;
         }
         if let Some(z) = self.zonas.editor {
@@ -3548,6 +3566,53 @@ fn desindentar(b: &mut Buffer) -> Option<Delta> {
     let nuevo = cursor.saturating_sub(n).max(inicio);
     b.mover_a(nuevo, false);
     d
+}
+
+/// Filas de Ver → Tamaños de paneles: (título, unidad).
+pub const CAMPOS_PANELES: [(&str, &str); 6] = [
+    ("Barra izquierda (archivos y proyecto)", "columnas"),
+    ("Consigna", "% (0 = según el modo)"),
+    ("quick-doc a la derecha", "%"),
+    ("quick-doc en el dock inferior", "filas"),
+    ("Panel lateral derecho (git, reglas, variables)", "%"),
+    ("Panel inferior (problemas, terminal, depurador)", "filas"),
+];
+
+/// Valor actual de la fila `i` de [`CAMPOS_PANELES`].
+pub fn valor_panel(t: &TamPaneles, i: usize) -> u16 {
+    [
+        t.izquierdo,
+        t.consigna,
+        t.quickdoc,
+        t.dock,
+        t.lateral,
+        t.inferior,
+    ][i]
+}
+
+/// Suma `delta` pasos a la fila `i` (columnas y filas de a 1, porcentajes de a 5).
+pub fn ajustar_panel(t: &mut TamPaneles, i: usize, delta: i32) {
+    let campo = match i {
+        0 => &mut t.izquierdo,
+        1 => &mut t.consigna,
+        2 => &mut t.quickdoc,
+        3 => &mut t.dock,
+        4 => &mut t.lateral,
+        _ => &mut t.inferior,
+    };
+    let paso = if matches!(i, 1 | 2 | 4) { 5 } else { 1 };
+    // La consigna salta de 0 (automático) a 15 y vuelve a 0 por debajo de 15.
+    let nuevo = *campo as i32 + delta * paso;
+    *campo = if i == 1 && nuevo < 15 {
+        if delta > 0 {
+            15
+        } else {
+            0
+        }
+    } else {
+        nuevo.max(0) as u16
+    };
+    *t = t.acotar();
 }
 
 /// Reemplaza tabs por espacios hasta la próxima columna múltiplo de 4.

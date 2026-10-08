@@ -360,3 +360,67 @@ fn pestanas_abrir_varios_cerrar_y_atajos() {
         "la activa a la vista: {p}"
     );
 }
+
+#[test]
+fn paneles_se_redimensionan_con_mouse_y_opciones() {
+    use jonesy_tui::layout::Sep;
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    let dir = proyecto(&[("main.c", MAIN), ("consigna.md", "# Consigna\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('p'), KeyModifiers::ALT); // panel inferior
+    pantalla(&mut a, 160, 40);
+    let raton = |kind, x, y| {
+        Event::Mouse(MouseEvent {
+            kind,
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
+    // Arrastrar el separador consigna|editor 16 columnas a la derecha.
+    let s = *a
+        .areas
+        .separadores
+        .iter()
+        .find(|s| s.sep == Sep::Consigna)
+        .unwrap();
+    let ancho_antes = a.areas.consigna.unwrap().width;
+    a.evento(raton(MouseEventKind::Down(MouseButton::Left), s.pos, 10));
+    a.evento(raton(
+        MouseEventKind::Drag(MouseButton::Left),
+        s.pos + 16,
+        10,
+    ));
+    a.evento(raton(MouseEventKind::Up(MouseButton::Left), s.pos + 16, 10));
+    pantalla(&mut a, 160, 40);
+    assert_eq!(a.areas.consigna.unwrap().width, ancho_antes + 16);
+    // Subir el borde del panel inferior 4 filas.
+    let s = *a
+        .areas
+        .separadores
+        .iter()
+        .find(|s| s.sep == Sep::Inferior)
+        .unwrap();
+    let alto_antes = a.areas.inferior.unwrap().height;
+    a.evento(raton(MouseEventKind::Down(MouseButton::Left), 60, s.pos));
+    a.evento(raton(
+        MouseEventKind::Drag(MouseButton::Left),
+        60,
+        s.pos - 4,
+    ));
+    a.evento(raton(MouseEventKind::Up(MouseButton::Left), 60, s.pos - 4));
+    pantalla(&mut a, 160, 40);
+    assert_eq!(a.areas.inferior.unwrap().height, alto_antes + 4);
+    // Ver → Tamaños de paneles: el quick-doc (fila 3) crece de a 5 %.
+    a.accion(jonesy_tui::accion::Accion::TamanosPaneles);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Tamaños de paneles"), "{p}");
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Right, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.paneles.quickdoc, 30);
+    // Se recuerdan en la sesión.
+    let (b, _rx) = app(dir.path(), false);
+    assert_eq!(b.paneles, a.paneles);
+}

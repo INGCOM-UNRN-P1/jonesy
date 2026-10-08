@@ -15,7 +15,7 @@ pub mod sesion;
 
 pub use buffer::{Buffer, Delta, Lenguaje};
 pub use diagnostico::{Diagnostico, Origen, Severidad};
-pub use proyecto::{Config, PosicionDoc, Proyecto};
+pub use proyecto::{Config, PosicionDoc, Proyecto, TamPaneles};
 
 /// SHA-256 en hexadecimal.
 pub fn sha256_hex(datos: &[u8]) -> String {

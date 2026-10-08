@@ -32,18 +32,18 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         quickdoc_visible: app.quickdoc_visible,
         quickdoc_posicion: app.quickdoc_posicion,
         panel_inferior: app.panel_inferior,
-        alto_inferior: app.alto_inferior,
-        ancho_consigna: app.ancho_consigna,
         vista: app.vista,
         lateral: app.lateral.is_some(),
-        ancho_lateral: if app.lateral == Some(Lateral::CatScan) {
+        lateral_minimo: if app.lateral == Some(Lateral::CatScan) {
             45
         } else {
-            30
+            0
         },
+        izquierdo: false,
+        tam: app.paneles,
     };
     app.areas = layout::calcular(&pedido);
-    let a = app.areas;
+    let a = app.areas.clone();
     let mut cursor: Option<(u16, u16)> = None;
 
     dibujar_menu(f, app, a.menu);
@@ -1474,6 +1474,7 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
             Vista::Codigo => "F8 código",
             Vista::Terminal => "F9 terminal",
             Vista::Doc => "F4 doc",
+            Vista::Navegador => "Alt+E navegador",
         };
         izq.push(Span::styled(
             format!(" {vista} "),
@@ -1709,6 +1710,40 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     Style::default().fg(tema::ATENUADO),
                 );
             }
+            None
+        }
+        Modal::Paneles { sel } => {
+            let sel = *sel;
+            let r = centrado(area, 72, crate::app::CAMPOS_PANELES.len() as u16 + 5);
+            f.render_widget(Clear, r);
+            let b = bloque(" Tamaños de paneles ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let mut lineas: Vec<Line> = crate::app::CAMPOS_PANELES
+                .iter()
+                .enumerate()
+                .map(|(n, (titulo, unidad))| {
+                    let v = crate::app::valor_panel(&app.paneles, n);
+                    let estilo = if n == sel {
+                        Style::default()
+                            .bg(tema::FONDO_SELECCION)
+                            .add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default()
+                    };
+                    Line::from(vec![
+                        Span::styled(format!(" {titulo:<48}"), estilo),
+                        Span::styled(format!("◂ {v:>3} ▸ "), estilo.fg(tema::ACENTO)),
+                        Span::styled(unidad.to_string(), estilo.fg(tema::ATENUADO)),
+                    ])
+                })
+                .collect();
+            lineas.push(Line::raw(""));
+            lineas.push(Line::styled(
+                " ↑↓ elegir · ←→ ajustar · r valores de .jonesy.toml · Enter cerrar · también se arrastran con el mouse",
+                Style::default().fg(tema::ATENUADO),
+            ));
+            f.render_widget(Paragraph::new(lineas).wrap(Wrap { trim: false }), i);
             None
         }
         Modal::Menu { indice, sel } => {

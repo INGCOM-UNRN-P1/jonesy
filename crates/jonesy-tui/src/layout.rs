@@ -4,12 +4,14 @@
 //! - Estándar (90–119 columnas, > 24 filas): consigna 35 % | editor 65 %, quick-doc en un
 //!   dock inferior de 3 filas o como ventana flotante con F4.
 //! - Compacto (≤ 89 columnas o ≤ 24 filas): una vista a pantalla completa por vez
-//!   (F7 consigna, F8 código, F9 terminal, F4 doc).
+//!   (F7 consigna, F8 código, F9 terminal, F4 doc; la barra izquierda también ocupa toda
+//!   la pantalla).
 //!
-//! El panel inferior (deck, diagnósticos, git, depurador) se abre bajo demanda en los modos
-//! espacioso y estándar; en compacto ocupa la vista "terminal".
+//! La barra izquierda (archivos y estructura del proyecto), el panel lateral derecho y el
+//! panel inferior se abren bajo demanda. Todos los tamaños vienen de [`TamPaneles`] y cada
+//! división expone un [`Separador`] que se arrastra con el mouse.
 
-use jonesy_core::PosicionDoc;
+use jonesy_core::{PosicionDoc, TamPaneles};
 use ratatui::layout::Rect;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,6 +48,8 @@ pub enum Vista {
     Codigo,
     Terminal,
     Doc,
+    /// La barra izquierda (explorador o proyecto).
+    Navegador,
 }
 
 impl Vista {
@@ -55,6 +59,7 @@ impl Vista {
             Vista::Codigo => "codigo",
             Vista::Terminal => "terminal",
             Vista::Doc => "doc",
+            Vista::Navegador => "navegador",
         }
     }
 
@@ -63,8 +68,57 @@ impl Vista {
             "consigna" => Vista::Consigna,
             "terminal" => Vista::Terminal,
             "doc" => Vista::Doc,
+            "navegador" => Vista::Navegador,
             _ => Vista::Codigo,
         }
+    }
+}
+
+/// Qué tamaño cambia al arrastrar un separador.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Sep {
+    Izquierdo,
+    Consigna,
+    QuickDoc,
+    Dock,
+    Lateral,
+    Inferior,
+}
+
+/// Una división arrastrable: línea vertical (columna `pos`) u horizontal (fila `pos`)
+/// que parte la región `base`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Separador {
+    pub sep: Sep,
+    pub vertical: bool,
+    pub pos: u16,
+    pub base: Rect,
+}
+
+impl Separador {
+    /// true si la celda (x, y) está sobre el separador (con una celda de tolerancia).
+    pub fn toca(&self, x: u16, y: u16) -> bool {
+        let b = self.base;
+        if self.vertical {
+            (x == self.pos || x + 1 == self.pos) && y >= b.y && y < b.y + b.height
+        } else {
+            (y == self.pos || y + 1 == self.pos) && x >= b.x && x < b.x + b.width
+        }
+    }
+
+    /// Nuevo tamaño al soltar el separador en (x, y).
+    pub fn aplicar(&self, x: u16, y: u16, t: &mut TamPaneles) {
+        let b = self.base;
+        let pct = |n: u16, total: u16| (n as u32 * 100 / total.max(1) as u32) as u16;
+        match self.sep {
+            Sep::Izquierdo => t.izquierdo = x.saturating_sub(b.x),
+            Sep::Consigna => t.consigna = pct(x.saturating_sub(b.x), b.width).max(1),
+            Sep::QuickDoc => t.quickdoc = pct((b.x + b.width).saturating_sub(x), b.width),
+            Sep::Dock => t.dock = (b.y + b.height).saturating_sub(y),
+            Sep::Lateral => t.lateral = pct((b.x + b.width).saturating_sub(x), b.width),
+            Sep::Inferior => t.inferior = (b.y + b.height).saturating_sub(y),
+        }
+        *t = t.acotar();
     }
 }
 
@@ -76,21 +130,21 @@ pub struct Pedido {
     pub quickdoc_visible: bool,
     pub quickdoc_posicion: PosicionDoc,
     pub panel_inferior: bool,
-    /// Alto del panel inferior en filas (redimensionable con el mouse).
-    pub alto_inferior: u16,
-    /// Porcentaje del ancho para la consigna (redimensionable con el mouse).
-    pub ancho_consigna: Option<u16>,
     pub vista: Vista,
-    /// Panel lateral derecho extra (git, reglas, variables, cat-scan).
+    /// Panel lateral derecho (git, reglas, variables, cat-scan).
     pub lateral: bool,
-    /// Porcentaje del ancho para el panel lateral (cat-scan necesita más).
-    pub ancho_lateral: u16,
+    /// Ancho mínimo del panel lateral en % (cat-scan necesita más).
+    pub lateral_minimo: u16,
+    /// Barra izquierda (explorador y proyecto).
+    pub izquierdo: bool,
+    pub tam: TamPaneles,
 }
 
 /// Rectángulos resultantes; `None` = no visible.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Areas {
     pub menu: Rect,
+    pub izquierdo: Option<Rect>,
     pub consigna: Option<Rect>,
     pub editor: Option<Rect>,
     pub quickdoc: Option<Rect>,
@@ -99,9 +153,7 @@ pub struct Areas {
     pub inferior: Option<Rect>,
     pub lateral: Option<Rect>,
     pub estado: Rect,
-    /// Separadores arrastrables: (columna de la consigna | editor), (fila editor / inferior).
-    pub sep_vertical: Option<u16>,
-    pub sep_horizontal: Option<u16>,
+    pub separadores: Vec<Separador>,
 }
 
 fn partir_h(r: Rect, izq: u16) -> (Rect, Rect) {
@@ -133,6 +185,7 @@ fn partir_v(r: Rect, arriba: u16) -> (Rect, Rect) {
 
 pub fn calcular(p: &Pedido) -> Areas {
     let a = p.area;
+    let t = p.tam.acotar();
     let modo = Modo::de_tamano(a.width, a.height);
     let (menu, resto) = partir_v(a, 1);
     let (cuerpo, estado) = partir_v(resto, resto.height.saturating_sub(1));
@@ -147,6 +200,7 @@ pub fn calcular(p: &Pedido) -> Areas {
             Vista::Consigna if p.hay_consigna => r.consigna = Some(cuerpo),
             Vista::Terminal => r.inferior = Some(cuerpo),
             Vista::Doc => r.quickdoc = Some(cuerpo),
+            Vista::Navegador if p.izquierdo => r.izquierdo = Some(cuerpo),
             _ => {
                 if p.lateral {
                     r.lateral = Some(cuerpo);
@@ -158,56 +212,98 @@ pub fn calcular(p: &Pedido) -> Areas {
         return r;
     }
 
-    // Panel lateral derecho: por defecto 30 % del ancho, mín. 28 columnas.
-    let mut centro = cuerpo;
-    if p.lateral {
-        let w = (cuerpo.width * p.ancho_lateral.clamp(20, 60) / 100)
-            .max(28)
-            .min(cuerpo.width * 6 / 10);
-        let (c, l) = partir_h(cuerpo, cuerpo.width - w);
-        centro = c;
-        r.lateral = Some(l);
+    // Barra izquierda de ancho fijo en columnas.
+    let mut resto = cuerpo;
+    if p.izquierdo {
+        let w = t.izquierdo.min(cuerpo.width / 2);
+        let (izq, der) = partir_h(cuerpo, w);
+        r.izquierdo = Some(izq);
+        r.separadores.push(Separador {
+            sep: Sep::Izquierdo,
+            vertical: true,
+            pos: der.x,
+            base: cuerpo,
+        });
+        resto = der;
     }
 
-    // Panel inferior bajo demanda.
+    // Panel lateral derecho.
+    let mut centro = resto;
+    if p.lateral {
+        let pct = t.lateral.max(p.lateral_minimo);
+        let w = (resto.width as u32 * pct as u32 / 100) as u16;
+        let w = w.max(28).min(resto.width * 6 / 10);
+        let (c, l) = partir_h(resto, resto.width - w);
+        centro = c;
+        r.lateral = Some(l);
+        r.separadores.push(Separador {
+            sep: Sep::Lateral,
+            vertical: true,
+            pos: l.x,
+            base: resto,
+        });
+    }
+
+    // Panel inferior.
     let mut arriba = centro;
     if p.panel_inferior {
-        let alto = p
-            .alto_inferior
-            .clamp(4, centro.height.saturating_sub(6).max(4));
+        let alto = t.inferior.clamp(4, centro.height.saturating_sub(6).max(4));
         let (ar, ab) = partir_v(centro, centro.height - alto);
         arriba = ar;
         r.inferior = Some(ab);
-        r.sep_horizontal = Some(ab.y);
+        r.separadores.push(Separador {
+            sep: Sep::Inferior,
+            vertical: false,
+            pos: ab.y,
+            base: centro,
+        });
     }
 
     let doc_derecha = modo == Modo::Espacioso
         && p.quickdoc_posicion == PosicionDoc::Derecha
         && p.quickdoc_visible;
-    let (pct_consigna, pct_doc) = match modo {
-        Modo::Espacioso => (25, if doc_derecha { 25 } else { 0 }),
-        _ => (35, 0),
+    let pct_consigna = match (t.consigna, modo) {
+        (0, Modo::Espacioso) => 25,
+        (0, _) => 35,
+        (c, _) => c,
     };
-    let pct_consigna = p.ancho_consigna.unwrap_or(pct_consigna).clamp(15, 60);
     let mut editor = arriba;
     if p.hay_consigna {
-        let w = arriba.width * pct_consigna / 100;
+        let w = (arriba.width as u32 * pct_consigna as u32 / 100) as u16;
         let (c, e) = partir_h(arriba, w);
         r.consigna = Some(c);
-        r.sep_vertical = Some(e.x);
+        r.separadores.push(Separador {
+            sep: Sep::Consigna,
+            vertical: true,
+            pos: e.x,
+            base: arriba,
+        });
         editor = e;
     }
-    if pct_doc > 0 {
-        let w = arriba.width * pct_doc / 100;
+    if doc_derecha {
+        let w = (arriba.width as u32 * t.quickdoc as u32 / 100) as u16;
         let (e, d) = partir_h(editor, editor.width.saturating_sub(w));
         editor = e;
         r.quickdoc = Some(d);
+        r.separadores.push(Separador {
+            sep: Sep::QuickDoc,
+            vertical: true,
+            pos: d.x,
+            base: arriba,
+        });
     } else if p.quickdoc_visible {
         if modo == Modo::Espacioso || p.quickdoc_posicion == PosicionDoc::Inferior {
-            // Dock inferior de 3 filas (+ borde) bajo el código.
-            let (e, d) = partir_v(editor, editor.height.saturating_sub(4));
+            let base = editor;
+            let alto = t.dock.min(editor.height.saturating_sub(4));
+            let (e, d) = partir_v(editor, editor.height.saturating_sub(alto));
             editor = e;
             r.quickdoc = Some(d);
+            r.separadores.push(Separador {
+                sep: Sep::Dock,
+                vertical: false,
+                pos: d.y,
+                base,
+            });
         } else {
             // Estándar con preferencia "derecha": ventana flotante sobre el editor.
             r.quickdoc_flotante = true;
@@ -236,11 +332,11 @@ mod tests {
             quickdoc_visible: true,
             quickdoc_posicion: PosicionDoc::Derecha,
             panel_inferior: false,
-            alto_inferior: 10,
-            ancho_consigna: None,
             vista: Vista::Codigo,
             lateral: false,
-            ancho_lateral: 30,
+            lateral_minimo: 0,
+            izquierdo: false,
+            tam: TamPaneles::default(),
         }
     }
 
@@ -265,6 +361,7 @@ mod tests {
         assert_eq!(e.x + e.width, d.x);
         assert_eq!(a.menu.height, 1);
         assert_eq!(a.estado.y, 39);
+        assert_eq!(a.separadores.len(), 2);
     }
 
     #[test]
@@ -292,17 +389,70 @@ mod tests {
         assert_eq!(calcular(&p).consigna.unwrap().height, 22);
         p.vista = Vista::Terminal;
         assert!(calcular(&p).inferior.is_some());
+        p.izquierdo = true;
+        p.vista = Vista::Navegador;
+        assert_eq!(calcular(&p).izquierdo.unwrap().width, 80);
     }
 
     #[test]
-    fn panel_inferior_y_lateral() {
+    fn paneles_izquierdo_inferior_y_lateral() {
         let mut p = pedido(160, 40);
         p.panel_inferior = true;
         p.lateral = true;
+        p.izquierdo = true;
         let a = calcular(&p);
+        let izq = a.izquierdo.unwrap();
+        assert_eq!(izq.width, 28);
+        assert_eq!(a.consigna.unwrap().x, 28);
         let inf = a.inferior.unwrap();
         assert_eq!(inf.height, 10);
-        assert_eq!(a.lateral.unwrap().width, 48);
+        assert_eq!(a.lateral.unwrap().width, 39); // 30 % de 132
         assert_eq!(a.editor.unwrap().y + a.editor.unwrap().height, inf.y);
+        assert_eq!(a.separadores.len(), 5);
+    }
+
+    #[test]
+    fn tamanos_configurables_y_arrastre() {
+        let mut p = pedido(160, 40);
+        p.izquierdo = true;
+        p.panel_inferior = true;
+        p.tam = TamPaneles {
+            izquierdo: 40,
+            consigna: 30,
+            quickdoc: 20,
+            inferior: 15,
+            ..Default::default()
+        };
+        let a = calcular(&p);
+        assert_eq!(a.izquierdo.unwrap().width, 40);
+        assert_eq!(a.consigna.unwrap().width, 36); // 30 % de 120
+        assert_eq!(a.quickdoc.unwrap().width, 24);
+        assert_eq!(a.inferior.unwrap().height, 15);
+        // Arrastrar el separador de la consigna 12 columnas a la derecha.
+        let s = *a
+            .separadores
+            .iter()
+            .find(|s| s.sep == Sep::Consigna)
+            .unwrap();
+        assert!(s.toca(s.pos, 10));
+        let mut t = p.tam;
+        s.aplicar(s.pos + 12, 10, &mut t);
+        assert_eq!(t.consigna, 40);
+        // El inferior: subir 5 filas lo agranda en 5.
+        let s = *a
+            .separadores
+            .iter()
+            .find(|s| s.sep == Sep::Inferior)
+            .unwrap();
+        s.aplicar(0, s.pos - 5, &mut t);
+        assert_eq!(t.inferior, 20);
+        // Los valores se acotan.
+        let s = *a
+            .separadores
+            .iter()
+            .find(|s| s.sep == Sep::Izquierdo)
+            .unwrap();
+        s.aplicar(2, 5, &mut t);
+        assert_eq!(t.izquierdo, 14);
     }
 }

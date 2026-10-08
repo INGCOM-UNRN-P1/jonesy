@@ -72,6 +72,58 @@ pub struct Interfaz {
     pub ascii: bool,
     /// Shell de la terminal interna (vacío = $SHELL o bash).
     pub shell: String,
+    /// Tamaños iniciales de los paneles (`[interfaz.paneles]`); los cambios hechos con el
+    /// mouse o desde Ver → Tamaños de paneles se guardan en la sesión.
+    pub paneles: TamPaneles,
+}
+
+/// Tamaños de los paneles redimensionables.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct TamPaneles {
+    /// Ancho de la barra izquierda (explorador y proyecto), en columnas.
+    pub izquierdo: u16,
+    /// Ancho de la consigna en % (0 = según el modo: 25 % espacioso, 35 % estándar).
+    pub consigna: u16,
+    /// Ancho del quick-doc a la derecha, en %.
+    pub quickdoc: u16,
+    /// Alto del quick-doc en el dock inferior, en filas (incluye el borde).
+    pub dock: u16,
+    /// Ancho del panel lateral derecho (git, reglas, variables), en %.
+    pub lateral: u16,
+    /// Alto del panel inferior (problemas, terminal, depurador), en filas.
+    pub inferior: u16,
+}
+
+impl Default for TamPaneles {
+    fn default() -> Self {
+        TamPaneles {
+            izquierdo: 28,
+            consigna: 0,
+            quickdoc: 25,
+            dock: 4,
+            lateral: 30,
+            inferior: 10,
+        }
+    }
+}
+
+impl TamPaneles {
+    /// Ajusta cada valor a su rango válido.
+    pub fn acotar(self) -> TamPaneles {
+        TamPaneles {
+            izquierdo: self.izquierdo.clamp(14, 80),
+            consigna: if self.consigna == 0 {
+                0
+            } else {
+                self.consigna.clamp(15, 60)
+            },
+            quickdoc: self.quickdoc.clamp(15, 50),
+            dock: self.dock.clamp(3, 20),
+            lateral: self.lateral.clamp(20, 60),
+            inferior: self.inferior.clamp(4, 40),
+        }
+    }
 }
 
 impl Default for Interfaz {
@@ -81,6 +133,7 @@ impl Default for Interfaz {
             osc52: true,
             ascii: false,
             shell: String::new(),
+            paneles: TamPaneles::default(),
         }
     }
 }

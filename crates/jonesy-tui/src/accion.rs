@@ -55,6 +55,7 @@ pub enum Accion {
     Atajos,
     AcercaDe,
     Paleta,
+    TamanosPaneles,
 }
 
 pub struct Info {
@@ -112,6 +113,7 @@ impl Accion {
             Atajos => ("Atajos de teclado", ""),
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
+            TamanosPaneles => ("Tamaños de paneles…", ""),
         };
         Info { titulo, atajo }
     }
@@ -162,6 +164,7 @@ impl Accion {
             GitLog,
             Entregar,
             ExplicarRegla,
+            TamanosPaneles,
             Atajos,
             AcercaDe,
             Salir,
@@ -213,6 +216,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
                 VistaConsigna,
                 VistaCodigo,
                 VistaTerminal,
+                TamanosPaneles,
             ],
         ),
         (
