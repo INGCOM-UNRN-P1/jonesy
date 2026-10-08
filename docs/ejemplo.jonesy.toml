@@ -1,0 +1,45 @@
+# .jonesy.toml — configuración de un proyecto para jonesy.
+# Todas las secciones son opcionales: sin este archivo jonesy usa el Makefile
+# (make, make run, make test) o gcc -std=c11 -Wall -Wextra -g -O0 sobre el .c activo.
+
+[compilar]
+# F6. Vacío = "make" si hay Makefile, si no gcc sobre el archivo activo.
+comando = "make"
+
+[ejecutar]
+# Ctrl+F5 (corre en el deck). Vacío = "make run" si existe, si no compilar && ./programa.
+comando = "make run"
+
+[depurar]
+# F5. Comando que compila con símbolos (vacío = el de [compilar]).
+compilar = "make"
+# Ejecutable a depurar (vacío = el nombre del .c activo sin extensión).
+programa = "tp"
+argumentos = ["datos/entrada.txt"]
+
+[examen]
+# Enunciado de solo lectura (vacío = consigna.md, enunciado.md o CONSIGNA.md).
+consigna = "consigna.md"
+# Duración en minutos para el cronómetro (0 = sin cronómetro).
+duracion_min = 120
+# Verificación de la entrega (vacío = "make test" si el Makefile lo define).
+verificar = "make test"
+# Archivos de la entrega (vacío = *.c, *.h, *.md y el Makefile, también en src/, test/, include/).
+archivos = ["*.c", "*.h", "Makefile"]
+# SHA-256 de los plugins Python que la cátedra autoriza durante el examen.
+plugins_permitidos = []
+
+[interfaz]
+# Posición del quick-doc: "derecha" o "inferior".
+quickdoc = "derecha"
+# Copiar al portapapeles del sistema con OSC 52 (también por SSH).
+osc52 = true
+# Forzar caracteres ASCII en lugar de los de caja.
+ascii = false
+# Shell del deck (vacío = $SHELL).
+shell = ""
+
+[ripley]
+# Correr "ripley check <archivo> --format json" al guardar archivos C.
+activo = true
+comando = "ripley"
