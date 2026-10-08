@@ -65,6 +65,9 @@ comando = ""
 # jonesy lo busca, lo usa en el quick-doc y avisa en la barra cuando falta o quedó
 # viejo respecto del código, con un botón que corre make doc.
 dir = "doc"
+# Aviso en la barra cuando falta o quedó vieja: true siempre, false nunca; sin
+# indicarlo, sólo si el proyecto la usa (objetivo doc, corbel.toml o doc/).
+# aviso = true
 
 [integraciones]
 # Herramientas del ecosistema como plugins (ver docs/integraciones.md). Las de fábrica

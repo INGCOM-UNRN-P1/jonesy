@@ -29,6 +29,9 @@ pub struct Config {
 pub struct Documentacion {
     /// Directorio donde `make doc` (corbel) deja `api.json` (vacío = `doc`).
     pub dir: String,
+    /// Avisar en la barra cuando falta o quedó vieja: true siempre, false nunca; sin
+    /// indicarlo, sólo si el proyecto la usa (objetivo doc, corbel.toml o doc/).
+    pub aviso: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

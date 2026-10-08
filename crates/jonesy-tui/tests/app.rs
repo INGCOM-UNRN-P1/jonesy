@@ -1263,3 +1263,22 @@ fn deshacer_el_ultimo_commit() {
         a.mensaje
     );
 }
+
+#[test]
+fn aviso_de_documentacion_solo_si_el_proyecto_la_usa() {
+    // Sin objetivo doc, corbel.toml ni doc/: no se avisa aunque corbel esté instalado.
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (a, _rx) = app(dir.path(), false);
+    assert!(a.aviso_doc().is_none());
+    // Forzado desde .jonesy.toml (si hay cómo generarla).
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("Makefile", "doc:\n\t@true\n"),
+        (".jonesy.toml", "[documentacion]\naviso = false\n"),
+    ]);
+    let (a, _rx) = app(dir.path(), false);
+    assert!(a.aviso_doc().is_none(), "aviso = false lo silencia");
+    let dir = proyecto(&[("main.c", MAIN), ("Makefile", "doc:\n\t@true\n")]);
+    let (a, _rx) = app(dir.path(), false);
+    assert_eq!(a.aviso_doc(), Some("sin doc"));
+}

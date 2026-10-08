@@ -3076,12 +3076,32 @@ impl App {
     pub fn aviso_doc(&self) -> Option<&'static str> {
         use jonesy_core::documentacion::EstadoDoc;
         self.comando_doc()?;
+        if !self.proyecto_usa_doc() {
+            return None;
+        }
         match self.estado_doc {
             EstadoDoc::AlDia => None,
             EstadoDoc::Ausente => Some("sin doc"),
             EstadoDoc::Desactualizada(_) => Some("doc vieja"),
             EstadoDoc::Invalida(_) => Some("doc inválida"),
         }
+    }
+
+    /// Si conviene avisar sobre la documentación en este proyecto: lo dice
+    /// `[documentacion] aviso` o, sin indicarlo, que el proyecto la use (algún objetivo
+    /// doc, un corbel.toml o la carpeta doc/). Tener corbel instalado no alcanza.
+    pub fn proyecto_usa_doc(&self) -> bool {
+        if let Some(a) = self.proyecto.config.documentacion.aviso {
+            return a;
+        }
+        let dir = self.ruta_api();
+        self.proyecto
+            .estructura
+            .modulos
+            .iter()
+            .any(|m| m.tiene("doc"))
+            || self.proyecto.raiz.join("corbel.toml").is_file()
+            || dir.parent().is_some_and(|d| d.is_dir())
     }
 
     /// Cómo se nombra el comando en el botón: make doc o corbel (sin objetivo doc).
