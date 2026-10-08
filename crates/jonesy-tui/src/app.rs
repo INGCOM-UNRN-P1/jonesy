@@ -43,6 +43,9 @@ pub const AUTOGUARDADO: Duration = Duration::from_secs(30);
 pub const DEBOUNCE_PREVIEW: Duration = Duration::from_millis(120);
 pub const SONDEO_GIT: Duration = Duration::from_secs(2);
 pub const AVISOS_MIN: [u64; 3] = [30, 15, 5];
+/// Las herramientas lentas (ripley tarda ~10 s) corren este tiempo después del último
+/// guardado: guardar seguido no las relanza cada vez.
+pub const DEMORA_LENTAS: Duration = Duration::from_millis(1500);
 
 #[derive(Debug, Clone)]
 pub struct Opciones {
@@ -499,6 +502,8 @@ pub struct App {
     integraciones_ausentes: BTreeSet<String>,
     /// Archivos guardados mientras una integración ya los analizaba: se repite una vez.
     integraciones_pendientes: BTreeSet<(String, PathBuf)>,
+    /// Integraciones lentas programadas para después del último guardado.
+    integraciones_programadas: HashMap<(String, PathBuf), Instant>,
 
     pub terminal: Option<Deck>,
     pub ejecucion: Option<Deck>,
@@ -649,6 +654,7 @@ impl App {
             salida_desplazamiento: 0,
             integraciones_ausentes: BTreeSet::new(),
             integraciones_pendientes: BTreeSet::new(),
+            integraciones_programadas: HashMap::new(),
             terminal: None,
             ejecucion: None,
             depuracion: None,
@@ -1088,13 +1094,18 @@ impl App {
                 texto,
             });
         }
-        let al_guardar: Vec<String> = self
+        let al_guardar: Vec<(String, bool)> = self
             .integraciones_activas()
             .filter(|x| x.cuando == jonesy_core::integraciones::Cuando::Guardar && x.aplica_a(ruta))
-            .map(|x| x.nombre.clone())
+            .map(|x| (x.nombre.clone(), x.lento))
             .collect();
-        for nombre in al_guardar {
-            self.lanzar_integracion(&nombre, ruta);
+        for (nombre, lento) in al_guardar {
+            if lento {
+                self.integraciones_programadas
+                    .insert((nombre, ruta.to_path_buf()), Instant::now() + DEMORA_LENTAS);
+            } else {
+                self.lanzar_integracion(&nombre, ruta);
+            }
         }
         self.refrescar_git();
     }
@@ -1411,6 +1422,11 @@ impl App {
                 Tarea::Formatear { .. } => "formateando".into(),
             })
             .collect();
+        v.extend(
+            self.integraciones_programadas
+                .keys()
+                .map(|(n, _)| n.clone()),
+        );
         v.sort();
         v.dedup();
         v
@@ -3609,6 +3625,7 @@ impl App {
                 Err(RecvTimeoutError::Disconnected) => break,
             };
             let mut solo_despertar = true;
+            let hubo_evento = primero.is_some();
             if let Some(a) = primero {
                 solo_despertar &= matches!(a, Aviso::Despertar);
                 self.procesar(a);
@@ -3620,12 +3637,18 @@ impl App {
                     }
                 }
             }
+            let antes = self.firma_visible();
             self.tic();
             if self.salir {
                 break;
             }
+            // Sin eventos y sin cambios visibles no se dibuja: ratatui reescribiría el
+            // cursor igual y la terminal recibiría bytes en reposo (§10: 0 B/s).
+            if !hubo_evento && self.firma_visible() == antes {
+                continue;
+            }
             // Coalescencia: la salida masiva del deck se dibuja a 60 FPS como máximo.
-            if solo_despertar {
+            if solo_despertar && hubo_evento {
                 let desde = ultimo_dibujo.elapsed();
                 if desde < Duration::from_millis(16) {
                     std::thread::sleep(Duration::from_millis(16) - desde);
@@ -3635,6 +3658,41 @@ impl App {
             ultimo_dibujo = Instant::now();
         }
         Ok(())
+    }
+
+    /// Resumen barato de lo que se ve en pantalla y puede cambiar sin eventos de entrada
+    /// (temporizadores, sondeos, procesos): si no cambió, no se redibuja.
+    pub fn firma_visible(&self) -> u64 {
+        use std::hash::{Hash, Hasher};
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.mensaje
+            .as_ref()
+            .map(|(m, _, _)| m.clone())
+            .hash(&mut h);
+        self.git_estado
+            .as_ref()
+            .map(|e| (e.resumen(), e.entradas.len()))
+            .hash(&mut h);
+        format!("{:?}", self.estado_doc).hash(&mut h);
+        self.modal.is_some().hash(&mut h);
+        self.procesos.len().hash(&mut h);
+        self.diagnosticos().len().hash(&mut h);
+        self.depuracion
+            .as_ref()
+            .map(|d| (d.estado.clone(), d.ubicacion.clone(), d.consola.len()))
+            .hash(&mut h);
+        // El cronómetro del examen cambia cada segundo.
+        if let Some(e) = self.examen.as_ref().filter(|e| !e.estado.entregado) {
+            e.estado.restante_s(jonesy_core::ahora_unix()).hash(&mut h);
+        }
+        // Vista previa de Markdown pendiente de renderizar (debounce cumplido).
+        if self.preview_markdown {
+            let b = self.buf();
+            (b.preview.as_ref().map(|p| p.0) != Some(b.buf.version)
+                && b.ultimo_cambio.elapsed() >= DEBOUNCE_PREVIEW)
+                .hash(&mut h);
+        }
+        h.finish()
     }
 
     fn proxima_espera(&self) -> Duration {
@@ -3661,6 +3719,12 @@ impl App {
                         .max(Duration::from_millis(10)),
                 );
             }
+        }
+        if let Some(t) = self.integraciones_programadas.values().min() {
+            espera = espera.min(
+                t.saturating_duration_since(Instant::now())
+                    .max(Duration::from_millis(10)),
+            );
         }
         if !self.procesos.is_empty() {
             espera = espera.min(Duration::from_millis(500));
@@ -3693,6 +3757,17 @@ impl App {
         if self.refrescar_estructura && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.refrescar_estructura = false;
             self.refrescar_estructura();
+        }
+        let vencidas: Vec<(String, PathBuf)> = self
+            .integraciones_programadas
+            .iter()
+            .filter(|(_, t)| Instant::now() >= **t)
+            .map(|(k, _)| k.clone())
+            .collect();
+        for (nombre, archivo) in vencidas {
+            self.integraciones_programadas
+                .remove(&(nombre.clone(), archivo.clone()));
+            self.lanzar_integracion(&nombre, &archivo);
         }
         self.tic_examen();
         self.sondear_git();

@@ -68,6 +68,8 @@ fn esperar(app: &mut App, rx: &Receiver<Aviso>, mut cond: impl FnMut(&App) -> bo
         if let Ok(a) = rx.recv_timeout(Duration::from_millis(50)) {
             app.procesar(a);
         }
+        // Como el bucle real: temporizadores, sondeos y herramientas programadas.
+        app.tic();
     }
 }
 
@@ -316,6 +318,8 @@ fn herramientas_del_ecosistema_al_guardar() {
         if let Ok(av) = rx.recv_timeout(Duration::from_millis(100)) {
             a.procesar(av);
         }
+        // Las lentas (ripley) se lanzan después de DEMORA_LENTAS.
+        a.tic();
     }
     assert!(
         a.tareas_en_curso().is_empty(),
@@ -967,4 +971,23 @@ explicar = "echo explicación de {codigo}"
     assert!(!a.buf().buf.modificado());
     tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
     assert_eq!(a.buf().buf.contenido(), "int x;\nint z;\n");
+}
+
+#[test]
+fn reposo_sin_redibujos() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    pantalla(&mut a, 120, 30);
+    a.tic();
+    let antes = a.firma_visible();
+    for _ in 0..3 {
+        a.tic();
+    }
+    assert_eq!(
+        antes,
+        a.firma_visible(),
+        "sin eventos nada visible cambia: no hay que redibujar"
+    );
+    a.avisar("hola", jonesy_tui::app::Nivel::Info);
+    assert_ne!(antes, a.firma_visible());
 }
