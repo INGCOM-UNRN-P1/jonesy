@@ -12,7 +12,9 @@ use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::accion::{self, Accion};
-use crate::app::{columnas_visuales, mismo_archivo, App, Foco, Lateral, Modal, Nivel, Pestana, ZonaEditor};
+use crate::app::{
+    columnas_visuales, mismo_archivo, App, Foco, Lateral, Modal, Nivel, Pestana, ZonaEditor,
+};
 use crate::layout::{self, Modo, Vista};
 use crate::markdown;
 use crate::paleta;
@@ -34,7 +36,11 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         ancho_consigna: app.ancho_consigna,
         vista: app.vista,
         lateral: app.lateral.is_some(),
-        ancho_lateral: if app.lateral == Some(Lateral::CatScan) { 45 } else { 30 },
+        ancho_lateral: if app.lateral == Some(Lateral::CatScan) {
+            45
+        } else {
+            30
+        },
     };
     app.areas = layout::calcular(&pedido);
     let a = app.areas;
@@ -112,7 +118,11 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
         if x + w > r.x + r.width {
             break;
         }
-        let estilo = if abierto == Some(i) { Style::default().bg(tema::ACENTO).fg(Color::Black) } else { fondo };
+        let estilo = if abierto == Some(i) {
+            Style::default().bg(tema::ACENTO).fg(Color::Black)
+        } else {
+            fondo
+        };
         let zona = Rect::new(x, r.y, w, 1);
         f.render_widget(Paragraph::new(format!(" {nombre} ")).style(estilo), zona);
         app.zonas.menu.push((zona, i));
@@ -123,27 +133,68 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
     let mut boton: Option<(String, Accion)> = None;
     if let Some(e) = &app.examen {
         if e.estado.entregado {
-            derecha.push(Span::styled(" ENTREGADO ", Style::default().bg(tema::OK).fg(Color::Black).add_modifier(Modifier::BOLD)));
+            derecha.push(Span::styled(
+                " ENTREGADO ",
+                Style::default()
+                    .bg(tema::OK)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD),
+            ));
         } else {
             if let Some(s) = e.estado.restante_s(jonesy_core::ahora_unix()) {
                 let (h, m, seg) = (s.max(0) / 3600, (s.max(0) % 3600) / 60, s.max(0) % 60);
-                let color = if s <= 300 { tema::ERROR } else if s <= 900 { tema::ADVERTENCIA } else { tema::OK };
-                derecha.push(Span::styled(format!(" {} {h}:{m:02}:{seg:02} ", app.sim.reloj), fondo.fg(color).add_modifier(Modifier::BOLD)));
+                let color = if s <= 300 {
+                    tema::ERROR
+                } else if s <= 900 {
+                    tema::ADVERTENCIA
+                } else {
+                    tema::OK
+                };
+                derecha.push(Span::styled(
+                    format!(" {} {h}:{m:02}:{seg:02} ", app.sim.reloj),
+                    fondo.fg(color).add_modifier(Modifier::BOLD),
+                ));
             }
-            boton = Some((if e.entregando { "[ Entregando… ]".into() } else { "[ Entregar Examen ]".into() }, Accion::Entregar));
+            boton = Some((
+                if e.entregando {
+                    "[ Entregando… ]".into()
+                } else {
+                    "[ Entregar Examen ]".into()
+                },
+                Accion::Entregar,
+            ));
         }
     } else {
-        let nombre = app.proyecto.raiz.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-        derecha.push(Span::styled(format!(" jonesy · {nombre} "), fondo.fg(tema::ATENUADO)));
+        let nombre = app
+            .proyecto
+            .raiz
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        derecha.push(Span::styled(
+            format!(" jonesy · {nombre} "),
+            fondo.fg(tema::ATENUADO),
+        ));
     }
-    let ancho_boton = boton.as_ref().map(|(t, _)| t.chars().count() as u16 + 1).unwrap_or(0);
+    let ancho_boton = boton
+        .as_ref()
+        .map(|(t, _)| t.chars().count() as u16 + 1)
+        .unwrap_or(0);
     let ancho_der: u16 = derecha.iter().map(|s| s.width() as u16).sum::<u16>() + ancho_boton;
     if ancho_der < r.width.saturating_sub(x - r.x) {
         let zona = Rect::new(r.x + r.width - ancho_der, r.y, ancho_der - ancho_boton, 1);
         f.render_widget(Paragraph::new(Line::from(derecha)).style(fondo), zona);
         if let Some((t, a)) = boton {
             let zb = Rect::new(r.x + r.width - ancho_boton, r.y, ancho_boton - 1, 1);
-            f.render_widget(Paragraph::new(t).style(Style::default().bg(tema::ADVERTENCIA).fg(Color::Black).add_modifier(Modifier::BOLD)), zb);
+            f.render_widget(
+                Paragraph::new(t).style(
+                    Style::default()
+                        .bg(tema::ADVERTENCIA)
+                        .fg(Color::Black)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                zb,
+            );
             app.zonas.botones.push((zb, a));
         }
     }
@@ -153,18 +204,31 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
 
 fn dibujar_consigna(f: &mut Frame, app: &mut App, r: Rect) {
     let foco = app.foco == Foco::Consigna;
-    let titulo = if app.examen.is_some() { " Consigna (solo lectura) " } else { " Consigna " };
+    let titulo = if app.examen.is_some() {
+        " Consigna (solo lectura) "
+    } else {
+        " Consigna "
+    };
     let b = bloque_app(app, titulo, foco);
     let interior = b.inner(r);
     f.render_widget(b, r);
     let sim = app.sim.clone();
     let Some(c) = &mut app.consigna else { return };
     if c.doc.as_ref().is_none_or(|(w, _)| *w != interior.width) {
-        c.doc = Some((interior.width, markdown::renderizar(&c.fuente, interior.width, &sim)));
+        c.doc = Some((
+            interior.width,
+            markdown::renderizar(&c.fuente, interior.width, &sim),
+        ));
     }
     let (_, doc) = c.doc.as_ref().unwrap();
     c.desplazamiento = c.desplazamiento.min(doc.lineas.len().saturating_sub(1));
-    let lineas: Vec<Line> = doc.lineas.iter().skip(c.desplazamiento).take(interior.height as usize).cloned().collect();
+    let lineas: Vec<Line> = doc
+        .lineas
+        .iter()
+        .skip(c.desplazamiento)
+        .take(interior.height as usize)
+        .cloned()
+        .collect();
     f.render_widget(Paragraph::new(lineas), interior);
 }
 
@@ -172,13 +236,27 @@ fn dibujar_consigna(f: &mut Frame, app: &mut App, r: Rect) {
 
 fn dibujar_area_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
     // Fila de pestañas de buffers.
-    let (tabs, cuerpo) = (Rect { height: 1, ..r }, Rect { y: r.y + 1, height: r.height.saturating_sub(1), ..r });
+    let (tabs, cuerpo) = (
+        Rect { height: 1, ..r },
+        Rect {
+            y: r.y + 1,
+            height: r.height.saturating_sub(1),
+            ..r
+        },
+    );
     dibujar_pestanas_buffers(f, app, tabs);
     let md = app.buf().buf.lenguaje == Lenguaje::Markdown;
     if app.preview_markdown && md && cuerpo.width >= 40 {
         let mitad = cuerpo.width / 2;
-        let izq = Rect { width: mitad, ..cuerpo };
-        let der = Rect { x: cuerpo.x + mitad, width: cuerpo.width - mitad, ..cuerpo };
+        let izq = Rect {
+            width: mitad,
+            ..cuerpo
+        };
+        let der = Rect {
+            x: cuerpo.x + mitad,
+            width: cuerpo.width - mitad,
+            ..cuerpo
+        };
         let c = dibujar_editor(f, app, izq);
         dibujar_preview(f, app, der);
         c
@@ -188,18 +266,38 @@ fn dibujar_area_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u1
 }
 
 fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
-    f.render_widget(Block::default().style(Style::default().bg(tema::FONDO_LINEA)), r);
+    f.render_widget(
+        Block::default().style(Style::default().bg(tema::FONDO_LINEA)),
+        r,
+    );
     let mut x = r.x;
     for (i, b) in app.buffers.iter().enumerate() {
-        let marca = if b.buf.modificado() { " ●" } else if b.buf.solo_lectura { " 🔒" } else { "" };
-        let marca = if app.sim.ascii && !marca.is_empty() { if b.buf.modificado() { " *" } else { " RO" } } else { marca };
+        let marca = if b.buf.modificado() {
+            " ●"
+        } else if b.buf.solo_lectura {
+            " 🔒"
+        } else {
+            ""
+        };
+        let marca = if app.sim.ascii && !marca.is_empty() {
+            if b.buf.modificado() {
+                " *"
+            } else {
+                " RO"
+            }
+        } else {
+            marca
+        };
         let texto = format!(" {}{} ", b.buf.nombre(), marca);
         let w = UnicodeWidthStr::width(texto.as_str()) as u16;
         if x + w > r.x + r.width {
             break;
         }
         let estilo = if i == app.activo {
-            Style::default().bg(tema::FONDO_SELECCION).fg(Color::White).add_modifier(Modifier::BOLD)
+            Style::default()
+                .bg(tema::FONDO_SELECCION)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().bg(tema::FONDO_LINEA).fg(tema::ATENUADO)
         };
@@ -220,14 +318,27 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
     let lineas_total = app.buffers[activo].buf.lineas();
     let digitos = lineas_total.max(1).to_string().len().max(3) as u16;
     let ancho_gutter = 1 + digitos + 2;
-    let gutter = Rect { width: ancho_gutter.min(r.width), ..r };
-    let texto = Rect { x: r.x + gutter.width, width: r.width - gutter.width, ..r };
+    let gutter = Rect {
+        width: ancho_gutter.min(r.width),
+        ..r
+    };
+    let texto = Rect {
+        x: r.x + gutter.width,
+        width: r.width - gutter.width,
+        ..r
+    };
     app.zonas.editor = Some(ZonaEditor { texto, gutter });
 
     // Ubicación del depurador y breakpoints de este archivo.
-    let linea_depurador = app.depuracion.as_ref().and_then(|d| d.ubicacion.clone()).and_then(|(a, l)| {
-        ruta.as_ref().is_some_and(|r| mismo_archivo(&a, r)).then_some(l - 1)
-    });
+    let linea_depurador = app
+        .depuracion
+        .as_ref()
+        .and_then(|d| d.ubicacion.clone())
+        .and_then(|(a, l)| {
+            ruta.as_ref()
+                .is_some_and(|r| mismo_archivo(&a, r))
+                .then_some(l - 1)
+        });
     let bps: Vec<usize> = app
         .breakpoints
         .iter()
@@ -240,8 +351,16 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             .into_iter()
             .filter(|d| d.archivo.as_deref().is_some_and(|a| mismo_archivo(a, p)))
             .map(|d| {
-                let codigo = d.codigo.as_deref().map(|c| format!(" [{c}]")).unwrap_or_default();
-                (d.linea.saturating_sub(1), d.severidad, format!("{}{codigo}", d.mensaje))
+                let codigo = d
+                    .codigo
+                    .as_deref()
+                    .map(|c| format!(" [{c}]"))
+                    .unwrap_or_default();
+                (
+                    d.linea.saturating_sub(1),
+                    d.severidad,
+                    format!("{}{codigo}", d.mensaje),
+                )
             })
             .collect(),
         None => vec![],
@@ -275,7 +394,9 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
     let lenguaje = b.lenguaje;
     let mut estado = {
         let bref = &*b;
-        ba.cache.estado_en(version, lenguaje, desp, |i| bref.linea_texto(i).chars().collect())
+        ba.cache.estado_en(version, lenguaje, desp, |i| {
+            bref.linea_texto(i).chars().collect()
+        })
     };
     let b = &ba.buf;
     let buf = f.buffer_mut();
@@ -293,25 +414,39 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             Color::Reset
         };
         for x in r.x..r.x + r.width {
-            buf[(x, y)].set_symbol(" ").set_style(Style::default().bg(fondo));
+            buf[(x, y)]
+                .set_symbol(" ")
+                .set_style(Style::default().bg(fondo));
         }
         if linea >= lineas_total {
-            buf[(gutter.x + 1, y)].set_symbol("~").set_fg(tema::ATENUADO);
+            buf[(gutter.x + 1, y)]
+                .set_symbol("~")
+                .set_fg(tema::ATENUADO);
             continue;
         }
         // Gutter: breakpoint, número, marca de diagnóstico.
         if bps.contains(&linea) {
-            buf[(gutter.x, y)].set_symbol(sim.breakpoint).set_fg(tema::ERROR);
+            buf[(gutter.x, y)]
+                .set_symbol(sim.breakpoint)
+                .set_fg(tema::ERROR);
         }
         if es_depurador {
-            buf[(gutter.x, y)].set_symbol(sim.linea_actual).set_fg(tema::ADVERTENCIA);
+            buf[(gutter.x, y)]
+                .set_symbol(sim.linea_actual)
+                .set_fg(tema::ADVERTENCIA);
         }
         let num = format!("{:>w$}", linea + 1, w = digitos as usize);
-        let estilo_num = if es_actual { Style::default().fg(Color::White) } else { Style::default().fg(tema::ATENUADO) };
+        let estilo_num = if es_actual {
+            Style::default().fg(Color::White)
+        } else {
+            Style::default().fg(tema::ATENUADO)
+        };
         buf.set_string(gutter.x + 1, y, &num, estilo_num);
         let peor = diags.iter().filter(|d| d.0 == linea).map(|d| d.1).min();
         if let Some(s) = peor {
-            buf[(gutter.x + 1 + digitos, y)].set_symbol("▎").set_fg(tema::color_severidad(s));
+            buf[(gutter.x + 1 + digitos, y)]
+                .set_symbol("▎")
+                .set_fg(tema::color_severidad(s));
         }
         // Texto con resaltado y selección.
         let chars: Vec<char> = b.linea_texto(linea).chars().collect();
@@ -348,7 +483,9 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             }
         }
         // Selección que incluye el salto de línea.
-        if seleccion.is_some_and(|(a, z)| inicio_linea + chars.len() >= a && inicio_linea + chars.len() < z) {
+        if seleccion
+            .is_some_and(|(a, z)| inicio_linea + chars.len() >= a && inicio_linea + chars.len() < z)
+        {
             let vis = cols[chars.len()];
             if vis >= desp_h && vis - desp_h < texto.width as usize {
                 buf[(texto.x + (vis - desp_h) as u16, y)].set_bg(tema::FONDO_SELECCION);
@@ -370,7 +507,10 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                     texto.x + fin as u16,
                     y,
                     s,
-                    Style::default().fg(tema::color_severidad(*sev)).bg(fondo).add_modifier(Modifier::ITALIC),
+                    Style::default()
+                        .fg(tema::color_severidad(*sev))
+                        .bg(fondo)
+                        .add_modifier(Modifier::ITALIC),
                 );
             }
         }
@@ -394,15 +534,26 @@ fn dibujar_preview(f: &mut Frame, app: &mut App, r: Rect) {
     let ba = &mut app.buffers[app.activo];
     let version = ba.buf.version;
     let vencido = ba.ultimo_cambio.elapsed() >= crate::app::DEBOUNCE_PREVIEW;
-    let desactualizado = ba.preview.as_ref().is_none_or(|(v, w, _)| *v != version || *w != interior.width);
+    let desactualizado = ba
+        .preview
+        .as_ref()
+        .is_none_or(|(v, w, _)| *v != version || *w != interior.width);
     // Debounce (RF-8.2): no se rerenderiza mientras se tipea.
     if desactualizado && (vencido || ba.preview.is_none()) {
         let doc = markdown::renderizar(&ba.buf.contenido(), interior.width, &sim);
         ba.preview = Some((version, interior.width, doc));
     }
     if let Some((_, _, doc)) = &ba.preview {
-        ba.preview_desplazamiento = ba.preview_desplazamiento.min(doc.lineas.len().saturating_sub(1));
-        let lineas: Vec<Line> = doc.lineas.iter().skip(ba.preview_desplazamiento).take(interior.height as usize).cloned().collect();
+        ba.preview_desplazamiento = ba
+            .preview_desplazamiento
+            .min(doc.lineas.len().saturating_sub(1));
+        let lineas: Vec<Line> = doc
+            .lineas
+            .iter()
+            .skip(ba.preview_desplazamiento)
+            .take(interior.height as usize)
+            .cloned()
+            .collect();
         f.render_widget(Paragraph::new(lineas), interior);
     }
 }
@@ -413,18 +564,35 @@ fn funcion_doc<'a>(app: &'a App, nombre: &str) -> Option<std::borrow::Cow<'a, Fu
     if let Some(f) = Base::embebida().funcion(nombre) {
         return Some(std::borrow::Cow::Borrowed(f));
     }
-    app.funciones_usuario.as_ref().and_then(|(_, _, v)| v.iter().find(|f| f.nombre == nombre)).map(|f| std::borrow::Cow::Owned(f.clone()))
+    app.funciones_usuario
+        .as_ref()
+        .and_then(|(_, _, v)| v.iter().find(|f| f.nombre == nombre))
+        .map(|f| std::borrow::Cow::Owned(f.clone()))
 }
 
 pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>) {
     let activo = app.activo;
     let b = &app.buffers[activo].buf;
     if b.lenguaje != Lenguaje::C {
-        return (" quick-doc ".into(), vec![Line::styled("Ayuda de funciones de C: abrí un archivo .c o .h.", Style::default().fg(tema::ATENUADO))]);
+        return (
+            " quick-doc ".into(),
+            vec![Line::styled(
+                "Ayuda de funciones de C: abrí un archivo .c o .h.",
+                Style::default().fg(tema::ATENUADO),
+            )],
+        );
     }
     let version = b.version;
-    if app.funciones_usuario.as_ref().is_none_or(|(i, v, _)| *i != activo || *v != version) {
-        app.funciones_usuario = Some((activo, version, jonesy_doc::funciones_del_codigo(&b.contenido())));
+    if app
+        .funciones_usuario
+        .as_ref()
+        .is_none_or(|(i, v, _)| *i != activo || *v != version)
+    {
+        app.funciones_usuario = Some((
+            activo,
+            version,
+            jonesy_doc::funciones_del_codigo(&b.contenido()),
+        ));
     }
     let b = &app.buffers[activo].buf;
     // Ventana alrededor del cursor: el lexer no necesita el archivo entero.
@@ -439,7 +607,13 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
     };
     let atenuado = Style::default().fg(tema::ATENUADO);
     if nombre.is_empty() {
-        return (" quick-doc ".into(), vec![Line::styled("Posá el cursor sobre una función o escribí «(» para ver su firma.", atenuado)]);
+        return (
+            " quick-doc ".into(),
+            vec![Line::styled(
+                "Posá el cursor sobre una función o escribí «(» para ver su firma.",
+                atenuado,
+            )],
+        );
     }
     if let Some(func) = funcion_doc(app, &nombre) {
         let mut l = vec![];
@@ -448,12 +622,18 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
         let texto = func.firma.clone();
         match (activo_param, texto.find('('), texto.rfind(')')) {
             (Some(p), Some(a), Some(z)) if a < z && !func.parametros.is_empty() => {
-                firma.push(Span::styled(texto[..=a].to_string(), Style::default().fg(tema::ACENTO)));
+                firma.push(Span::styled(
+                    texto[..=a].to_string(),
+                    Style::default().fg(tema::ACENTO),
+                ));
                 let partes: Vec<&str> = texto[a + 1..z].split(',').collect();
                 for (i, parte) in partes.iter().enumerate() {
-                    let es_activo = i == p.min(partes.len() - 1) && !(texto.contains("...") && p >= partes.len() && i != partes.len() - 1);
+                    let es_activo = i == p.min(partes.len() - 1)
+                        && !(texto.contains("...") && p >= partes.len() && i != partes.len() - 1);
                     let estilo = if es_activo {
-                        Style::default().fg(tema::ADVERTENCIA).add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+                        Style::default()
+                            .fg(tema::ADVERTENCIA)
+                            .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
                     } else {
                         Style::default()
                     };
@@ -462,49 +642,99 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                         firma.push(Span::raw(","));
                     }
                 }
-                firma.push(Span::styled(texto[z..].to_string(), Style::default().fg(tema::ACENTO)));
+                firma.push(Span::styled(
+                    texto[z..].to_string(),
+                    Style::default().fg(tema::ACENTO),
+                ));
             }
-            _ => firma.push(Span::styled(texto.clone(), Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD))),
+            _ => firma.push(Span::styled(
+                texto.clone(),
+                Style::default()
+                    .fg(tema::ACENTO)
+                    .add_modifier(Modifier::BOLD),
+            )),
         }
         l.push(Line::from(firma));
         if !func.cabecera.is_empty() {
-            l.push(Line::styled(format!("#include <{}>", func.cabecera.trim_matches(['<', '>'])), atenuado));
+            l.push(Line::styled(
+                format!("#include <{}>", func.cabecera.trim_matches(['<', '>'])),
+                atenuado,
+            ));
         }
         if !func.descripcion.is_empty() {
             l.push(Line::raw(func.descripcion.clone()));
         }
         if !func.retorno.is_empty() {
-            l.push(Line::from(vec![Span::styled("Retorno: ", Style::default().add_modifier(Modifier::BOLD)), Span::raw(func.retorno.clone())]));
+            l.push(Line::from(vec![
+                Span::styled("Retorno: ", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(func.retorno.clone()),
+            ]));
         }
         for (i, p) in func.parametros.iter().enumerate() {
             let activo = activo_param.is_some_and(|a| a == i);
-            let estilo = if activo { Style::default().fg(tema::ADVERTENCIA).add_modifier(Modifier::BOLD) } else { Style::default() };
+            let estilo = if activo {
+                Style::default()
+                    .fg(tema::ADVERTENCIA)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default()
+            };
             l.push(Line::from(vec![
                 Span::styled(format!("  {} {}", p.tipo, p.nombre), estilo),
-                Span::styled(if p.desc.is_empty() { String::new() } else { format!(" — {}", p.desc) }, if activo { estilo } else { atenuado }),
+                Span::styled(
+                    if p.desc.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" — {}", p.desc)
+                    },
+                    if activo { estilo } else { atenuado },
+                ),
             ]));
         }
         for t in &func.trampas {
-            l.push(Line::styled(format!("{} {t}", if app.sim.ascii { "!" } else { "⚠" }), Style::default().fg(tema::ADVERTENCIA)));
+            l.push(Line::styled(
+                format!("{} {t}", if app.sim.ascii { "!" } else { "⚠" }),
+                Style::default().fg(tema::ADVERTENCIA),
+            ));
         }
         if !func.reglas.is_empty() {
-            l.push(Line::styled(format!("Reglas: {}", func.reglas.join(", ")), Style::default().fg(tema::ESTILO)));
+            l.push(Line::styled(
+                format!("Reglas: {}", func.reglas.join(", ")),
+                Style::default().fg(tema::ESTILO),
+            ));
         }
         let _ = ancho;
         return (format!(" {} ", func.nombre), l);
     }
     if let Some(t) = Base::embebida().tipo(&nombre) {
         let mut l = vec![
-            Line::styled(t.nombre.clone(), Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD)),
-            Line::styled(format!("#include <{}>", t.cabecera.trim_matches(['<', '>'])), atenuado),
+            Line::styled(
+                t.nombre.clone(),
+                Style::default()
+                    .fg(tema::ACENTO)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Line::styled(
+                format!("#include <{}>", t.cabecera.trim_matches(['<', '>'])),
+                atenuado,
+            ),
             Line::raw(t.descripcion.clone()),
         ];
         for tr in &t.trampas {
-            l.push(Line::styled(format!("{} {tr}", if app.sim.ascii { "!" } else { "⚠" }), Style::default().fg(tema::ADVERTENCIA)));
+            l.push(Line::styled(
+                format!("{} {tr}", if app.sim.ascii { "!" } else { "⚠" }),
+                Style::default().fg(tema::ADVERTENCIA),
+            ));
         }
         return (format!(" {} ", t.nombre), l);
     }
-    (" quick-doc ".into(), vec![Line::styled(format!("Sin documentación para «{nombre}»."), atenuado)])
+    (
+        " quick-doc ".into(),
+        vec![Line::styled(
+            format!("Sin documentación para «{nombre}»."),
+            atenuado,
+        )],
+    )
 }
 
 fn dibujar_quickdoc(f: &mut Frame, app: &mut App, r: Rect) {
@@ -522,7 +752,10 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
     let foco = app.foco == Foco::Inferior && app.modal.is_none();
     // Pestañas en la fila superior (sobre el borde).
     let fila = Rect { height: 1, ..r };
-    f.render_widget(Block::default().style(Style::default().bg(tema::FONDO_BARRA)), fila);
+    f.render_widget(
+        Block::default().style(Style::default().bg(tema::FONDO_BARRA)),
+        fila,
+    );
     let mut x = r.x + 1;
     for p in Pestana::TODAS {
         let mut titulo = p.titulo().to_string();
@@ -542,7 +775,14 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
             break;
         }
         let estilo = if p == app.pestana {
-            Style::default().bg(if foco { tema::ACENTO } else { tema::FONDO_SELECCION }).fg(if foco { Color::Black } else { Color::White }).add_modifier(Modifier::BOLD)
+            Style::default()
+                .bg(if foco {
+                    tema::ACENTO
+                } else {
+                    tema::FONDO_SELECCION
+                })
+                .fg(if foco { Color::Black } else { Color::White })
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default().bg(tema::FONDO_BARRA).fg(tema::ATENUADO)
         };
@@ -551,7 +791,11 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
         app.zonas.pestanas_inferior.push((zona, p));
         x += w + 1;
     }
-    let cuerpo = Rect { y: r.y + 1, height: r.height.saturating_sub(1), ..r };
+    let cuerpo = Rect {
+        y: r.y + 1,
+        height: r.height.saturating_sub(1),
+        ..r
+    };
     match app.pestana {
         Pestana::Problemas => {
             dibujar_problemas(f, app, cuerpo);
@@ -565,7 +809,16 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
             let ini = fin.saturating_sub(alto);
             let lineas: Vec<Line> = app.salida[ini..fin]
                 .iter()
-                .map(|(t, e)| Line::styled(t.clone(), if *e { Style::default().fg(tema::ERROR) } else { Style::default() }))
+                .map(|(t, e)| {
+                    Line::styled(
+                        t.clone(),
+                        if *e {
+                            Style::default().fg(tema::ERROR)
+                        } else {
+                            Style::default()
+                        },
+                    )
+                })
                 .collect();
             f.render_widget(Paragraph::new(lineas), cuerpo);
             None
@@ -573,23 +826,45 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
         Pestana::Terminal | Pestana::Ejecucion => {
             app.zonas.deck = Some(cuerpo);
             let es_terminal = app.pestana == Pestana::Terminal;
-            let deck = if es_terminal { app.terminal.as_mut() } else { app.ejecucion.as_mut() };
+            let deck = if es_terminal {
+                app.terminal.as_mut()
+            } else {
+                app.ejecucion.as_mut()
+            };
             let Some(d) = deck else {
-                f.render_widget(Paragraph::new("Alt+T abre la terminal.").style(Style::default().fg(tema::ATENUADO)), cuerpo);
+                f.render_widget(
+                    Paragraph::new("Alt+T abre la terminal.")
+                        .style(Style::default().fg(tema::ATENUADO)),
+                    cuerpo,
+                );
                 return None;
             };
             let (filas, cols) = d.con_pantalla(|s| s.size());
-            if (filas, cols) != (cuerpo.height, cuerpo.width) && cuerpo.height > 1 && cuerpo.width > 1 {
+            if (filas, cols) != (cuerpo.height, cuerpo.width)
+                && cuerpo.height > 1
+                && cuerpo.width > 1
+            {
                 d.redimensionar(cuerpo.height, cuerpo.width);
             }
             d.tomar_pendiente();
             let vivo = d.vivo();
-            let c = d.con_pantalla(|s| crate::vt::dibujar_pantalla(s, cuerpo, f.buffer_mut(), foco && vivo));
+            let c = d.con_pantalla(|s| {
+                crate::vt::dibujar_pantalla(s, cuerpo, f.buffer_mut(), foco && vivo)
+            });
             if !vivo {
-                let aviso = if es_terminal { " [terminal cerrada: Alt+T abre otra] " } else { " [terminado] " };
+                let aviso = if es_terminal {
+                    " [terminal cerrada: Alt+T abre otra] "
+                } else {
+                    " [terminado] "
+                };
                 let w = aviso.chars().count() as u16;
                 if cuerpo.width > w {
-                    f.buffer_mut().set_string(cuerpo.x + cuerpo.width - w, r.y, aviso, Style::default().fg(tema::ATENUADO).bg(tema::FONDO_BARRA));
+                    f.buffer_mut().set_string(
+                        cuerpo.x + cuerpo.width - w,
+                        r.y,
+                        aviso,
+                        Style::default().fg(tema::ATENUADO).bg(tema::FONDO_BARRA),
+                    );
                 }
             }
             c
@@ -614,7 +889,11 @@ fn icono_severidad(s: Severidad, ascii: bool) -> &'static str {
 fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
     let diags: Vec<_> = app.diagnosticos().into_iter().cloned().collect();
     if diags.is_empty() {
-        f.render_widget(Paragraph::new(" Sin problemas. F6 compila; al guardar corre ripley.").style(Style::default().fg(tema::ATENUADO)), r);
+        f.render_widget(
+            Paragraph::new(" Sin problemas. F6 compila; al guardar corre ripley.")
+                .style(Style::default().fg(tema::ATENUADO)),
+            r,
+        );
         return;
     }
     app.sel_problema = app.sel_problema.min(diags.len() - 1);
@@ -629,22 +908,46 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
         .map(|(i, d)| {
             let ubic = format!(
                 "{}:{}:{}",
-                d.archivo.as_deref().map(|a| app.proyecto.relativa(a)).unwrap_or_default(),
+                d.archivo
+                    .as_deref()
+                    .map(|a| app.proyecto.relativa(a))
+                    .unwrap_or_default(),
                 d.linea,
                 d.columna
             );
-            let fondo = if i == app.sel_problema { tema::FONDO_SELECCION } else { Color::Reset };
+            let fondo = if i == app.sel_problema {
+                tema::FONDO_SELECCION
+            } else {
+                Color::Reset
+            };
             let origen = match d.origen {
                 jonesy_core::Origen::Compilador => "gcc",
                 jonesy_core::Origen::Ripley => "ripley",
                 jonesy_core::Origen::Plugin => "plugin",
             };
             Line::from(vec![
-                Span::styled(format!(" {} ", icono_severidad(d.severidad, app.sim.ascii)), Style::default().fg(tema::color_severidad(d.severidad)).bg(fondo)),
-                Span::styled(format!("{ubic} "), Style::default().fg(tema::ATENUADO).bg(fondo)),
+                Span::styled(
+                    format!(" {} ", icono_severidad(d.severidad, app.sim.ascii)),
+                    Style::default()
+                        .fg(tema::color_severidad(d.severidad))
+                        .bg(fondo),
+                ),
+                Span::styled(
+                    format!("{ubic} "),
+                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                ),
                 Span::styled(d.mensaje.clone(), Style::default().bg(fondo)),
-                Span::styled(d.codigo.as_deref().map(|c| format!(" [{c}]")).unwrap_or_default(), Style::default().fg(tema::ESTILO).bg(fondo)),
-                Span::styled(format!(" ({origen})"), Style::default().fg(tema::ATENUADO).bg(fondo)),
+                Span::styled(
+                    d.codigo
+                        .as_deref()
+                        .map(|c| format!(" [{c}]"))
+                        .unwrap_or_default(),
+                    Style::default().fg(tema::ESTILO).bg(fondo),
+                ),
+                Span::styled(
+                    format!(" ({origen})"),
+                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                ),
             ])
         })
         .collect();
@@ -653,7 +956,9 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
 
 fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Option<(u16, u16)> {
     let sim_ascii = app.sim.ascii;
-    let Some(d) = &mut app.depuracion else { return None };
+    let Some(d) = &mut app.depuracion else {
+        return None;
+    };
     // Barra de botones (RF-4.1).
     let botones: [(&str, &str, Accion); 5] = [
         ("▶ Continuar", "> Continuar", Accion::Depurar),
@@ -670,18 +975,37 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
             break;
         }
         let zona = Rect::new(x, r.y, w, 1);
-        f.render_widget(Paragraph::new(t).style(Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD)), zona);
+        f.render_widget(
+            Paragraph::new(t).style(
+                Style::default()
+                    .fg(tema::ACENTO)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            zona,
+        );
         app.zonas.botones_depurador.push((zona, accion));
         x += w + 1;
     }
     let estado = format!(" {} ", d.estado);
     if x + estado.chars().count() as u16 <= r.x + r.width {
-        f.buffer_mut().set_string(x, r.y, &estado, Style::default().fg(tema::ATENUADO));
+        f.buffer_mut()
+            .set_string(x, r.y, &estado, Style::default().fg(tema::ATENUADO));
     }
-    let cuerpo = Rect { y: r.y + 1, height: r.height.saturating_sub(1), ..r };
+    let cuerpo = Rect {
+        y: r.y + 1,
+        height: r.height.saturating_sub(1),
+        ..r
+    };
     let mitad = cuerpo.width / 2;
-    let izq = Rect { width: mitad, ..cuerpo };
-    let der = Rect { x: cuerpo.x + mitad, width: cuerpo.width - mitad, ..cuerpo };
+    let izq = Rect {
+        width: mitad,
+        ..cuerpo
+    };
+    let der = Rect {
+        x: cuerpo.x + mitad,
+        width: cuerpo.width - mitad,
+        ..cuerpo
+    };
     let bp = bloque(" programa (E/S) ", foco && !d.foco_consola);
     let ip = bp.inner(izq);
     f.render_widget(bp, izq);
@@ -690,19 +1014,35 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
         d.tam_pty = (ip.height, ip.width);
     }
     d.pty.tomar_pendiente();
-    let c1 = d.pty.con_pantalla(|s| crate::vt::dibujar_pantalla(s, ip, f.buffer_mut(), foco && !d.foco_consola));
+    let c1 = d.pty.con_pantalla(|s| {
+        crate::vt::dibujar_pantalla(s, ip, f.buffer_mut(), foco && !d.foco_consola)
+    });
     let bc = bloque(" consola gdb (Tab alterna) ", foco && d.foco_consola);
     let ic = bc.inner(der);
     f.render_widget(bc, der);
     let alto = ic.height.saturating_sub(1) as usize;
     let ini = d.consola.len().saturating_sub(alto);
-    let lineas: Vec<Line> = d.consola[ini..].iter().map(|l| Line::raw(l.clone())).collect();
-    f.render_widget(Paragraph::new(lineas), Rect { height: ic.height.saturating_sub(1), ..ic });
+    let lineas: Vec<Line> = d.consola[ini..]
+        .iter()
+        .map(|l| Line::raw(l.clone()))
+        .collect();
+    f.render_widget(
+        Paragraph::new(lineas),
+        Rect {
+            height: ic.height.saturating_sub(1),
+            ..ic
+        },
+    );
     let entrada = format!("(gdb) {}", d.entrada);
     let y = ic.y + ic.height.saturating_sub(1);
-    f.buffer_mut().set_string(ic.x, y, &entrada, Style::default().fg(tema::ACENTO));
+    f.buffer_mut()
+        .set_string(ic.x, y, &entrada, Style::default().fg(tema::ACENTO));
     if foco && d.foco_consola {
-        Some((ic.x + (UnicodeWidthStr::width(entrada.as_str()) as u16).min(ic.width.saturating_sub(1)), y))
+        Some((
+            ic.x + (UnicodeWidthStr::width(entrada.as_str()) as u16)
+                .min(ic.width.saturating_sub(1)),
+            y,
+        ))
     } else {
         c1
     }
@@ -726,25 +1066,61 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let i = b.inner(r);
     f.render_widget(b, r);
     let Some(e) = app.git_estado.clone() else {
-        f.render_widget(Paragraph::new("El proyecto no está en un repositorio git.").style(Style::default().fg(tema::ATENUADO)).wrap(Wrap { trim: true }), i);
+        f.render_widget(
+            Paragraph::new("El proyecto no está en un repositorio git.")
+                .style(Style::default().fg(tema::ATENUADO))
+                .wrap(Wrap { trim: true }),
+            i,
+        );
         return;
     };
     let mut cabecera = vec![Line::from(vec![
-        Span::styled(format!("{}{}", app.sim.rama, e.rama.clone().unwrap_or("(sin rama)".into())), Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD)),
         Span::styled(
             format!(
                 "{}{}",
-                if e.adelante > 0 { format!("  ↑{}", e.adelante) } else { String::new() },
-                if e.atras > 0 { format!("  ↓{}", e.atras) } else { String::new() }
+                app.sim.rama,
+                e.rama.clone().unwrap_or("(sin rama)".into())
+            ),
+            Style::default()
+                .fg(tema::ACENTO)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(
+            format!(
+                "{}{}",
+                if e.adelante > 0 {
+                    format!("  ↑{}", e.adelante)
+                } else {
+                    String::new()
+                },
+                if e.atras > 0 {
+                    format!("  ↓{}", e.atras)
+                } else {
+                    String::new()
+                }
             ),
             Style::default().fg(tema::ADVERTENCIA),
         ),
     ])];
-    let ayuda = if app.git.log.is_some() { "Enter: ver commit · l: volver" } else { "Espacio stage · a/u todo · c commit · l log · Enter diff" };
+    let ayuda = if app.git.log.is_some() {
+        "Enter: ver commit · l: volver"
+    } else {
+        "Espacio stage · a/u todo · c commit · l log · Enter diff"
+    };
     cabecera.push(Line::styled(ayuda, Style::default().fg(tema::ATENUADO)));
     let alto_cab = cabecera.len() as u16;
-    f.render_widget(Paragraph::new(cabecera).wrap(Wrap { trim: true }), Rect { height: alto_cab.min(i.height), ..i });
-    let lista = Rect { y: i.y + alto_cab + 1, height: i.height.saturating_sub(alto_cab + 1), ..i };
+    f.render_widget(
+        Paragraph::new(cabecera).wrap(Wrap { trim: true }),
+        Rect {
+            height: alto_cab.min(i.height),
+            ..i
+        },
+    );
+    let lista = Rect {
+        y: i.y + alto_cab + 1,
+        height: i.height.saturating_sub(alto_cab + 1),
+        ..i
+    };
     let alto = lista.height as usize;
     if let Some(log) = &app.git.log {
         let sel = app.git.sel_log.min(log.len().saturating_sub(1));
@@ -756,11 +1132,21 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             .skip(base)
             .take(alto)
             .map(|(n, c)| {
-                let fondo = if n == sel { tema::FONDO_SELECCION } else { Color::Reset };
+                let fondo = if n == sel {
+                    tema::FONDO_SELECCION
+                } else {
+                    Color::Reset
+                };
                 Line::from(vec![
-                    Span::styled(format!("{} ", c.hash), Style::default().fg(tema::ADVERTENCIA).bg(fondo)),
+                    Span::styled(
+                        format!("{} ", c.hash),
+                        Style::default().fg(tema::ADVERTENCIA).bg(fondo),
+                    ),
                     Span::styled(c.resumen.clone(), Style::default().bg(fondo)),
-                    Span::styled(format!(" · {}", c.cuando), Style::default().fg(tema::ATENUADO).bg(fondo)),
+                    Span::styled(
+                        format!(" · {}", c.cuando),
+                        Style::default().fg(tema::ATENUADO).bg(fondo),
+                    ),
                 ])
             })
             .collect();
@@ -768,7 +1154,10 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         return;
     }
     if e.entradas.is_empty() {
-        f.render_widget(Paragraph::new("Árbol de trabajo limpio.").style(Style::default().fg(tema::OK)), lista);
+        f.render_widget(
+            Paragraph::new("Árbol de trabajo limpio.").style(Style::default().fg(tema::OK)),
+            lista,
+        );
         return;
     }
     let sel = app.git.sel.min(e.entradas.len() - 1);
@@ -781,7 +1170,11 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         .skip(base)
         .take(alto)
         .map(|(n, en)| {
-            let fondo = if n == sel { tema::FONDO_SELECCION } else { Color::Reset };
+            let fondo = if n == sel {
+                tema::FONDO_SELECCION
+            } else {
+                Color::Reset
+            };
             let (marca, color) = if en.en_stage() && !en.sin_stage() {
                 ("[S]", tema::OK)
             } else if en.en_stage() {
@@ -791,7 +1184,10 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             };
             Line::from(vec![
                 Span::styled(format!("{marca} "), Style::default().fg(color).bg(fondo)),
-                Span::styled(format!("{:<10} ", en.describir()), Style::default().fg(tema::ATENUADO).bg(fondo)),
+                Span::styled(
+                    format!("{:<10} ", en.describir()),
+                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                ),
                 Span::styled(en.ruta.clone(), Style::default().bg(fondo)),
             ])
         })
@@ -803,8 +1199,11 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let b = bloque_app(app, " Reglas (ripley) ", foco);
     let i = b.inner(r);
     f.render_widget(b, r);
-    let grupos: Vec<(&'static str, Vec<jonesy_core::Diagnostico>)> =
-        app.reglas_agrupadas().into_iter().map(|(c, v)| (c, v.into_iter().cloned().collect())).collect();
+    let grupos: Vec<(&'static str, Vec<jonesy_core::Diagnostico>)> = app
+        .reglas_agrupadas()
+        .into_iter()
+        .map(|(c, v)| (c, v.into_iter().cloned().collect()))
+        .collect();
     if grupos.is_empty() {
         f.render_widget(
             Paragraph::new("Sin observaciones. ripley corre al guardar un archivo .c (F1 sobre una línea marcada explica la regla).")
@@ -821,17 +1220,42 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let mut n = 0;
     let mut fila_sel = 0;
     for (cat, v) in &grupos {
-        lineas.push(Line::styled(format!("▾ {cat} ({})", v.len()), Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD)));
+        lineas.push(Line::styled(
+            format!("▾ {cat} ({})", v.len()),
+            Style::default()
+                .fg(tema::ACENTO)
+                .add_modifier(Modifier::BOLD),
+        ));
         for d in v {
-            let fondo = if n == app.sel_regla { tema::FONDO_SELECCION } else { Color::Reset };
+            let fondo = if n == app.sel_regla {
+                tema::FONDO_SELECCION
+            } else {
+                Color::Reset
+            };
             if n == app.sel_regla {
                 fila_sel = lineas.len();
             }
-            let archivo = d.archivo.as_deref().and_then(Path::file_name).map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+            let archivo = d
+                .archivo
+                .as_deref()
+                .and_then(Path::file_name)
+                .map(|f| f.to_string_lossy().into_owned())
+                .unwrap_or_default();
             lineas.push(Line::from(vec![
-                Span::styled(format!("  {} ", icono_severidad(d.severidad, app.sim.ascii)), Style::default().fg(tema::color_severidad(d.severidad)).bg(fondo)),
-                Span::styled(format!("{archivo}:{} ", d.linea), Style::default().fg(tema::ATENUADO).bg(fondo)),
-                Span::styled(d.codigo.clone().unwrap_or_default(), Style::default().fg(tema::ESTILO).bg(fondo)),
+                Span::styled(
+                    format!("  {} ", icono_severidad(d.severidad, app.sim.ascii)),
+                    Style::default()
+                        .fg(tema::color_severidad(d.severidad))
+                        .bg(fondo),
+                ),
+                Span::styled(
+                    format!("{archivo}:{} ", d.linea),
+                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                ),
+                Span::styled(
+                    d.codigo.clone().unwrap_or_default(),
+                    Style::default().fg(tema::ESTILO).bg(fondo),
+                ),
                 Span::styled(format!(" {}", d.mensaje), Style::default().bg(fondo)),
             ]));
             n += 1;
@@ -839,7 +1263,16 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     }
     let alto = i.height as usize;
     let desde = fila_sel.saturating_sub(alto.saturating_sub(1));
-    f.render_widget(Paragraph::new(lineas.into_iter().skip(desde).take(alto).collect::<Vec<_>>()), i);
+    f.render_widget(
+        Paragraph::new(
+            lineas
+                .into_iter()
+                .skip(desde)
+                .take(alto)
+                .collect::<Vec<_>>(),
+        ),
+        i,
+    );
 }
 
 fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
@@ -847,35 +1280,68 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let i = b.inner(r);
     f.render_widget(b, r);
     let Some(d) = &app.depuracion else {
-        f.render_widget(Paragraph::new("F5 inicia la depuración.").style(Style::default().fg(tema::ATENUADO)), i);
+        f.render_widget(
+            Paragraph::new("F5 inicia la depuración.").style(Style::default().fg(tema::ATENUADO)),
+            i,
+        );
         return;
     };
-    let mut l: Vec<Line> = vec![Line::styled("Pila", Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD))];
+    let mut l: Vec<Line> = vec![Line::styled(
+        "Pila",
+        Style::default()
+            .fg(tema::ACENTO)
+            .add_modifier(Modifier::BOLD),
+    )];
     for m in &d.marcos {
         let ubic = match (&m.archivo, m.linea) {
-            (Some(a), Some(n)) => format!("{}:{n}", a.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default()),
+            (Some(a), Some(n)) => format!(
+                "{}:{n}",
+                a.file_name()
+                    .map(|f| f.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
             _ => m.direccion.clone(),
         };
         l.push(Line::from(vec![
-            Span::styled(format!(" #{} ", m.nivel), Style::default().fg(tema::ATENUADO)),
-            Span::styled(format!("{}()", m.funcion), Style::default().fg(tema::ACENTO)),
+            Span::styled(
+                format!(" #{} ", m.nivel),
+                Style::default().fg(tema::ATENUADO),
+            ),
+            Span::styled(
+                format!("{}()", m.funcion),
+                Style::default().fg(tema::ACENTO),
+            ),
             Span::styled(format!(" {ubic}"), Style::default().fg(tema::ATENUADO)),
         ]));
     }
     l.push(Line::raw(""));
-    l.push(Line::styled("Variables", Style::default().fg(tema::ACENTO).add_modifier(Modifier::BOLD)));
+    l.push(Line::styled(
+        "Variables",
+        Style::default()
+            .fg(tema::ACENTO)
+            .add_modifier(Modifier::BOLD),
+    ));
     for v in &d.variables {
         l.push(Line::from(vec![
-            Span::styled(if v.argumento { " ⇢ " } else { "   " }, Style::default().fg(tema::ATENUADO)),
+            Span::styled(
+                if v.argumento { " ⇢ " } else { "   " },
+                Style::default().fg(tema::ATENUADO),
+            ),
             Span::styled(format!("{} ", v.tipo), estilo_clase(resaltado::Clase::Tipo)),
-            Span::styled(v.nombre.clone(), Style::default().add_modifier(Modifier::BOLD)),
+            Span::styled(
+                v.nombre.clone(),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
             Span::raw(" = "),
             Span::styled(v.valor.clone(), estilo_clase(resaltado::Clase::Numero)),
         ]));
     }
     if d.traza.is_some() {
         l.push(Line::raw(""));
-        l.push(Line::styled("Alt+M: vista de memoria (cat-scan)", Style::default().fg(tema::ATENUADO)));
+        l.push(Line::styled(
+            "Alt+M: vista de memoria (cat-scan)",
+            Style::default().fg(tema::ATENUADO),
+        ));
     }
     f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), i);
 }
@@ -887,8 +1353,15 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     f.render_widget(b, r);
     let Some(d) = &app.depuracion else { return };
     let (Some(t), Some(p)) = (&d.traza, d.paso_traza) else {
-        let msg = if d.traza.is_none() { "Esperando la traza de mem-trace…" } else { "Esta parada no figura en la traza de mem-trace." };
-        f.render_widget(Paragraph::new(msg).style(Style::default().fg(tema::ATENUADO)), i);
+        let msg = if d.traza.is_none() {
+            "Esperando la traza de mem-trace…"
+        } else {
+            "Esta parada no figura en la traza de mem-trace."
+        };
+        f.render_widget(
+            Paragraph::new(msg).style(Style::default().fg(tema::ATENUADO)),
+            i,
+        );
         return;
     };
     let lienzo = jonesy_core::catscan::dibujar(&t.steps[p], i.width as usize);
@@ -897,12 +1370,19 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         for (col, c) in celdas.iter().enumerate().take(i.width as usize) {
             let mut s = [0u8; 4];
             let ch = sim.degradar(c.c);
-            buf[(i.x + col as u16, i.y + fila as u16)].set_symbol(ch.encode_utf8(&mut s)).set_style(tema::tono_catscan(c.tono));
+            buf[(i.x + col as u16, i.y + fila as u16)]
+                .set_symbol(ch.encode_utf8(&mut s))
+                .set_style(tema::tono_catscan(c.tono));
         }
     }
     let pie = format!(" paso {}/{} ", p + 1, t.steps.len());
     if i.width as usize > pie.len() && r.height > 1 {
-        buf.set_string(r.x + r.width - pie.len() as u16 - 1, r.y + r.height - 1, &pie, Style::default().fg(tema::ATENUADO));
+        buf.set_string(
+            r.x + r.width - pie.len() as u16 - 1,
+            r.y + r.height - 1,
+            &pie,
+            Style::default().fg(tema::ATENUADO),
+        );
     }
 }
 
@@ -915,7 +1395,13 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     let (l, c) = b.linea_columna();
     let mut izq: Vec<Span> = vec![];
     if app.examen.is_some() {
-        izq.push(Span::styled(" EXAMEN ", Style::default().bg(tema::ERROR).fg(Color::Black).add_modifier(Modifier::BOLD)));
+        izq.push(Span::styled(
+            " EXAMEN ",
+            Style::default()
+                .bg(tema::ERROR)
+                .fg(Color::Black)
+                .add_modifier(Modifier::BOLD),
+        ));
     }
     if app.modo() == Modo::Compacto {
         let vista = match app.vista {
@@ -924,13 +1410,25 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
             Vista::Terminal => "F9 terminal",
             Vista::Doc => "F4 doc",
         };
-        izq.push(Span::styled(format!(" {vista} "), Style::default().bg(tema::FONDO_SELECCION)));
+        izq.push(Span::styled(
+            format!(" {vista} "),
+            Style::default().bg(tema::FONDO_SELECCION),
+        ));
     }
-    izq.push(Span::styled(format!(" {}{} ", b.nombre(), if b.modificado() { "*" } else { "" }), fondo.add_modifier(Modifier::BOLD)));
-    izq.push(Span::styled(format!("Ln {}, Col {} ", l + 1, c + 1), fondo.fg(tema::ATENUADO)));
+    izq.push(Span::styled(
+        format!(" {}{} ", b.nombre(), if b.modificado() { "*" } else { "" }),
+        fondo.add_modifier(Modifier::BOLD),
+    ));
+    izq.push(Span::styled(
+        format!("Ln {}, Col {} ", l + 1, c + 1),
+        fondo.fg(tema::ATENUADO),
+    ));
     let tareas = app.tareas_en_curso();
     if !tareas.is_empty() {
-        izq.push(Span::styled(format!(" {}… ", tareas.join(", ")), fondo.fg(tema::NOTA).add_modifier(Modifier::ITALIC)));
+        izq.push(Span::styled(
+            format!(" {}… ", tareas.join(", ")),
+            fondo.fg(tema::NOTA).add_modifier(Modifier::ITALIC),
+        ));
     }
     if let Some((m, n, _)) = &app.mensaje {
         let color = match n {
@@ -945,16 +1443,40 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     let mut botones: Vec<(String, Accion)> = vec![
         ("[F6 Compilar]".into(), Accion::Compilar),
         ("[^F5 Ejecutar]".into(), Accion::Ejecutar),
-        (if app.depuracion.is_some() { "[F5 Continuar]" } else { "[F5 Depurar]" }.into(), Accion::Depurar),
+        (
+            if app.depuracion.is_some() {
+                "[F5 Continuar]"
+            } else {
+                "[F5 Depurar]"
+            }
+            .into(),
+            Accion::Depurar,
+        ),
         ("[Terminal]".into(), Accion::Terminal),
     ];
-    let git = app.git_estado.as_ref().map(|e| e.resumen()).unwrap_or_default();
+    let git = app
+        .git_estado
+        .as_ref()
+        .map(|e| e.resumen())
+        .unwrap_or_default();
     if app.repo.is_some() {
-        botones.push((format!("[{} {}]", app.sim.rama, git.trim()), Accion::PanelGit));
+        botones.push((
+            format!("[{} {}]", app.sim.rama, git.trim()),
+            Accion::PanelGit,
+        ));
     }
-    let ancho_der: u16 = botones.iter().map(|(t, _)| UnicodeWidthStr::width(t.as_str()) as u16 + 1).sum();
+    let ancho_der: u16 = botones
+        .iter()
+        .map(|(t, _)| UnicodeWidthStr::width(t.as_str()) as u16 + 1)
+        .sum();
     let ancho_izq = r.width.saturating_sub(ancho_der);
-    f.render_widget(Paragraph::new(Line::from(izq)).style(fondo), Rect { width: ancho_izq, ..r });
+    f.render_widget(
+        Paragraph::new(Line::from(izq)).style(fondo),
+        Rect {
+            width: ancho_izq,
+            ..r
+        },
+    );
     if ancho_der <= r.width {
         let mut x = r.x + ancho_izq;
         for (t, a) in botones {
@@ -972,42 +1494,81 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
 fn centrado(area: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(area.width);
     let h = h.min(area.height);
-    Rect::new(area.x + (area.width - w) / 2, area.y + (area.height - h) / 3, w, h)
+    Rect::new(
+        area.x + (area.width - w) / 2,
+        area.y + (area.height - h) / 3,
+        w,
+        h,
+    )
 }
 
 fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
     let ascii = app.sim.ascii;
     let Some(modal) = &app.modal else { return None };
     match modal {
-        Modal::Paleta { filtro, sel, opciones } => {
+        Modal::Paleta {
+            filtro,
+            sel,
+            opciones,
+        } => {
             let titulos: Vec<&str> = opciones.iter().map(|o| o.titulo.as_str()).collect();
             let filtradas = paleta::filtrar(filtro, &titulos);
-            let items: Vec<(String, String)> = filtradas.iter().map(|&i| (opciones[i].titulo.clone(), opciones[i].atajo.clone())).collect();
+            let items: Vec<(String, String)> = filtradas
+                .iter()
+                .map(|&i| (opciones[i].titulo.clone(), opciones[i].atajo.clone()))
+                .collect();
             let (filtro, sel) = (filtro.clone(), *sel);
             lista_modal(f, app, area, " Comandos ", &filtro, &items, sel)
         }
-        Modal::Abrir { filtro, sel, archivos } => {
+        Modal::Abrir {
+            filtro,
+            sel,
+            archivos,
+        } => {
             let filtrados = paleta::filtrar(filtro, archivos);
-            let items: Vec<(String, String)> = filtrados.iter().map(|&i| (archivos[i].clone(), String::new())).collect();
+            let items: Vec<(String, String)> = filtrados
+                .iter()
+                .map(|&i| (archivos[i].clone(), String::new()))
+                .collect();
             let (filtro, sel) = (filtro.clone(), *sel);
-            let titulo = if items.is_empty() && !filtro.is_empty() { " Abrir (Enter crea el archivo) " } else { " Abrir archivo " };
+            let titulo = if items.is_empty() && !filtro.is_empty() {
+                " Abrir (Enter crea el archivo) "
+            } else {
+                " Abrir archivo "
+            };
             lista_modal(f, app, area, titulo, &filtro, &items, sel)
         }
         Modal::Buscar { texto } | Modal::IrALinea { texto } => {
-            let titulo = if matches!(modal, Modal::Buscar { .. }) { " Buscar (Enter siguiente · Esc cerrar) " } else { " Ir a la línea " };
+            let titulo = if matches!(modal, Modal::Buscar { .. }) {
+                " Buscar (Enter siguiente · Esc cerrar) "
+            } else {
+                " Ir a la línea "
+            };
             let base = app.zonas.editor.map(|z| z.texto).unwrap_or(area);
-            let r = Rect::new(base.x + base.width.saturating_sub(46), base.y, 46.min(base.width), 3);
+            let r = Rect::new(
+                base.x + base.width.saturating_sub(46),
+                base.y,
+                46.min(base.width),
+                3,
+            );
             f.render_widget(Clear, r);
             let b = bloque(titulo, true);
             let i = b.inner(r);
             f.render_widget(b, r);
             f.render_widget(Paragraph::new(texto.clone()), i);
-            Some((i.x + (UnicodeWidthStr::width(texto.as_str()) as u16).min(i.width.saturating_sub(1)), i.y))
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
         }
-        Modal::Confirmar { titulo, mensaje, .. } => {
+        Modal::Confirmar {
+            titulo, mensaje, ..
+        } => {
             let r = centrado(area, 64, 7);
             f.render_widget(Clear, r);
-            let b = bloque(format!(" {titulo} "), true).border_style(Style::default().fg(tema::ADVERTENCIA));
+            let b = bloque(format!(" {titulo} "), true)
+                .border_style(Style::default().fg(tema::ADVERTENCIA));
             let i = b.inner(r);
             f.render_widget(b, r);
             f.render_widget(Paragraph::new(mensaje.clone()).wrap(Wrap { trim: true }), i);
@@ -1016,23 +1577,41 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         Modal::Commit { mensaje } => {
             let r = centrado(area, 76, 12);
             f.render_widget(Clear, r);
-            let b = bloque(" Commit (Ctrl+Enter, Alt+Enter o Ctrl+S confirma · Esc cancela) ", true);
+            let b = bloque(
+                " Commit (Ctrl+Enter, Alt+Enter o Ctrl+S confirma · Esc cancela) ",
+                true,
+            );
             let i = b.inner(r);
             f.render_widget(b, r);
-            let mut lineas: Vec<Line> = mensaje.split('\n').map(|l| Line::raw(l.to_string())).collect();
+            let mut lineas: Vec<Line> = mensaje
+                .split('\n')
+                .map(|l| Line::raw(l.to_string()))
+                .collect();
             let aviso = jonesy_git::aviso_mensaje(mensaje);
             let alto = i.height.saturating_sub(if aviso.is_some() { 1 } else { 0 });
             if let Some(a) = aviso {
-                f.buffer_mut().set_string(i.x, i.y + i.height - 1, a, Style::default().fg(tema::ADVERTENCIA));
+                f.buffer_mut().set_string(
+                    i.x,
+                    i.y + i.height - 1,
+                    a,
+                    Style::default().fg(tema::ADVERTENCIA),
+                );
             }
             let n = lineas.len();
             let ultima = lineas.pop().unwrap_or_default();
             let ancho_ultima = ultima.width() as u16;
             lineas.push(ultima);
             f.render_widget(Paragraph::new(lineas), Rect { height: alto, ..i });
-            Some((i.x + ancho_ultima.min(i.width.saturating_sub(1)), i.y + (n as u16 - 1).min(alto.saturating_sub(1))))
+            Some((
+                i.x + ancho_ultima.min(i.width.saturating_sub(1)),
+                i.y + (n as u16 - 1).min(alto.saturating_sub(1)),
+            ))
         }
-        Modal::Visor { titulo, lineas, desplazamiento } => {
+        Modal::Visor {
+            titulo,
+            lineas,
+            desplazamiento,
+        } => {
             let ancho_max = lineas.iter().map(|l| l.width()).max().unwrap_or(20) as u16 + 4;
             let w = ancho_max.clamp(40, area.width.saturating_sub(4));
             let h = (lineas.len() as u16 + 2).clamp(6, area.height.saturating_sub(4));
@@ -1041,21 +1620,49 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let b = bloque(format!(" {titulo} · Esc cierra "), true);
             let i = b.inner(r);
             f.render_widget(b, r);
-            let visibles: Vec<Line> = lineas.iter().skip(*desplazamiento).take(i.height as usize).cloned().collect();
+            let visibles: Vec<Line> = lineas
+                .iter()
+                .skip(*desplazamiento)
+                .take(i.height as usize)
+                .cloned()
+                .collect();
             f.render_widget(Paragraph::new(visibles), i);
             if lineas.len() > i.height as usize {
                 let pie = format!(" {}/{} ", desplazamiento + 1, lineas.len());
-                f.buffer_mut().set_string(r.x + r.width.saturating_sub(pie.len() as u16 + 2), r.y + r.height - 1, pie, Style::default().fg(tema::ATENUADO));
+                f.buffer_mut().set_string(
+                    r.x + r.width.saturating_sub(pie.len() as u16 + 2),
+                    r.y + r.height - 1,
+                    pie,
+                    Style::default().fg(tema::ATENUADO),
+                );
             }
             None
         }
         Modal::Menu { indice, sel } => {
             let (indice, sel) = (*indice, *sel);
             let menus = accion::menus(app.examen.is_some());
-            let Some((_, items)) = menus.get(indice) else { return None };
-            let x = app.zonas.menu.iter().find(|(_, i)| *i == indice).map(|(r, _)| r.x).unwrap_or(1);
-            let ancho = items.iter().map(|a| a.info().titulo.chars().count() + a.info().atajo.chars().count() + 4).max().unwrap_or(20) as u16 + 2;
-            let r = Rect::new(x.min(area.width.saturating_sub(ancho)), 1, ancho.min(area.width), (items.len() as u16 + 2).min(area.height.saturating_sub(1)));
+            let Some((_, items)) = menus.get(indice) else {
+                return None;
+            };
+            let x = app
+                .zonas
+                .menu
+                .iter()
+                .find(|(_, i)| *i == indice)
+                .map(|(r, _)| r.x)
+                .unwrap_or(1);
+            let ancho = items
+                .iter()
+                .map(|a| a.info().titulo.chars().count() + a.info().atajo.chars().count() + 4)
+                .max()
+                .unwrap_or(20) as u16
+                + 2;
+            let r = Rect::new(
+                x.min(area.width.saturating_sub(ancho)),
+                1,
+                ancho.min(area.width),
+                (items.len() as u16 + 2).min(area.height.saturating_sub(1)),
+            );
             f.render_widget(Clear, r);
             let b = bloque("", true);
             let i = b.inner(r);
@@ -1063,8 +1670,13 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             for (n, a) in items.iter().enumerate().take(i.height as usize) {
                 let info = a.info();
                 let fila = Rect::new(i.x, i.y + n as u16, i.width, 1);
-                let estilo = if n == sel { Style::default().bg(tema::ACENTO).fg(Color::Black) } else { Style::default() };
-                let relleno = (i.width as usize).saturating_sub(info.titulo.chars().count() + info.atajo.chars().count() + 2);
+                let estilo = if n == sel {
+                    Style::default().bg(tema::ACENTO).fg(Color::Black)
+                } else {
+                    Style::default()
+                };
+                let relleno = (i.width as usize)
+                    .saturating_sub(info.titulo.chars().count() + info.atajo.chars().count() + 2);
                 let texto = format!(" {}{}{} ", info.titulo, " ".repeat(relleno), info.atajo);
                 f.render_widget(Paragraph::new(texto).style(estilo), fila);
                 app.zonas.items_menu.push((fila, *a));
@@ -1075,23 +1687,43 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
     }
 }
 
-fn lista_modal(f: &mut Frame, app: &mut App, area: Rect, titulo: &str, filtro: &str, items: &[(String, String)], sel: usize) -> Option<(u16, u16)> {
+fn lista_modal(
+    f: &mut Frame,
+    app: &mut App,
+    area: Rect,
+    titulo: &str,
+    filtro: &str,
+    items: &[(String, String)],
+    sel: usize,
+) -> Option<(u16, u16)> {
     let r = centrado(area, 70, 18);
     f.render_widget(Clear, r);
     let b = bloque(titulo.to_string(), true);
     let i = b.inner(r);
     f.render_widget(b, r);
     let entrada = format!("> {filtro}");
-    f.buffer_mut().set_string(i.x, i.y, &entrada, Style::default().fg(tema::ACENTO));
-    let lista = Rect { y: i.y + 1, height: i.height.saturating_sub(1), ..i };
+    f.buffer_mut()
+        .set_string(i.x, i.y, &entrada, Style::default().fg(tema::ACENTO));
+    let lista = Rect {
+        y: i.y + 1,
+        height: i.height.saturating_sub(1),
+        ..i
+    };
     let alto = lista.height as usize;
     let sel = sel.min(items.len().saturating_sub(1));
     let base = sel.saturating_sub(alto.saturating_sub(1));
     app.zonas.modal_items = Some((lista, base));
     for (n, (t, atajo)) in items.iter().enumerate().skip(base).take(alto) {
         let fila = Rect::new(lista.x, lista.y + (n - base) as u16, lista.width, 1);
-        let estilo = if n == sel { Style::default().bg(tema::FONDO_SELECCION).add_modifier(Modifier::BOLD) } else { Style::default() };
-        let relleno = (lista.width as usize).saturating_sub(UnicodeWidthStr::width(t.as_str()) + atajo.chars().count() + 2);
+        let estilo = if n == sel {
+            Style::default()
+                .bg(tema::FONDO_SELECCION)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        let relleno = (lista.width as usize)
+            .saturating_sub(UnicodeWidthStr::width(t.as_str()) + atajo.chars().count() + 2);
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(format!(" {t}{}", " ".repeat(relleno)), estilo),
@@ -1100,5 +1732,8 @@ fn lista_modal(f: &mut Frame, app: &mut App, area: Rect, titulo: &str, filtro: &
             fila,
         );
     }
-    Some((i.x + (UnicodeWidthStr::width(entrada.as_str()) as u16).min(i.width.saturating_sub(1)), i.y))
+    Some((
+        i.x + (UnicodeWidthStr::width(entrada.as_str()) as u16).min(i.width.saturating_sub(1)),
+        i.y,
+    ))
 }

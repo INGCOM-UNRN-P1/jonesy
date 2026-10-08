@@ -39,7 +39,12 @@ pub enum Lenguaje {
 
 impl Lenguaje {
     pub fn de_ruta(ruta: &Path) -> Lenguaje {
-        match ruta.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref() {
+        match ruta
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref()
+        {
             Some("c" | "h") => Lenguaje::C,
             Some("md" | "markdown") => Lenguaje::Markdown,
             Some("yaml" | "yml") => Lenguaje::Yaml,
@@ -113,7 +118,11 @@ impl Buffer {
     /// Identificador estable para la telemetría: la ruta relativa al proyecto o el nombre.
     pub fn id(&self, raiz: &Path) -> String {
         match &self.ruta {
-            Some(r) => r.strip_prefix(raiz).unwrap_or(r).to_string_lossy().into_owned(),
+            Some(r) => r
+                .strip_prefix(raiz)
+                .unwrap_or(r)
+                .to_string_lossy()
+                .into_owned(),
             None => "[sin nombre]".into(),
         }
     }
@@ -272,7 +281,10 @@ impl Buffer {
     pub fn inicio_linea(&mut self, extender: bool) {
         let (linea, col) = self.linea_columna();
         let texto = self.linea_texto(linea);
-        let sangria = texto.chars().take_while(|c| *c == ' ' || *c == '\t').count();
+        let sangria = texto
+            .chars()
+            .take_while(|c| *c == ' ' || *c == '\t')
+            .count();
         // Inicio «inteligente»: primero la sangría, después la columna 0.
         let destino = if col == sangria { 0 } else { sangria };
         self.columna_deseada = None;
@@ -282,7 +294,10 @@ impl Buffer {
     pub fn fin_linea(&mut self, extender: bool) {
         let (linea, _) = self.linea_columna();
         self.columna_deseada = None;
-        self.mover_a(self.texto.line_to_char(linea) + self.largo_linea(linea), extender);
+        self.mover_a(
+            self.texto.line_to_char(linea) + self.largo_linea(linea),
+            extender,
+        );
     }
 
     pub fn palabra_izquierda(&mut self, extender: bool) {
@@ -312,7 +327,14 @@ impl Buffer {
 
     // ------------------------------------------------------------------ edición
 
-    fn aplicar(&mut self, offset: usize, borrar: usize, insertar: &str, cursor_despues: usize, agrupable: bool) -> Option<Delta> {
+    fn aplicar(
+        &mut self,
+        offset: usize,
+        borrar: usize,
+        insertar: &str,
+        cursor_despues: usize,
+        agrupable: bool,
+    ) -> Option<Delta> {
         if self.solo_lectura {
             return None;
         }
@@ -352,7 +374,11 @@ impl Buffer {
         self.ancla = None;
         self.columna_deseada = None;
         self.version += 1;
-        Some(Delta { offset, insertado: insertar.to_string(), borrados: borrar })
+        Some(Delta {
+            offset,
+            insertado: insertar.to_string(),
+            borrados: borrar,
+        })
     }
 
     /// Inserta en el cursor (reemplazando la selección).
@@ -366,7 +392,10 @@ impl Buffer {
     pub fn nueva_linea(&mut self) -> Option<Delta> {
         let (linea, col) = self.linea_columna();
         let texto = self.linea_texto(linea);
-        let sangria: String = texto.chars().take_while(|c| *c == ' ' || *c == '\t').collect();
+        let sangria: String = texto
+            .chars()
+            .take_while(|c| *c == ' ' || *c == '\t')
+            .collect();
         let antes: String = texto.chars().take(col).collect();
         let mut extra = String::new();
         if self.lenguaje == Lenguaje::C && antes.trim_end().ends_with('{') {
@@ -385,7 +414,11 @@ impl Buffer {
         // Borra una sangría completa de 4 espacios de una vez.
         let (linea, col) = self.linea_columna();
         let antes: String = self.linea_texto(linea).chars().take(col).collect();
-        let n = if !antes.is_empty() && antes.chars().all(|c| c == ' ') && col % 4 == 0 { 4 } else { 1 };
+        let n = if !antes.is_empty() && antes.chars().all(|c| c == ' ') && col % 4 == 0 {
+            4
+        } else {
+            1
+        };
         let n = n.min(self.cursor);
         let pos = self.cursor - n;
         self.aplicar(pos, n, "", pos, false)
@@ -422,7 +455,11 @@ impl Buffer {
         self.cursor = e.cursor_antes.min(self.largo());
         self.ancla = None;
         self.version += 1;
-        let delta = Delta { offset: e.offset, insertado: e.borrado.clone(), borrados: n };
+        let delta = Delta {
+            offset: e.offset,
+            insertado: e.borrado.clone(),
+            borrados: n,
+        };
         self.rehacer.push(e);
         Some(delta)
     }
@@ -435,7 +472,11 @@ impl Buffer {
         self.cursor = e.cursor_despues.min(self.largo());
         self.ancla = None;
         self.version += 1;
-        let delta = Delta { offset: e.offset, insertado: e.insertado.clone(), borrados: n };
+        let delta = Delta {
+            offset: e.offset,
+            insertado: e.insertado.clone(),
+            borrados: n,
+        };
         self.deshacer.push(e);
         Some(delta)
     }
@@ -461,10 +502,9 @@ impl Buffer {
 
     /// Guarda de forma atómica: archivo temporal en el mismo directorio, fsync y rename.
     pub fn guardar(&mut self) -> std::io::Result<usize> {
-        let ruta = self
-            .ruta
-            .clone()
-            .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "el buffer no tiene ruta"))?;
+        let ruta = self.ruta.clone().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "el buffer no tiene ruta")
+        })?;
         let bytes = guardar_atomico(&ruta, self.texto.to_string().as_bytes())?;
         self.version_guardada = self.version;
         Ok(bytes)
@@ -485,9 +525,15 @@ fn es_palabra(c: char) -> bool {
 
 /// Escritura atómica: `.<nombre>.jonesy-tmp` + fsync + rename (+ fsync del directorio).
 pub fn guardar_atomico(ruta: &Path, datos: &[u8]) -> std::io::Result<usize> {
-    let dir = ruta.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let dir = ruta
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     fs::create_dir_all(dir)?;
-    let nombre = ruta.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let nombre = ruta
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let tmp = dir.join(format!(".{nombre}.jonesy-tmp"));
     {
         let mut f = fs::File::create(&tmp)?;
@@ -513,7 +559,14 @@ mod tests {
         let mut b = Buffer::desde_texto("int x;\n");
         b.mover_a(4, false);
         let d = b.insertar("y").unwrap();
-        assert_eq!(d, Delta { offset: 4, insertado: "y".into(), borrados: 0 });
+        assert_eq!(
+            d,
+            Delta {
+                offset: 4,
+                insertado: "y".into(),
+                borrados: 0
+            }
+        );
         assert_eq!(b.contenido(), "int yx;\n");
         b.borrar_adelante();
         assert_eq!(b.contenido(), "int y;\n");

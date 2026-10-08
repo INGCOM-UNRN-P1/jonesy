@@ -85,7 +85,12 @@ pub struct Interfaz {
 
 impl Default for Interfaz {
     fn default() -> Self {
-        Interfaz { quickdoc: PosicionDoc::Derecha, osc52: true, ascii: false, shell: String::new() }
+        Interfaz {
+            quickdoc: PosicionDoc::Derecha,
+            osc52: true,
+            ascii: false,
+            shell: String::new(),
+        }
     }
 }
 
@@ -99,7 +104,10 @@ pub struct Ripley {
 
 impl Default for Ripley {
     fn default() -> Self {
-        Ripley { activo: true, comando: "ripley".into() }
+        Ripley {
+            activo: true,
+            comando: "ripley".into(),
+        }
     }
 }
 
@@ -123,7 +131,11 @@ impl Proyecto {
             },
             Err(_) => (Config::default(), None),
         };
-        Proyecto { raiz, config, error_config }
+        Proyecto {
+            raiz,
+            config,
+            error_config,
+        }
     }
 
     pub fn dir_estado(&self) -> PathBuf {
@@ -131,20 +143,33 @@ impl Proyecto {
     }
 
     pub fn makefile(&self) -> Option<PathBuf> {
-        ["Makefile", "makefile", "GNUmakefile"].iter().map(|n| self.raiz.join(n)).find(|p| p.is_file())
+        ["Makefile", "makefile", "GNUmakefile"]
+            .iter()
+            .map(|n| self.raiz.join(n))
+            .find(|p| p.is_file())
     }
 
     /// Objetivos declarados en el Makefile (líneas `objetivo:` sin sangría).
     pub fn objetivos_make(&self) -> Vec<String> {
-        let Some(ruta) = self.makefile() else { return Vec::new() };
-        let Ok(texto) = std::fs::read_to_string(ruta) else { return Vec::new() };
+        let Some(ruta) = self.makefile() else {
+            return Vec::new();
+        };
+        let Ok(texto) = std::fs::read_to_string(ruta) else {
+            return Vec::new();
+        };
         texto
             .lines()
             .filter(|l| !l.starts_with(['\t', ' ', '#', '.']))
             .filter_map(|l| {
                 let (antes, despues) = l.split_once(':')?;
-                (!despues.starts_with('=') && !antes.contains('=') && !antes.contains('$'))
-                    .then(|| antes.split_whitespace().map(String::from).collect::<Vec<_>>())
+                (!despues.starts_with('=') && !antes.contains('=') && !antes.contains('$')).then(
+                    || {
+                        antes
+                            .split_whitespace()
+                            .map(String::from)
+                            .collect::<Vec<_>>()
+                    },
+                )
             })
             .flatten()
             .collect()
@@ -161,7 +186,11 @@ impl Proyecto {
         let archivo = activo.filter(|p| p.extension().is_some_and(|e| e == "c"))?;
         let rel = self.relativa(archivo);
         let stem = archivo.file_stem()?.to_string_lossy().into_owned();
-        Some(format!("gcc -std=c11 -Wall -Wextra -g -O0 -o {} {}", shell_quote(&stem), shell_quote(&rel)))
+        Some(format!(
+            "gcc -std=c11 -Wall -Wextra -g -O0 -o {} {}",
+            shell_quote(&stem),
+            shell_quote(&rel)
+        ))
     }
 
     /// Comando de ejecución (Ctrl+F5): compilar y correr.
@@ -185,7 +214,10 @@ impl Proyecto {
         if !self.config.examen.verificar.trim().is_empty() {
             return Some(self.config.examen.verificar.clone());
         }
-        self.objetivos_make().iter().any(|o| o == "test").then(|| "make test".into())
+        self.objetivos_make()
+            .iter()
+            .any(|o| o == "test")
+            .then(|| "make test".into())
     }
 
     /// Consigna del examen: la configurada o `consigna.md` / `enunciado.md` en la raíz.
@@ -193,11 +225,17 @@ impl Proyecto {
         if !self.config.examen.consigna.is_empty() {
             return Some(self.raiz.join(&self.config.examen.consigna));
         }
-        ["consigna.md", "enunciado.md", "CONSIGNA.md"].iter().map(|n| self.raiz.join(n)).find(|p| p.is_file())
+        ["consigna.md", "enunciado.md", "CONSIGNA.md"]
+            .iter()
+            .map(|n| self.raiz.join(n))
+            .find(|p| p.is_file())
     }
 
     pub fn relativa(&self, ruta: &Path) -> String {
-        ruta.strip_prefix(&self.raiz).unwrap_or(ruta).to_string_lossy().into_owned()
+        ruta.strip_prefix(&self.raiz)
+            .unwrap_or(ruta)
+            .to_string_lossy()
+            .into_owned()
     }
 
     /// Archivos del proyecto (para abrir con Ctrl+O), sin directorios ocultos ni binarios conocidos.
@@ -205,7 +243,9 @@ impl Proyecto {
         let mut salida = Vec::new();
         let mut pila = vec![self.raiz.clone()];
         while let Some(dir) = pila.pop() {
-            let Ok(entradas) = std::fs::read_dir(&dir) else { continue };
+            let Ok(entradas) = std::fs::read_dir(&dir) else {
+                continue;
+            };
             let mut entradas: Vec<_> = entradas.flatten().collect();
             entradas.sort_by_key(|e| e.file_name());
             for e in entradas {
@@ -230,19 +270,41 @@ impl Proyecto {
 }
 
 pub fn es_editable(ruta: &Path) -> bool {
-    let nombre = ruta.file_name().map(|n| n.to_string_lossy().to_lowercase()).unwrap_or_default();
+    let nombre = ruta
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
     if nombre == "makefile" || nombre == "gnumakefile" {
         return true;
     }
     matches!(
-        ruta.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).as_deref(),
-        Some("c" | "h" | "md" | "txt" | "toml" | "yaml" | "yml" | "in" | "out" | "json" | "py" | "sh" | "gift")
+        ruta.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some(
+            "c" | "h"
+                | "md"
+                | "txt"
+                | "toml"
+                | "yaml"
+                | "yml"
+                | "in"
+                | "out"
+                | "json"
+                | "py"
+                | "sh"
+                | "gift"
+        )
     )
 }
 
 /// Comillas simples para `sh -c`.
 pub fn shell_quote(s: &str) -> String {
-    if !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || "._-/+".contains(c)) {
+    if !s.is_empty()
+        && s.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "._-/+".contains(c))
+    {
         s.to_string()
     } else {
         format!("'{}'", s.replace('\'', "'\\''"))
@@ -258,15 +320,25 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let p = Proyecto::abrir(dir.path());
         let a = p.raiz.join("lista.c");
-        assert_eq!(p.comando_compilar(Some(&a)).unwrap(), "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c");
-        assert_eq!(p.comando_ejecutar(Some(&a)).unwrap(), "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c && ./lista");
+        assert_eq!(
+            p.comando_compilar(Some(&a)).unwrap(),
+            "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c"
+        );
+        assert_eq!(
+            p.comando_ejecutar(Some(&a)).unwrap(),
+            "gcc -std=c11 -Wall -Wextra -g -O0 -o lista lista.c && ./lista"
+        );
         assert!(p.comando_compilar(Some(&p.raiz.join("notas.md"))).is_none());
     }
 
     #[test]
     fn makefile_y_config() {
         let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("Makefile"), "CC=gcc\nall: prog\nrun: all\n\t./prog\ntest:\n\t./t\n").unwrap();
+        std::fs::write(
+            dir.path().join("Makefile"),
+            "CC=gcc\nall: prog\nrun: all\n\t./prog\ntest:\n\t./t\n",
+        )
+        .unwrap();
         let p = Proyecto::abrir(dir.path());
         assert_eq!(p.objetivos_make(), vec!["all", "run", "test"]);
         assert_eq!(p.comando_compilar(None).unwrap(), "make");

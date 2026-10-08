@@ -14,9 +14,14 @@ use jonesy_core::catscan::Traza;
 use jonesy_core::gdb::{EventoGdb, Gdb, Marco, Parada, Variable};
 use jonesy_core::proceso::{self, Salida};
 use jonesy_core::sesion::{ArchivoAbierto, EstadoExamen, Sesion};
-use jonesy_core::{diagnostico, entrega, Buffer, Delta, Diagnostico, Lenguaje, Origen, PosicionDoc, Proyecto, Severidad};
+use jonesy_core::{
+    diagnostico, entrega, Buffer, Delta, Diagnostico, Lenguaje, Origen, PosicionDoc, Proyecto,
+    Severidad,
+};
 use jonesy_git::{Commit, Repo};
-use jonesy_plugins::{ComandoPlugin, Contexto, Pedido as PedidoPlugin, Registro, Respuesta, Servicio, Supervisor};
+use jonesy_plugins::{
+    ComandoPlugin, Contexto, Pedido as PedidoPlugin, Registro, Respuesta, Servicio, Supervisor,
+};
 use jonesy_telemetry::{Telemetria, TelemetryEvent};
 use jonesy_terminal::{bytes_de_tecla, Deck, PtyInferior, Tecla};
 use ratatui::crossterm::event::{
@@ -79,7 +84,13 @@ pub enum Pestana {
 }
 
 impl Pestana {
-    pub const TODAS: [Pestana; 5] = [Pestana::Problemas, Pestana::Salida, Pestana::Terminal, Pestana::Ejecucion, Pestana::Depurador];
+    pub const TODAS: [Pestana; 5] = [
+        Pestana::Problemas,
+        Pestana::Salida,
+        Pestana::Terminal,
+        Pestana::Ejecucion,
+        Pestana::Depurador,
+    ];
 
     pub fn titulo(self) -> &'static str {
         match self {
@@ -121,14 +132,39 @@ pub enum Confirmacion {
 }
 
 pub enum Modal {
-    Paleta { filtro: String, sel: usize, opciones: Vec<OpcionPaleta> },
-    Abrir { filtro: String, sel: usize, archivos: Vec<String> },
-    Buscar { texto: String },
-    IrALinea { texto: String },
-    Confirmar { titulo: String, mensaje: String, que: Confirmacion },
-    Commit { mensaje: String },
-    Visor { titulo: String, lineas: Vec<Line<'static>>, desplazamiento: usize },
-    Menu { indice: usize, sel: usize },
+    Paleta {
+        filtro: String,
+        sel: usize,
+        opciones: Vec<OpcionPaleta>,
+    },
+    Abrir {
+        filtro: String,
+        sel: usize,
+        archivos: Vec<String>,
+    },
+    Buscar {
+        texto: String,
+    },
+    IrALinea {
+        texto: String,
+    },
+    Confirmar {
+        titulo: String,
+        mensaje: String,
+        que: Confirmacion,
+    },
+    Commit {
+        mensaje: String,
+    },
+    Visor {
+        titulo: String,
+        lineas: Vec<Line<'static>>,
+        desplazamiento: usize,
+    },
+    Menu {
+        indice: usize,
+        sel: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,7 +202,13 @@ pub struct BufferAbierto {
 
 impl BufferAbierto {
     fn nuevo(buf: Buffer) -> BufferAbierto {
-        BufferAbierto { buf, cache: Default::default(), preview: None, preview_desplazamiento: 0, ultimo_cambio: Instant::now() }
+        BufferAbierto {
+            buf,
+            cache: Default::default(),
+            preview: None,
+            preview_desplazamiento: 0,
+            ultimo_cambio: Instant::now(),
+        }
     }
 }
 
@@ -313,7 +355,11 @@ impl App {
     pub fn nueva(op: Opciones, tx: Sender<Aviso>) -> App {
         let proyecto = Proyecto::abrir(&op.raiz);
         let ascii = op.ascii || proyecto.config.interfaz.ascii || !tema::locale_utf8();
-        let sim = if ascii { Simbolos::ascii() } else { Simbolos::unicode() };
+        let sim = if ascii {
+            Simbolos::ascii()
+        } else {
+            Simbolos::unicode()
+        };
         let dir_estado = proyecto.dir_estado();
         let examen = op.examen.then(|| {
             let estado = EstadoExamen::cargar(&dir_estado).unwrap_or_else(|| EstadoExamen {
@@ -323,7 +369,12 @@ impl App {
             });
             let _ = std::fs::create_dir_all(&dir_estado);
             let _ = estado.guardar(&dir_estado);
-            EstadoExamenUi { estado, avisos_dados: BTreeSet::new(), ultimo_autoguardado: Instant::now(), entregando: false }
+            EstadoExamenUi {
+                estado,
+                avisos_dados: BTreeSet::new(),
+                ultimo_autoguardado: Instant::now(),
+                entregando: false,
+            }
         });
         let entregado = examen.as_ref().is_some_and(|e| e.estado.entregado);
         let telemetria = if (op.examen || op.telemetria) && !entregado {
@@ -333,10 +384,16 @@ impl App {
             None
         };
         if let Some(t) = &telemetria {
-            t.registrar(TelemetryEvent::SessionStart { user: jonesy_core::usuario(), exam_mode: op.examen });
+            t.registrar(TelemetryEvent::SessionStart {
+                user: jonesy_core::usuario(),
+                exam_mode: op.examen,
+            });
         }
         let permitidos = proyecto.config.examen.plugins_permitidos.clone();
-        let sup = Supervisor::nuevo(&dir_estado.join("plugins"), op.examen.then_some(permitidos.as_slice()));
+        let sup = Supervisor::nuevo(
+            &dir_estado.join("plugins"),
+            op.examen.then_some(permitidos.as_slice()),
+        );
         let rechazados = sup.rechazados.len();
         let plugins = sup.hay_plugins().then(|| {
             let tx = tx.clone();
@@ -347,7 +404,12 @@ impl App {
         let repo = Repo::abrir(&proyecto.raiz);
         let consigna = proyecto.consigna().and_then(|ruta| {
             let fuente = std::fs::read_to_string(&ruta).ok()?;
-            Some(Consigna { ruta, fuente, doc: None, desplazamiento: 0 })
+            Some(Consigna {
+                ruta,
+                fuente,
+                doc: None,
+                desplazamiento: 0,
+            })
         });
         let mut app = App {
             sim,
@@ -415,14 +477,25 @@ impl App {
         if let Some(e) = app.proyecto.error_config.clone() {
             app.avisar(e, Nivel::Error);
         } else if entregado {
-            app.avisar("El examen ya fue entregado: los archivos quedan de solo lectura.", Nivel::Aviso);
+            app.avisar(
+                "El examen ya fue entregado: los archivos quedan de solo lectura.",
+                Nivel::Aviso,
+            );
             for b in &mut app.buffers {
                 b.buf.solo_lectura = true;
             }
         } else if rechazados > 0 {
-            app.avisar(format!("Modo examen: {rechazados} plugin(s) sin firma de la cátedra no se cargaron."), Nivel::Aviso);
+            app.avisar(
+                format!(
+                    "Modo examen: {rechazados} plugin(s) sin firma de la cátedra no se cargaron."
+                ),
+                Nivel::Aviso,
+            );
         } else if app.examen.is_some() {
-            app.avisar("Modo examen: la sesión se registra y se guarda automáticamente.", Nivel::Info);
+            app.avisar(
+                "Modo examen: la sesión se registra y se guarda automáticamente.",
+                Nivel::Info,
+            );
         }
         app
     }
@@ -448,11 +521,16 @@ impl App {
             self.vista = Vista::de_nombre(&s.vista_compacta);
             self.preview_markdown = s.preview_markdown;
             for (rel, linea) in s.breakpoints {
-                self.breakpoints.insert((self.proyecto.raiz.join(rel), linea));
+                self.breakpoints
+                    .insert((self.proyecto.raiz.join(rel), linea));
             }
         }
         for a in archivos {
-            let ruta = if a.is_absolute() { a.clone() } else { std::env::current_dir().unwrap_or_default().join(a) };
+            let ruta = if a.is_absolute() {
+                a.clone()
+            } else {
+                std::env::current_dir().unwrap_or_default().join(a)
+            };
             if let Some(i) = self.abrir_archivo(&ruta, true) {
                 self.activo = i;
             }
@@ -464,13 +542,29 @@ impl App {
             let elegido = [raiz.join("main.c"), raiz.join("src/main.c")]
                 .into_iter()
                 .find(|p| p.is_file())
-                .or_else(|| candidatos.iter().find(|p| p.file_name().is_some_and(|n| n == "main.c")).cloned())
-                .or_else(|| candidatos.iter().find(|p| p.extension().is_some_and(|e| e == "c")).cloned())
-                .or_else(|| candidatos.iter().find(|p| Some(*p) != consigna.as_ref()).cloned());
+                .or_else(|| {
+                    candidatos
+                        .iter()
+                        .find(|p| p.file_name().is_some_and(|n| n == "main.c"))
+                        .cloned()
+                })
+                .or_else(|| {
+                    candidatos
+                        .iter()
+                        .find(|p| p.extension().is_some_and(|e| e == "c"))
+                        .cloned()
+                })
+                .or_else(|| {
+                    candidatos
+                        .iter()
+                        .find(|p| Some(*p) != consigna.as_ref())
+                        .cloned()
+                });
             if let Some(p) = elegido {
                 self.abrir_archivo(&p, false);
             } else {
-                self.buffers.push(BufferAbierto::nuevo(Buffer::desde_texto("")));
+                self.buffers
+                    .push(BufferAbierto::nuevo(Buffer::desde_texto("")));
             }
         }
     }
@@ -486,7 +580,11 @@ impl App {
                 .iter()
                 .filter_map(|b| {
                     let ruta = b.buf.ruta.as_ref()?;
-                    Some(ArchivoAbierto { ruta: self.proyecto.relativa(ruta), cursor: b.buf.cursor, desplazamiento: b.buf.desplazamiento })
+                    Some(ArchivoAbierto {
+                        ruta: self.proyecto.relativa(ruta),
+                        cursor: b.buf.cursor,
+                        desplazamiento: b.buf.desplazamiento,
+                    })
                 })
                 .collect(),
             activo: self.activo,
@@ -494,7 +592,11 @@ impl App {
             quickdoc_posicion: Some(self.quickdoc_posicion),
             vista_compacta: self.vista.nombre().into(),
             preview_markdown: self.preview_markdown,
-            breakpoints: self.breakpoints.iter().map(|(p, l)| (self.proyecto.relativa(p), *l)).collect(),
+            breakpoints: self
+                .breakpoints
+                .iter()
+                .map(|(p, l)| (self.proyecto.relativa(p), *l))
+                .collect(),
         };
         let _ = s.guardar(&dir);
     }
@@ -561,7 +663,9 @@ impl App {
             .chain(self.diag_ripley.values().flatten())
             .chain(self.diag_plugins.values().flatten())
             .collect();
-        v.sort_by(|a, b| (&a.archivo, a.linea, a.severidad).cmp(&(&b.archivo, b.linea, b.severidad)));
+        v.sort_by(|a, b| {
+            (&a.archivo, a.linea, a.severidad).cmp(&(&b.archivo, b.linea, b.severidad))
+        });
         v
     }
 
@@ -569,7 +673,9 @@ impl App {
     pub fn diagnosticos_linea(&self, ruta: &Path, linea: usize) -> Vec<&Diagnostico> {
         self.diagnosticos()
             .into_iter()
-            .filter(|d| d.linea == linea + 1 && d.archivo.as_deref().is_some_and(|a| mismo_archivo(a, ruta)))
+            .filter(|d| {
+                d.linea == linea + 1 && d.archivo.as_deref().is_some_and(|a| mismo_archivo(a, ruta))
+            })
             .collect()
     }
 
@@ -578,7 +684,11 @@ impl App {
     /// Abre (o activa) un archivo; devuelve su índice.
     pub fn abrir_archivo(&mut self, ruta: &Path, activar: bool) -> Option<usize> {
         let ruta = ruta.canonicalize().unwrap_or_else(|_| ruta.to_path_buf());
-        if let Some(i) = self.buffers.iter().position(|b| b.buf.ruta.as_deref() == Some(&ruta)) {
+        if let Some(i) = self
+            .buffers
+            .iter()
+            .position(|b| b.buf.ruta.as_deref() == Some(&ruta))
+        {
             if activar {
                 self.cambiar_buffer(i);
             }
@@ -588,7 +698,10 @@ impl App {
             match Buffer::abrir(&ruta) {
                 Ok(b) => b,
                 Err(e) => {
-                    self.avisar(format!("No se pudo abrir {}: {e}", ruta.display()), Nivel::Error);
+                    self.avisar(
+                        format!("No se pudo abrir {}: {e}", ruta.display()),
+                        Nivel::Error,
+                    );
                     return None;
                 }
             }
@@ -599,15 +712,23 @@ impl App {
             b
         };
         if self.examen.is_some() {
-            let protegido = self.consigna.as_ref().is_some_and(|c| mismo_archivo(&c.ruta, &ruta))
-                || ruta.file_name().is_some_and(|n| n == jonesy_core::proyecto::ARCHIVO_CONFIG)
+            let protegido = self
+                .consigna
+                .as_ref()
+                .is_some_and(|c| mismo_archivo(&c.ruta, &ruta))
+                || ruta
+                    .file_name()
+                    .is_some_and(|n| n == jonesy_core::proyecto::ARCHIVO_CONFIG)
                 || ruta.starts_with(self.proyecto.dir_estado());
             if protegido || self.examen_entregado() {
                 buf.solo_lectura = true;
             }
         }
         // Un buffer vacío sin ruta (el inicial) se reemplaza.
-        if self.buffers.len() == 1 && self.buffers[0].buf.ruta.is_none() && !self.buffers[0].buf.modificado() {
+        if self.buffers.len() == 1
+            && self.buffers[0].buf.ruta.is_none()
+            && !self.buffers[0].buf.modificado()
+        {
             self.buffers.clear();
         }
         self.buffers.push(BufferAbierto::nuevo(buf));
@@ -621,7 +742,10 @@ impl App {
     fn cambiar_buffer(&mut self, i: usize) {
         if i < self.buffers.len() && i != self.activo {
             self.activo = i;
-            self.tel(TelemetryEvent::FocusChange { panel: format!("buffer:{}", self.id_buffer(i)), focused: true });
+            self.tel(TelemetryEvent::FocusChange {
+                panel: format!("buffer:{}", self.id_buffer(i)),
+                focused: true,
+            });
         }
         self.foco = Foco::Editor;
         if self.modo() == Modo::Compacto {
@@ -639,7 +763,12 @@ impl App {
         let b = self.buf_mut();
         if let Some(d) = f(&mut b.buf) {
             b.ultimo_cambio = Instant::now();
-            self.tel(TelemetryEvent::TextDelta { buffer_id: id, offset: d.offset, inserted: d.insertado, deleted_len: d.borrados });
+            self.tel(TelemetryEvent::TextDelta {
+                buffer_id: id,
+                offset: d.offset,
+                inserted: d.insertado,
+                deleted_len: d.borrados,
+            });
         }
     }
 
@@ -647,7 +776,10 @@ impl App {
         let id = self.id_buffer(i);
         let b = &mut self.buffers[i].buf;
         if b.ruta.is_none() {
-            self.avisar("Este buffer no tiene archivo: abrí uno con Ctrl+O.", Nivel::Aviso);
+            self.avisar(
+                "Este buffer no tiene archivo: abrí uno con Ctrl+O.",
+                Nivel::Aviso,
+            );
             return false;
         }
         if b.solo_lectura {
@@ -655,7 +787,10 @@ impl App {
         }
         match b.guardar() {
             Ok(bytes) => {
-                self.tel(TelemetryEvent::BufferSave { buffer_id: id, total_bytes: bytes });
+                self.tel(TelemetryEvent::BufferSave {
+                    buffer_id: id,
+                    total_bytes: bytes,
+                });
                 let ruta = self.buffers[i].buf.ruta.clone().unwrap();
                 self.al_guardar(&ruta, i);
                 true
@@ -670,7 +805,10 @@ impl App {
     fn guardar_todo(&mut self) -> bool {
         let mut ok = true;
         for i in 0..self.buffers.len() {
-            if self.buffers[i].buf.modificado() && self.buffers[i].buf.ruta.is_some() && !self.buffers[i].buf.solo_lectura {
+            if self.buffers[i].buf.modificado()
+                && self.buffers[i].buf.ruta.is_some()
+                && !self.buffers[i].buf.solo_lectura
+            {
                 ok &= self.guardar(i);
             }
         }
@@ -683,7 +821,10 @@ impl App {
         let nativos = self.registro.diagnosticar(ruta, &texto);
         self.diag_plugins.insert(ruta.to_path_buf(), nativos);
         if let Some(p) = &self.plugins {
-            p.pedir(PedidoPlugin::AlGuardar { archivo: ruta.to_path_buf(), texto });
+            p.pedir(PedidoPlugin::AlGuardar {
+                archivo: ruta.to_path_buf(),
+                texto,
+            });
         }
         let es_c = matches!(self.buffers[i].buf.lenguaje, Lenguaje::C);
         if es_c && self.ripley_disponible {
@@ -695,14 +836,26 @@ impl App {
     /// ripley tarda varios segundos (compila y aplica todas las reglas): si ya está
     /// analizando el archivo, se encola una sola repetición en lugar de otra instancia.
     fn lanzar_ripley(&mut self, ruta: &Path) {
-        let en_curso = self.procesos.values().any(|t| matches!(t, Tarea::Ripley { archivo } if archivo == ruta));
+        let en_curso = self
+            .procesos
+            .values()
+            .any(|t| matches!(t, Tarea::Ripley { archivo } if archivo == ruta));
         if en_curso {
             self.ripley_pendiente.insert(ruta.to_path_buf());
             return;
         }
         let rel = self.proyecto.relativa(ruta);
-        let cmd = format!("{} check {} --format json", self.proyecto.config.ripley.comando, jonesy_core::proyecto::shell_quote(&rel));
-        self.lanzar(&cmd, Tarea::Ripley { archivo: ruta.to_path_buf() });
+        let cmd = format!(
+            "{} check {} --format json",
+            self.proyecto.config.ripley.comando,
+            jonesy_core::proyecto::shell_quote(&rel)
+        );
+        self.lanzar(
+            &cmd,
+            Tarea::Ripley {
+                archivo: ruta.to_path_buf(),
+            },
+        );
     }
 
     /// Nombres de las tareas en segundo plano, para la barra de estado.
@@ -727,14 +880,18 @@ impl App {
         if self.buf().buf.modificado() && !forzar {
             self.modal = Some(Modal::Confirmar {
                 titulo: "Cerrar archivo".into(),
-                mensaje: format!("{} tiene cambios sin guardar. ¿Cerrar igual? (s/n)", self.buf().buf.nombre()),
+                mensaje: format!(
+                    "{} tiene cambios sin guardar. ¿Cerrar igual? (s/n)",
+                    self.buf().buf.nombre()
+                ),
                 que: Confirmacion::CerrarBuffer,
             });
             return;
         }
         self.buffers.remove(self.activo);
         if self.buffers.is_empty() {
-            self.buffers.push(BufferAbierto::nuevo(Buffer::desde_texto("")));
+            self.buffers
+                .push(BufferAbierto::nuevo(Buffer::desde_texto("")));
         }
         self.activo = self.activo.min(self.buffers.len() - 1);
     }
@@ -780,14 +937,27 @@ impl App {
             return;
         };
         let r = match a {
-            Accion::GitStageTodo => repo.agregar_todo().map(|_| "Todo agregado al stage.".to_string()),
-            Accion::GitUnstageTodo => repo.quitar_todo_del_stage().map(|_| "Stage vaciado.".to_string()),
+            Accion::GitStageTodo => repo
+                .agregar_todo()
+                .map(|_| "Todo agregado al stage.".to_string()),
+            Accion::GitUnstageTodo => repo
+                .quitar_todo_del_stage()
+                .map(|_| "Stage vaciado.".to_string()),
             Accion::GitCommit => {
-                if self.git_estado.as_ref().is_some_and(|e| e.cantidad_en_stage() == 0) {
-                    self.avisar("No hay cambios en el stage (Espacio o 'a' para agregar).", Nivel::Aviso);
+                if self
+                    .git_estado
+                    .as_ref()
+                    .is_some_and(|e| e.cantidad_en_stage() == 0)
+                {
+                    self.avisar(
+                        "No hay cambios en el stage (Espacio o 'a' para agregar).",
+                        Nivel::Aviso,
+                    );
                     return;
                 }
-                self.modal = Some(Modal::Commit { mensaje: String::new() });
+                self.modal = Some(Modal::Commit {
+                    mensaje: String::new(),
+                });
                 return;
             }
             Accion::GitLog => {
@@ -816,9 +986,17 @@ impl App {
     }
 
     fn git_alternar_stage(&mut self) {
-        let (Some(repo), Some(e)) = (self.repo.clone(), self.git_estado.clone()) else { return };
-        let Some(entrada) = e.entradas.get(self.git.sel) else { return };
-        let r = if entrada.en_stage() && !entrada.sin_stage() { repo.quitar_del_stage(&entrada.ruta) } else { repo.agregar(&entrada.ruta) };
+        let (Some(repo), Some(e)) = (self.repo.clone(), self.git_estado.clone()) else {
+            return;
+        };
+        let Some(entrada) = e.entradas.get(self.git.sel) else {
+            return;
+        };
+        let r = if entrada.en_stage() && !entrada.sin_stage() {
+            repo.quitar_del_stage(&entrada.ruta)
+        } else {
+            repo.agregar(&entrada.ruta)
+        };
         if let Err(e) = r {
             self.avisar(e.to_string(), Nivel::Error);
         }
@@ -826,12 +1004,23 @@ impl App {
     }
 
     fn git_mostrar(&mut self) {
-        let Some(repo) = self.repo.clone() else { return };
+        let Some(repo) = self.repo.clone() else {
+            return;
+        };
         let (titulo, texto) = if let Some(log) = &self.git.log {
-            let Some(c) = log.get(self.git.sel_log) else { return };
+            let Some(c) = log.get(self.git.sel_log) else {
+                return;
+            };
             (format!("git show {}", c.hash), repo.mostrar(&c.hash))
         } else {
-            let Some(e) = self.git_estado.as_ref().and_then(|e| e.entradas.get(self.git.sel)).cloned() else { return };
+            let Some(e) = self
+                .git_estado
+                .as_ref()
+                .and_then(|e| e.entradas.get(self.git.sel))
+                .cloned()
+            else {
+                return;
+            };
             if e.tipo == jonesy_git::TipoEntrada::SinSeguimiento {
                 let ruta = repo.dir.join(&e.ruta);
                 if ruta.is_file() {
@@ -843,26 +1032,47 @@ impl App {
             (format!("diff {}", e.ruta), repo.diff(&e.ruta, en_stage))
         };
         match texto {
-            Ok(t) => self.modal = Some(Modal::Visor { titulo, lineas: lineas_diff(&t), desplazamiento: 0 }),
+            Ok(t) => {
+                self.modal = Some(Modal::Visor {
+                    titulo,
+                    lineas: lineas_diff(&t),
+                    desplazamiento: 0,
+                })
+            }
             Err(e) => self.avisar(e.to_string(), Nivel::Error),
         }
     }
 
     fn git_commit(&mut self, mensaje: &str) {
-        let Some(repo) = self.repo.clone() else { return };
+        let Some(repo) = self.repo.clone() else {
+            return;
+        };
         if mensaje.trim().is_empty() {
             self.avisar("El mensaje de commit está vacío.", Nivel::Aviso);
             return;
         }
         match repo.commit(mensaje) {
             Ok(salida) => {
-                self.tel(TelemetryEvent::CommandExec { command: "git commit".into(), exit_code: Some(0) });
-                self.avisar(salida.lines().next().unwrap_or("Commit creado.").to_string(), Nivel::Ok);
+                self.tel(TelemetryEvent::CommandExec {
+                    command: "git commit".into(),
+                    exit_code: Some(0),
+                });
+                self.avisar(
+                    salida
+                        .lines()
+                        .next()
+                        .unwrap_or("Commit creado.")
+                        .to_string(),
+                    Nivel::Ok,
+                );
                 self.modal = None;
                 self.git.log = None;
             }
             Err(e) => {
-                self.tel(TelemetryEvent::CommandExec { command: "git commit".into(), exit_code: Some(1) });
+                self.tel(TelemetryEvent::CommandExec {
+                    command: "git commit".into(),
+                    exit_code: Some(1),
+                });
                 self.avisar(e.to_string(), Nivel::Error);
             }
         }
@@ -876,19 +1086,28 @@ impl App {
     }
 
     pub fn compilar(&mut self, luego: Luego) {
-        if self.procesos.values().any(|t| matches!(t, Tarea::Compilar { .. })) {
+        if self
+            .procesos
+            .values()
+            .any(|t| matches!(t, Tarea::Compilar { .. }))
+        {
             self.avisar("Ya hay una compilación en curso.", Nivel::Aviso);
             return;
         }
         self.guardar_todo();
         let activo = self.activo_ruta();
-        let comando = if luego == Luego::Depurar && !self.proyecto.config.depurar.compilar.trim().is_empty() {
+        let comando = if luego == Luego::Depurar
+            && !self.proyecto.config.depurar.compilar.trim().is_empty()
+        {
             Some(self.proyecto.config.depurar.compilar.clone())
         } else {
             self.proyecto.comando_compilar(activo.as_deref())
         };
         let Some(comando) = comando else {
-            self.avisar("No hay qué compilar: abrí un .c o configurá [compilar] en .jonesy.toml.", Nivel::Aviso);
+            self.avisar(
+                "No hay qué compilar: abrí un .c o configurá [compilar] en .jonesy.toml.",
+                Nivel::Aviso,
+            );
             return;
         };
         self.salida = vec![(format!("$ {comando}"), false)];
@@ -904,16 +1123,26 @@ impl App {
     fn ejecutar_en_deck(&mut self) {
         let activo = self.activo_ruta();
         let Some(cmd) = self.proyecto.comando_ejecutar(activo.as_deref()) else {
-            self.avisar("No hay qué ejecutar: abrí un .c o configurá [ejecutar] en .jonesy.toml.", Nivel::Aviso);
+            self.avisar(
+                "No hay qué ejecutar: abrí un .c o configurá [ejecutar] en .jonesy.toml.",
+                Nivel::Aviso,
+            );
             return;
         };
         self.guardar_todo();
         let envoltorio = format!("{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n");
         let (filas, cols) = self.tam_panel_inferior();
         let tx = self.tx.clone();
-        match Deck::iniciar(Some("sh"), &["-c".into(), envoltorio], &self.proyecto.raiz, filas, cols, move || {
-            let _ = tx.send(Aviso::Despertar);
-        }) {
+        match Deck::iniciar(
+            Some("sh"),
+            &["-c".into(), envoltorio],
+            &self.proyecto.raiz,
+            filas,
+            cols,
+            move || {
+                let _ = tx.send(Aviso::Despertar);
+            },
+        ) {
             Ok(mut d) => {
                 d.titulo = cmd.clone();
                 self.ejecucion = Some(d);
@@ -923,7 +1152,10 @@ impl App {
                 if self.modo() == Modo::Compacto {
                     self.vista = Vista::Terminal;
                 }
-                self.tel(TelemetryEvent::CommandExec { command: cmd, exit_code: None });
+                self.tel(TelemetryEvent::CommandExec {
+                    command: cmd,
+                    exit_code: None,
+                });
             }
             Err(e) => self.avisar(format!("No se pudo crear la terminal: {e}"), Nivel::Error),
         }
@@ -932,19 +1164,30 @@ impl App {
     pub fn tam_panel_inferior(&self) -> (u16, u16) {
         match self.areas.inferior {
             Some(r) => (r.height.saturating_sub(2).max(4), r.width.max(20)),
-            None => (self.alto_inferior.saturating_sub(2).max(4), self.tam.0.max(20)),
+            None => (
+                self.alto_inferior.saturating_sub(2).max(4),
+                self.tam.0.max(20),
+            ),
         }
     }
 
     fn abrir_terminal(&mut self) {
         let vivo = self.terminal.as_mut().is_some_and(|d| d.vivo());
         if !vivo {
-            let shell = Some(self.proyecto.config.interfaz.shell.clone()).filter(|s| !s.trim().is_empty());
+            let shell =
+                Some(self.proyecto.config.interfaz.shell.clone()).filter(|s| !s.trim().is_empty());
             let (filas, cols) = self.tam_panel_inferior();
             let tx = self.tx.clone();
-            match Deck::iniciar(shell.as_deref(), &[], &self.proyecto.raiz, filas, cols, move || {
-                let _ = tx.send(Aviso::Despertar);
-            }) {
+            match Deck::iniciar(
+                shell.as_deref(),
+                &[],
+                &self.proyecto.raiz,
+                filas,
+                cols,
+                move || {
+                    let _ = tx.send(Aviso::Despertar);
+                },
+            ) {
                 Ok(d) => self.terminal = Some(d),
                 Err(e) => {
                     self.avisar(format!("No se pudo abrir la terminal: {e}"), Nivel::Error);
@@ -962,9 +1205,15 @@ impl App {
 
     fn cambiar_foco(&mut self, f: Foco) {
         if self.foco != f {
-            self.tel(TelemetryEvent::FocusChange { panel: self.foco.nombre().into(), focused: false });
+            self.tel(TelemetryEvent::FocusChange {
+                panel: self.foco.nombre().into(),
+                focused: false,
+            });
             self.foco = f;
-            self.tel(TelemetryEvent::FocusChange { panel: f.nombre().into(), focused: true });
+            self.tel(TelemetryEvent::FocusChange {
+                panel: f.nombre().into(),
+                focused: true,
+            });
         }
     }
 
@@ -993,7 +1242,10 @@ impl App {
 
     fn iniciar_depuracion(&mut self) {
         let Some(programa) = self.programa_a_depurar() else {
-            self.avisar("No encontré el ejecutable: configurá [depurar] programa en .jonesy.toml.", Nivel::Error);
+            self.avisar(
+                "No encontré el ejecutable: configurá [depurar] programa en .jonesy.toml.",
+                Nivel::Error,
+            );
             return;
         };
         let (filas, cols) = self.tam_panel_inferior();
@@ -1004,15 +1256,24 @@ impl App {
         }) {
             Ok(p) => p,
             Err(e) => {
-                self.avisar(format!("No se pudo crear el PTY del programa: {e}"), Nivel::Error);
+                self.avisar(
+                    format!("No se pudo crear el PTY del programa: {e}"),
+                    Nivel::Error,
+                );
                 return;
             }
         };
         let tx = self.tx.clone();
         let args = self.proyecto.config.depurar.argumentos.clone();
-        let mut gdb = match Gdb::lanzar(&programa, &args, &self.proyecto.raiz, Some(pty.ruta()), move || {
-            let _ = tx.send(Aviso::Despertar);
-        }) {
+        let mut gdb = match Gdb::lanzar(
+            &programa,
+            &args,
+            &self.proyecto.raiz,
+            Some(pty.ruta()),
+            move || {
+                let _ = tx.send(Aviso::Despertar);
+            },
+        ) {
             Ok(g) => g,
             Err(e) => {
                 self.avisar(format!("No se pudo lanzar gdb: {e}"), Nivel::Error);
@@ -1026,7 +1287,10 @@ impl App {
             let _ = gdb.poner_breakpoint(archivo, *linea);
         }
         let _ = gdb.correr();
-        self.tel(TelemetryEvent::CommandExec { command: format!("gdb {}", self.proyecto.relativa(&programa)), exit_code: None });
+        self.tel(TelemetryEvent::CommandExec {
+            command: format!("gdb {}", self.proyecto.relativa(&programa)),
+            exit_code: None,
+        });
         self.depuracion = Some(Depuracion {
             gdb,
             pty,
@@ -1046,13 +1310,18 @@ impl App {
         if self.lateral.is_none() || self.lateral == Some(Lateral::Reglas) {
             self.lateral = Some(Lateral::Variables);
         }
-        self.avisar("Depurando: F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener", Nivel::Info);
+        self.avisar(
+            "Depurando: F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener",
+            Nivel::Info,
+        );
         self.lanzar_memtrace();
     }
 
     /// mem-trace en segundo plano para cat-scan (sólo programas de un archivo).
     fn lanzar_memtrace(&mut self) {
-        let Some(activo) = self.activo_ruta() else { return };
+        let Some(activo) = self.activo_ruta() else {
+            return;
+        };
         if activo.extension().is_none_or(|e| e != "c") || self.proyecto.makefile().is_some() {
             return;
         }
@@ -1066,7 +1335,12 @@ impl App {
             q(&self.proyecto.relativa(&dir)),
             q(&self.proyecto.relativa(&dir.join("reporte.html")))
         );
-        self.lanzar(&cmd, Tarea::MemTrace { traza: dir.join("trace.json") });
+        self.lanzar(
+            &cmd,
+            Tarea::MemTrace {
+                traza: dir.join("trace.json"),
+            },
+        );
     }
 
     fn detener_depuracion(&mut self) {
@@ -1101,7 +1375,9 @@ impl App {
     }
 
     fn eventos_gdb(&mut self) {
-        let Some(d) = &mut self.depuracion else { return };
+        let Some(d) = &mut self.depuracion else {
+            return;
+        };
         let eventos = d.gdb.recibir();
         let mut ir: Option<(PathBuf, usize)> = None;
         let mut fin = false;
@@ -1110,9 +1386,18 @@ impl App {
             match e {
                 EventoGdb::Detenido(p) => {
                     let marco = match &p {
-                        Parada::Breakpoint(m) | Parada::Paso(m) | Parada::Otra(_, m) => Some(m.clone()),
-                        Parada::Senal { nombre, significado, marco } => {
-                            aviso = Some((format!("El programa recibió {nombre} ({significado})."), Nivel::Error));
+                        Parada::Breakpoint(m) | Parada::Paso(m) | Parada::Otra(_, m) => {
+                            Some(m.clone())
+                        }
+                        Parada::Senal {
+                            nombre,
+                            significado,
+                            marco,
+                        } => {
+                            aviso = Some((
+                                format!("El programa recibió {nombre} ({significado})."),
+                                Nivel::Error,
+                            ));
                             d.estado = format!("señal {nombre}");
                             Some(marco.clone())
                         }
@@ -1121,7 +1406,10 @@ impl App {
                                 Some(c) => format!("terminó (código {c})"),
                                 None => "terminó por una señal".into(),
                             };
-                            aviso = Some((format!("El programa {}. F5 lo vuelve a correr.", d.estado), Nivel::Info));
+                            aviso = Some((
+                                format!("El programa {}. F5 lo vuelve a correr.", d.estado),
+                                Nivel::Info,
+                            ));
                             d.ubicacion = None;
                             d.marcos.clear();
                             d.variables.clear();
@@ -1144,7 +1432,12 @@ impl App {
                     d.marcos = m;
                     if let (Some(t), Some(m0)) = (&d.traza, d.marcos.first()) {
                         if let Some(l) = m0.linea {
-                            d.paso_traza = t.alinear(&m0.funcion, l, d.marcos.len(), d.paso_traza.unwrap_or(0));
+                            d.paso_traza = t.alinear(
+                                &m0.funcion,
+                                l,
+                                d.marcos.len(),
+                                d.paso_traza.unwrap_or(0),
+                            );
                         }
                     }
                 }
@@ -1178,14 +1471,20 @@ impl App {
     }
 
     fn alternar_breakpoint(&mut self, linea: usize) {
-        let Some(ruta) = self.activo_ruta() else { return };
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
         let clave = (ruta.clone(), linea + 1);
         let poner = !self.breakpoints.remove(&clave);
         if poner {
             self.breakpoints.insert(clave);
         }
         if let Some(d) = &mut self.depuracion {
-            let _ = if poner { d.gdb.poner_breakpoint(&ruta, linea + 1) } else { d.gdb.quitar_breakpoint(&ruta, linea + 1) };
+            let _ = if poner {
+                d.gdb.poner_breakpoint(&ruta, linea + 1)
+            } else {
+                d.gdb.quitar_breakpoint(&ruta, linea + 1)
+            };
         }
     }
 
@@ -1193,15 +1492,24 @@ impl App {
 
     fn pedir_entrega(&mut self) {
         let Some(e) = &self.examen else {
-            self.avisar("La entrega sólo está disponible en modo examen (jonesy --exam).", Nivel::Aviso);
+            self.avisar(
+                "La entrega sólo está disponible en modo examen (jonesy --exam).",
+                Nivel::Aviso,
+            );
             return;
         };
         if e.estado.entregado {
-            let msg = format!("Ya entregado: {}", e.estado.sha256.clone().unwrap_or_default());
+            let msg = format!(
+                "Ya entregado: {}",
+                e.estado.sha256.clone().unwrap_or_default()
+            );
             self.avisar(msg, Nivel::Info);
             return;
         }
-        let verificar = self.proyecto.comando_verificar().unwrap_or_else(|| "(sin verificación configurada)".into());
+        let verificar = self
+            .proyecto
+            .comando_verificar()
+            .unwrap_or_else(|| "(sin verificación configurada)".into());
         self.modal = Some(Modal::Confirmar {
             titulo: "Entregar examen".into(),
             mensaje: format!(
@@ -1231,16 +1539,32 @@ impl App {
 
     fn finalizar_entrega(&mut self, verificacion: Option<entrega::Verificacion>) {
         if let Some(v) = &verificacion {
-            self.tel(TelemetryEvent::CommandExec { command: v.comando.clone(), exit_code: v.codigo });
+            self.tel(TelemetryEvent::CommandExec {
+                command: v.comando.clone(),
+                exit_code: v.codigo,
+            });
         }
-        self.tel(TelemetryEvent::SessionEnd { reason: "entrega".into() });
+        self.tel(TelemetryEvent::SessionEnd {
+            reason: "entrega".into(),
+        });
         let log = self.proyecto.dir_estado().join("telemetry.log");
         if let Some(t) = self.telemetria.take() {
             t.cerrar();
         }
         let sello = jonesy_telemetry::verificar(&log).ok();
-        let telemetria = sello.as_ref().map(|v| (log.as_path(), Some(v.ultimo_hash.clone()), v.registros as usize));
-        match entrega::empaquetar(&self.proyecto, telemetria, verificacion.clone(), jonesy_core::ahora_unix()) {
+        let telemetria = sello.as_ref().map(|v| {
+            (
+                log.as_path(),
+                Some(v.ultimo_hash.clone()),
+                v.registros as usize,
+            )
+        });
+        match entrega::empaquetar(
+            &self.proyecto,
+            telemetria,
+            verificacion.clone(),
+            jonesy_core::ahora_unix(),
+        ) {
             Ok(p) => {
                 let rel = self.proyecto.relativa(&p.ruta);
                 if let Some(e) = &mut self.examen {
@@ -1255,7 +1579,10 @@ impl App {
                 }
                 let resultado = match &verificacion {
                     Some(v) if v.codigo == Some(0) => "✓ la verificación pasó".to_string(),
-                    Some(v) => format!("✗ la verificación falló (código {})", v.codigo.map(|c| c.to_string()).unwrap_or("?".into())),
+                    Some(v) => format!(
+                        "✗ la verificación falló (código {})",
+                        v.codigo.map(|c| c.to_string()).unwrap_or("?".into())
+                    ),
                     None => "sin verificación configurada".to_string(),
                 };
                 let texto = format!(
@@ -1297,7 +1624,10 @@ impl App {
                 }
             }
             if r <= 0 && e.avisos_dados.insert(0) {
-                aviso = Some(("Se terminó el tiempo del examen: entregá con F12.".into(), Nivel::Error));
+                aviso = Some((
+                    "Se terminó el tiempo del examen: entregá con F12.".into(),
+                    Nivel::Error,
+                ));
             }
         }
         if autoguardar {
@@ -1319,11 +1649,15 @@ impl App {
             let dir = self.proyecto.dir_estado();
             for b in &self.buffers {
                 if let (true, Some(ruta)) = (b.buf.modificado(), &b.buf.ruta) {
-                    let destino = jonesy_core::sesion::ruta_recuperacion(&dir, &self.proyecto.relativa(ruta));
+                    let destino =
+                        jonesy_core::sesion::ruta_recuperacion(&dir, &self.proyecto.relativa(ruta));
                     if let Some(p) = destino.parent() {
                         let _ = std::fs::create_dir_all(p);
                     }
-                    let _ = jonesy_core::buffer::guardar_atomico(&destino, b.buf.contenido().as_bytes());
+                    let _ = jonesy_core::buffer::guardar_atomico(
+                        &destino,
+                        b.buf.contenido().as_bytes(),
+                    );
                 }
             }
         }
@@ -1332,19 +1666,29 @@ impl App {
             d.gdb.terminar();
         }
         if let Some(t) = self.telemetria.take() {
-            t.registrar(TelemetryEvent::SessionEnd { reason: razon.into() });
+            t.registrar(TelemetryEvent::SessionEnd {
+                reason: razon.into(),
+            });
             t.cerrar();
         }
     }
 
     fn pedir_salida(&mut self) {
-        let sin_guardar: Vec<String> = self.buffers.iter().filter(|b| b.buf.modificado()).map(|b| b.buf.nombre()).collect();
+        let sin_guardar: Vec<String> = self
+            .buffers
+            .iter()
+            .filter(|b| b.buf.modificado())
+            .map(|b| b.buf.nombre())
+            .collect();
         if sin_guardar.is_empty() || self.examen.is_some() {
             self.salir = true;
         } else {
             self.modal = Some(Modal::Confirmar {
                 titulo: "Salir".into(),
-                mensaje: format!("Hay cambios sin guardar en {}. ¿Salir sin guardar? (s/n)", sin_guardar.join(", ")),
+                mensaje: format!(
+                    "Hay cambios sin guardar en {}. ¿Salir sin guardar? (s/n)",
+                    sin_guardar.join(", ")
+                ),
                 que: Confirmacion::Salir,
             });
         }
@@ -1355,12 +1699,17 @@ impl App {
     fn al_proceso(&mut self, s: Salida) {
         match s {
             Salida::Linea { id, texto, error } => {
-                if matches!(self.procesos.get(&id), Some(Tarea::Compilar { .. } | Tarea::Verificar)) {
+                if matches!(
+                    self.procesos.get(&id),
+                    Some(Tarea::Compilar { .. } | Tarea::Verificar)
+                ) {
                     self.salida.push((texto, error));
                 }
             }
             Salida::Fin { id, codigo, salida } => {
-                let Some(t) = self.procesos.remove(&id) else { return };
+                let Some(t) = self.procesos.remove(&id) else {
+                    return;
+                };
                 self.fin_proceso(t, codigo, salida);
             }
         }
@@ -1369,14 +1718,31 @@ impl App {
     fn fin_proceso(&mut self, t: Tarea, codigo: Option<i32>, salida: String) {
         match t {
             Tarea::Compilar { luego } => {
-                let comando = self.salida.first().map(|l| l.0.trim_start_matches("$ ").to_string()).unwrap_or_default();
-                self.tel(TelemetryEvent::CommandExec { command: comando, exit_code: codigo });
+                let comando = self
+                    .salida
+                    .first()
+                    .map(|l| l.0.trim_start_matches("$ ").to_string())
+                    .unwrap_or_default();
+                self.tel(TelemetryEvent::CommandExec {
+                    command: comando,
+                    exit_code: codigo,
+                });
                 self.diag_compilador = diagnostico::parsear_gcc(&salida, &self.proyecto.raiz);
-                let errores = self.diag_compilador.iter().filter(|d| d.severidad == Severidad::Error).count();
+                let errores = self
+                    .diag_compilador
+                    .iter()
+                    .filter(|d| d.severidad == Severidad::Error)
+                    .count();
                 let advertencias = self.diag_compilador.len() - errores;
                 if codigo == Some(0) {
-                    self.salida.push((format!("[compilación correcta, {advertencias} advertencia(s)]"), false));
-                    self.avisar(format!("Compilación correcta ({advertencias} advertencias)."), Nivel::Ok);
+                    self.salida.push((
+                        format!("[compilación correcta, {advertencias} advertencia(s)]"),
+                        false,
+                    ));
+                    self.avisar(
+                        format!("Compilación correcta ({advertencias} advertencias)."),
+                        Nivel::Ok,
+                    );
                     if advertencias > 0 && luego == Luego::Nada {
                         self.pestana = Pestana::Problemas;
                     }
@@ -1386,7 +1752,10 @@ impl App {
                         Luego::Nada => {}
                     }
                 } else {
-                    self.salida.push((format!("[la compilación falló: código {}]", codigo.unwrap_or(-1)), true));
+                    self.salida.push((
+                        format!("[la compilación falló: código {}]", codigo.unwrap_or(-1)),
+                        true,
+                    ));
                     self.avisar(format!("La compilación falló: {errores} error(es). Enter en Problemas salta al error."), Nivel::Error);
                     if !self.diag_compilador.is_empty() {
                         self.pestana = Pestana::Problemas;
@@ -1419,9 +1788,20 @@ impl App {
                 }
             }
             Tarea::Verificar => {
-                let comando = self.salida.first().map(|l| l.0.trim_start_matches("$ ").to_string()).unwrap_or_default();
-                self.salida.push((format!("[verificación terminada: código {}]", codigo.unwrap_or(-1)), codigo != Some(0)));
-                let v = entrega::Verificacion { comando, codigo, salida: entrega::cola(&salida, 40) };
+                let comando = self
+                    .salida
+                    .first()
+                    .map(|l| l.0.trim_start_matches("$ ").to_string())
+                    .unwrap_or_default();
+                self.salida.push((
+                    format!("[verificación terminada: código {}]", codigo.unwrap_or(-1)),
+                    codigo != Some(0),
+                ));
+                let v = entrega::Verificacion {
+                    comando,
+                    codigo,
+                    salida: entrega::cola(&salida, 40),
+                };
                 self.finalizar_entrega(Some(v));
             }
             Tarea::Explicar { codigo: regla } => {
@@ -1429,9 +1809,15 @@ impl App {
                 let lineas = if codigo == Some(0) && !salida.trim().is_empty() {
                     crate::vt::ansi_a_lineas(&salida, ancho)
                 } else {
-                    vec![Line::from(format!("ripley no tiene una explicación para {regla}."))]
+                    vec![Line::from(format!(
+                        "ripley no tiene una explicación para {regla}."
+                    ))]
                 };
-                self.modal = Some(Modal::Visor { titulo: format!("Regla {regla}"), lineas, desplazamiento: 0 });
+                self.modal = Some(Modal::Visor {
+                    titulo: format!("Regla {regla}"),
+                    lineas,
+                    desplazamiento: 0,
+                });
             }
             Tarea::MemTrace { traza } => {
                 if codigo == Some(0) {
@@ -1453,8 +1839,12 @@ impl App {
         match r {
             Respuesta::Diagnosticos { archivo, resultado } => match resultado {
                 Ok(d) => {
-                    let nativos = self.registro.diagnosticar(&archivo, &std::fs::read_to_string(&archivo).unwrap_or_default());
-                    self.diag_plugins.insert(archivo, nativos.into_iter().chain(d).collect());
+                    let nativos = self.registro.diagnosticar(
+                        &archivo,
+                        &std::fs::read_to_string(&archivo).unwrap_or_default(),
+                    );
+                    self.diag_plugins
+                        .insert(archivo, nativos.into_iter().chain(d).collect());
                 }
                 Err(jonesy_plugins::ErrorPlugin::SinPlugins) => {}
                 Err(e) => self.avisar(format!("Plugins: {e}"), Nivel::Aviso),
@@ -1477,20 +1867,30 @@ impl App {
 
     fn explicar_regla(&mut self) {
         let codigo = match self.foco {
-            Foco::Inferior if self.pestana == Pestana::Problemas => {
-                self.diagnosticos().get(self.sel_problema).and_then(|d| d.codigo.clone())
-            }
-            Foco::Lateral if self.lateral == Some(Lateral::Reglas) => {
-                self.reglas_agrupadas().into_iter().flat_map(|(_, v)| v).nth(self.sel_regla).and_then(|d| d.codigo.clone())
-            }
+            Foco::Inferior if self.pestana == Pestana::Problemas => self
+                .diagnosticos()
+                .get(self.sel_problema)
+                .and_then(|d| d.codigo.clone()),
+            Foco::Lateral if self.lateral == Some(Lateral::Reglas) => self
+                .reglas_agrupadas()
+                .into_iter()
+                .flat_map(|(_, v)| v)
+                .nth(self.sel_regla)
+                .and_then(|d| d.codigo.clone()),
             _ => self.activo_ruta().and_then(|r| {
                 let (l, _) = self.buf().buf.linea_columna();
-                self.diagnosticos_linea(&r, l).into_iter().find_map(|d| d.codigo.clone())
+                self.diagnosticos_linea(&r, l)
+                    .into_iter()
+                    .find_map(|d| d.codigo.clone())
             }),
         };
         match codigo {
             Some(c) => {
-                let cmd = format!("{} explain {}", self.proyecto.config.ripley.comando, jonesy_core::proyecto::shell_quote(&c));
+                let cmd = format!(
+                    "{} explain {}",
+                    self.proyecto.config.ripley.comando,
+                    jonesy_core::proyecto::shell_quote(&c)
+                );
                 self.lanzar(&cmd, Tarea::Explicar { codigo: c });
             }
             None => self.abrir_paleta(),
@@ -1504,7 +1904,11 @@ impl App {
             if d.origen == Origen::Compilador {
                 continue;
             }
-            let cat = d.codigo.as_deref().map(diagnostico::categoria_regla).unwrap_or("Extensiones");
+            let cat = d
+                .codigo
+                .as_deref()
+                .map(diagnostico::categoria_regla)
+                .unwrap_or("Extensiones");
             grupos.entry(cat).or_default().push(d);
         }
         grupos.into_iter().collect()
@@ -1518,27 +1922,51 @@ impl App {
             .filter(|a| self.examen.is_some() || **a != Accion::Entregar)
             .map(|a| {
                 let i = a.info();
-                OpcionPaleta { titulo: i.titulo.into(), atajo: i.atajo.into(), que: QuePaleta::Accion(*a) }
+                OpcionPaleta {
+                    titulo: i.titulo.into(),
+                    atajo: i.atajo.into(),
+                    que: QuePaleta::Accion(*a),
+                }
             })
             .collect();
         for c in &self.comandos_plugins {
-            opciones.push(OpcionPaleta { titulo: c.titulo(), atajo: "plugin".into(), que: QuePaleta::Plugin(c.clone()) });
+            opciones.push(OpcionPaleta {
+                titulo: c.titulo(),
+                atajo: "plugin".into(),
+                que: QuePaleta::Plugin(c.clone()),
+            });
         }
         if self.comandos_plugins.is_empty() {
             if let Some(p) = &self.plugins {
                 p.pedir(PedidoPlugin::Comandos);
             }
         }
-        self.modal = Some(Modal::Paleta { filtro: String::new(), sel: 0, opciones });
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
     }
 
     fn abrir_selector(&mut self) {
-        let archivos: Vec<String> = self.proyecto.archivos(2000).iter().map(|p| self.proyecto.relativa(p)).collect();
-        self.modal = Some(Modal::Abrir { filtro: String::new(), sel: 0, archivos });
+        let archivos: Vec<String> = self
+            .proyecto
+            .archivos(2000)
+            .iter()
+            .map(|p| self.proyecto.relativa(p))
+            .collect();
+        self.modal = Some(Modal::Abrir {
+            filtro: String::new(),
+            sel: 0,
+            archivos,
+        });
     }
 
     pub fn accion(&mut self, a: Accion) {
-        self.tel(TelemetryEvent::CommandExec { command: format!("accion:{a:?}"), exit_code: None });
+        self.tel(TelemetryEvent::CommandExec {
+            command: format!("accion:{a:?}"),
+            exit_code: None,
+        });
         match a {
             Accion::Abrir => self.abrir_selector(),
             Accion::Guardar => {
@@ -1569,7 +1997,12 @@ impl App {
                 }
                 let id = self.id_buffer(self.activo);
                 if let Some((t, d)) = self.buf_mut().buf.cortar() {
-                    self.tel(TelemetryEvent::TextDelta { buffer_id: id, offset: d.offset, inserted: d.insertado, deleted_len: d.borrados });
+                    self.tel(TelemetryEvent::TextDelta {
+                        buffer_id: id,
+                        offset: d.offset,
+                        inserted: d.insertado,
+                        deleted_len: d.borrados,
+                    });
                     self.copiar_texto(t);
                 }
             }
@@ -1585,12 +2018,24 @@ impl App {
                 }
             }
             Accion::SeleccionarTodo => self.buf_mut().buf.seleccionar_todo(),
-            Accion::Buscar => self.modal = Some(Modal::Buscar { texto: self.busqueda.clone() }),
+            Accion::Buscar => {
+                self.modal = Some(Modal::Buscar {
+                    texto: self.busqueda.clone(),
+                })
+            }
             Accion::BuscarSiguiente => self.buscar_siguiente(),
-            Accion::IrALinea => self.modal = Some(Modal::IrALinea { texto: String::new() }),
+            Accion::IrALinea => {
+                self.modal = Some(Modal::IrALinea {
+                    texto: String::new(),
+                })
+            }
             Accion::QuickDoc => {
                 if self.modo() == Modo::Compacto {
-                    self.vista = if self.vista == Vista::Doc { Vista::Codigo } else { Vista::Doc };
+                    self.vista = if self.vista == Vista::Doc {
+                        Vista::Codigo
+                    } else {
+                        Vista::Doc
+                    };
                 } else {
                     self.quickdoc_visible = !self.quickdoc_visible;
                 }
@@ -1666,15 +2111,24 @@ impl App {
             }
             Accion::CatScan => {
                 if self.depuracion.is_none() {
-                    self.avisar("cat-scan muestra la memoria durante la depuración (F5).", Nivel::Aviso);
+                    self.avisar(
+                        "cat-scan muestra la memoria durante la depuración (F5).",
+                        Nivel::Aviso,
+                    );
                     return;
                 }
-                self.lateral = Some(if self.lateral == Some(Lateral::CatScan) { Lateral::Variables } else { Lateral::CatScan });
+                self.lateral = Some(if self.lateral == Some(Lateral::CatScan) {
+                    Lateral::Variables
+                } else {
+                    Lateral::CatScan
+                });
                 if self.depuracion.as_ref().is_some_and(|d| d.traza.is_none()) {
                     self.avisar("La traza de mem-trace todavía no está lista (o el proyecto tiene Makefile).", Nivel::Info);
                 }
             }
-            Accion::GitStageTodo | Accion::GitUnstageTodo | Accion::GitCommit | Accion::GitLog => self.git_accion(a),
+            Accion::GitStageTodo | Accion::GitUnstageTodo | Accion::GitCommit | Accion::GitLog => {
+                self.git_accion(a)
+            }
             Accion::Entregar => self.pedir_entrega(),
             Accion::ExplicarRegla => self.explicar_regla(),
             Accion::Atajos => {
@@ -1740,7 +2194,9 @@ impl App {
 
     fn buscar_siguiente(&mut self) {
         if self.busqueda.is_empty() {
-            self.modal = Some(Modal::Buscar { texto: String::new() });
+            self.modal = Some(Modal::Buscar {
+                texto: String::new(),
+            });
             return;
         }
         let patron = self.busqueda.clone();
@@ -1758,7 +2214,11 @@ impl App {
 
     // ------------------------------------------------------------ bucle
 
-    pub fn bucle<B: ratatui::backend::Backend>(&mut self, term: &mut ratatui::Terminal<B>, rx: Receiver<Aviso>) -> anyhow::Result<()> {
+    pub fn bucle<B: ratatui::backend::Backend>(
+        &mut self,
+        term: &mut ratatui::Terminal<B>,
+        rx: Receiver<Aviso>,
+    ) -> anyhow::Result<()> {
         term.draw(|f| crate::dibujo::dibujar(f, self))?;
         let mut ultimo_dibujo = Instant::now();
         while !self.salir {
@@ -1806,12 +2266,20 @@ impl App {
             espera = espera.min(SONDEO_GIT);
         }
         if let Some((_, _, t)) = &self.mensaje {
-            espera = espera.min(Duration::from_secs(6).saturating_sub(t.elapsed()).max(Duration::from_millis(50)));
+            espera = espera.min(
+                Duration::from_secs(6)
+                    .saturating_sub(t.elapsed())
+                    .max(Duration::from_millis(50)),
+            );
         }
         if self.preview_markdown {
             let b = self.buf();
             if b.preview.as_ref().is_none_or(|p| p.0 != b.buf.version) {
-                espera = espera.min(DEBOUNCE_PREVIEW.saturating_sub(b.ultimo_cambio.elapsed()).max(Duration::from_millis(10)));
+                espera = espera.min(
+                    DEBOUNCE_PREVIEW
+                        .saturating_sub(b.ultimo_cambio.elapsed())
+                        .max(Duration::from_millis(10)),
+                );
             }
         }
         if !self.procesos.is_empty() {
@@ -1825,17 +2293,25 @@ impl App {
         self.tic_examen();
         self.sondear_git();
         self.eventos_gdb();
-        if self.mensaje.as_ref().is_some_and(|(_, n, t)| t.elapsed() > Duration::from_secs(if *n == Nivel::Error { 12 } else { 6 })) {
+        if self.mensaje.as_ref().is_some_and(|(_, n, t)| {
+            t.elapsed() > Duration::from_secs(if *n == Nivel::Error { 12 } else { 6 })
+        }) {
             self.mensaje = None;
         }
         // CursorMove con un mínimo de 200 ms entre registros.
         if self.telemetria.is_some() {
             let (l, c) = self.buf().buf.linea_columna();
             let id = self.id_buffer(self.activo);
-            if (id.clone(), l, c) != self.ultimo_cursor && self.ultimo_cursor_registrado.elapsed() >= Duration::from_millis(200) {
+            if (id.clone(), l, c) != self.ultimo_cursor
+                && self.ultimo_cursor_registrado.elapsed() >= Duration::from_millis(200)
+            {
                 self.ultimo_cursor = (id.clone(), l, c);
                 self.ultimo_cursor_registrado = Instant::now();
-                self.tel(TelemetryEvent::CursorMove { buffer_id: id, line: l + 1, col: c + 1 });
+                self.tel(TelemetryEvent::CursorMove {
+                    buffer_id: id,
+                    line: l + 1,
+                    col: c + 1,
+                });
             }
         }
     }
@@ -1865,12 +2341,18 @@ impl App {
             Event::Paste(t) => self.pegar(t),
             Event::Resize(w, h) => self.tam = (w, h),
             Event::FocusLost => {
-                self.tel(TelemetryEvent::FocusChange { panel: "terminal".into(), focused: false });
+                self.tel(TelemetryEvent::FocusChange {
+                    panel: "terminal".into(),
+                    focused: false,
+                });
                 if self.examen.is_some() && !self.examen_entregado() {
                     self.guardar_todo();
                 }
             }
-            Event::FocusGained => self.tel(TelemetryEvent::FocusChange { panel: "terminal".into(), focused: true }),
+            Event::FocusGained => self.tel(TelemetryEvent::FocusChange {
+                panel: "terminal".into(),
+                focused: true,
+            }),
             _ => {}
         }
     }
@@ -1878,7 +2360,11 @@ impl App {
     fn pegar(&mut self, t: String) {
         let t = t.replace("\r\n", "\n").replace('\r', "\n");
         match &mut self.modal {
-            Some(Modal::Buscar { texto } | Modal::IrALinea { texto } | Modal::Commit { mensaje: texto }) => {
+            Some(
+                Modal::Buscar { texto }
+                | Modal::IrALinea { texto }
+                | Modal::Commit { mensaje: texto },
+            ) => {
                 texto.push_str(&t);
                 return;
             }
@@ -1938,7 +2424,11 @@ impl App {
             return;
         }
         // Los caracteres sueltos ya quedan en TextDelta; se registran teclas de control.
-        if matches!(k.code, KeyCode::Char(_)) && !k.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) {
+        if matches!(k.code, KeyCode::Char(_))
+            && !k
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+        {
             return;
         }
         let nombre = match k.code {
@@ -1946,7 +2436,10 @@ impl App {
             KeyCode::F(n) => format!("F{n}"),
             otro => format!("{otro:?}"),
         };
-        self.tel(TelemetryEvent::KeyPress { key: nombre, modifiers: k.modifiers.bits() });
+        self.tel(TelemetryEvent::KeyPress {
+            key: nombre,
+            modifiers: k.modifiers.bits(),
+        });
     }
 
     pub fn tecla(&mut self, k: KeyEvent) {
@@ -2008,7 +2501,11 @@ impl App {
             self.foco = Foco::Editor;
             return;
         };
-        let alto = self.areas.consigna.map(|r| r.height.saturating_sub(2) as usize).unwrap_or(10);
+        let alto = self
+            .areas
+            .consigna
+            .map(|r| r.height.saturating_sub(2) as usize)
+            .unwrap_or(10);
         match k.code {
             KeyCode::Up => c.desplazamiento = c.desplazamiento.saturating_sub(1),
             KeyCode::Down => c.desplazamiento += 1,
@@ -2032,9 +2529,16 @@ impl App {
                 let total = if en_log {
                     self.git.log.as_ref().map(|l| l.len()).unwrap_or(0)
                 } else {
-                    self.git_estado.as_ref().map(|e| e.entradas.len()).unwrap_or(0)
+                    self.git_estado
+                        .as_ref()
+                        .map(|e| e.entradas.len())
+                        .unwrap_or(0)
                 };
-                let sel = if en_log { &mut self.git.sel_log } else { &mut self.git.sel };
+                let sel = if en_log {
+                    &mut self.git.sel_log
+                } else {
+                    &mut self.git.sel
+                };
                 match k.code {
                     KeyCode::Up => *sel = sel.saturating_sub(1),
                     KeyCode::Down => *sel = (*sel + 1).min(total.saturating_sub(1)),
@@ -2052,10 +2556,23 @@ impl App {
                 let total: usize = self.reglas_agrupadas().iter().map(|(_, v)| v.len()).sum();
                 match k.code {
                     KeyCode::Up => self.sel_regla = self.sel_regla.saturating_sub(1),
-                    KeyCode::Down => self.sel_regla = (self.sel_regla + 1).min(total.saturating_sub(1)),
+                    KeyCode::Down => {
+                        self.sel_regla = (self.sel_regla + 1).min(total.saturating_sub(1))
+                    }
                     KeyCode::Enter => {
-                        let d = self.reglas_agrupadas().into_iter().flat_map(|(_, v)| v).nth(self.sel_regla).cloned();
-                        if let Some(Diagnostico { archivo: Some(a), linea, columna, .. }) = d {
+                        let d = self
+                            .reglas_agrupadas()
+                            .into_iter()
+                            .flat_map(|(_, v)| v)
+                            .nth(self.sel_regla)
+                            .cloned();
+                        if let Some(Diagnostico {
+                            archivo: Some(a),
+                            linea,
+                            columna,
+                            ..
+                        }) = d
+                        {
                             self.ir_a(&a, linea, columna);
                         }
                     }
@@ -2071,7 +2588,10 @@ impl App {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         // Esc Esc devuelve el foco al editor (un Esc solo va al programa).
         if k.code == KeyCode::Esc {
-            if self.esc_pendiente.is_some_and(|t| t.elapsed() < Duration::from_millis(600)) {
+            if self
+                .esc_pendiente
+                .is_some_and(|t| t.elapsed() < Duration::from_millis(600))
+            {
                 self.esc_pendiente = None;
                 self.cambiar_foco(Foco::Editor);
                 if self.modo() == Modo::Compacto {
@@ -2090,7 +2610,9 @@ impl App {
                 let total = self.diagnosticos().len();
                 match k.code {
                     KeyCode::Up => self.sel_problema = self.sel_problema.saturating_sub(1),
-                    KeyCode::Down => self.sel_problema = (self.sel_problema + 1).min(total.saturating_sub(1)),
+                    KeyCode::Down => {
+                        self.sel_problema = (self.sel_problema + 1).min(total.saturating_sub(1))
+                    }
                     KeyCode::Enter => self.saltar_a_problema(self.sel_problema),
                     KeyCode::F(1) => self.explicar_regla(),
                     KeyCode::Tab => self.cambiar_foco(Foco::Editor),
@@ -2099,18 +2621,32 @@ impl App {
             }
             Pestana::Salida => match k.code {
                 KeyCode::Up => self.salida_desplazamiento += 1,
-                KeyCode::Down => self.salida_desplazamiento = self.salida_desplazamiento.saturating_sub(1),
+                KeyCode::Down => {
+                    self.salida_desplazamiento = self.salida_desplazamiento.saturating_sub(1)
+                }
                 KeyCode::PageUp => self.salida_desplazamiento += 10,
-                KeyCode::PageDown => self.salida_desplazamiento = self.salida_desplazamiento.saturating_sub(10),
+                KeyCode::PageDown => {
+                    self.salida_desplazamiento = self.salida_desplazamiento.saturating_sub(10)
+                }
                 KeyCode::Tab => self.cambiar_foco(Foco::Editor),
                 _ => {}
             },
             Pestana::Terminal | Pestana::Ejecucion => {
-                let deck = if self.pestana == Pestana::Terminal { self.terminal.as_mut() } else { self.ejecucion.as_mut() };
+                let deck = if self.pestana == Pestana::Terminal {
+                    self.terminal.as_mut()
+                } else {
+                    self.ejecucion.as_mut()
+                };
                 let Some(d) = deck else { return };
-                if k.modifiers.contains(KeyModifiers::SHIFT) && matches!(k.code, KeyCode::PageUp | KeyCode::PageDown) {
+                if k.modifiers.contains(KeyModifiers::SHIFT)
+                    && matches!(k.code, KeyCode::PageUp | KeyCode::PageDown)
+                {
                     let actual = d.con_pantalla(|s| s.scrollback());
-                    let n = if k.code == KeyCode::PageUp { actual + 10 } else { actual.saturating_sub(10) };
+                    let n = if k.code == KeyCode::PageUp {
+                        actual + 10
+                    } else {
+                        actual.saturating_sub(10)
+                    };
                     d.desplazar(n);
                     return;
                 }
@@ -2120,7 +2656,9 @@ impl App {
                 }
             }
             Pestana::Depurador => {
-                let Some(d) = &mut self.depuracion else { return };
+                let Some(d) = &mut self.depuracion else {
+                    return;
+                };
                 if k.code == KeyCode::Tab {
                     d.foco_consola = !d.foco_consola;
                     return;
@@ -2148,7 +2686,13 @@ impl App {
 
     fn saltar_a_problema(&mut self, i: usize) {
         let d = self.diagnosticos().get(i).map(|d| (*d).clone());
-        if let Some(Diagnostico { archivo: Some(a), linea, columna, .. }) = d {
+        if let Some(Diagnostico {
+            archivo: Some(a),
+            linea,
+            columna,
+            ..
+        }) = d
+        {
             self.ir_a(&a, linea, columna);
         }
     }
@@ -2160,13 +2704,21 @@ impl App {
         if self.foco != Foco::Editor && self.foco != Foco::Consigna {
             self.foco = Foco::Editor;
         }
-        if self.modo() == Modo::Compacto && self.vista != Vista::Codigo && self.vista != Vista::Consigna {
+        if self.modo() == Modo::Compacto
+            && self.vista != Vista::Codigo
+            && self.vista != Vista::Consigna
+        {
             if k.code == KeyCode::Esc {
                 self.vista = Vista::Codigo;
             }
             return;
         }
-        let alto = self.zonas.editor.map(|z| z.texto.height as isize).unwrap_or(20).max(2);
+        let alto = self
+            .zonas
+            .editor
+            .map(|z| z.texto.height as isize)
+            .unwrap_or(20)
+            .max(2);
         let accion = match (k.code, ctrl, shift) {
             (KeyCode::Char('s'), true, true) => Some(Accion::GuardarTodo),
             (KeyCode::Char('s'), true, false) | (KeyCode::F(2), _, _) => Some(Accion::Guardar),
@@ -2197,7 +2749,10 @@ impl App {
             if let KeyCode::Char(c) = k.code {
                 // Alt+letra abre el menú correspondiente.
                 let menus = accion::menus(self.examen.is_some());
-                if let Some(i) = menus.iter().position(|(n, _)| n.to_lowercase().starts_with(c)) {
+                if let Some(i) = menus
+                    .iter()
+                    .position(|(n, _)| n.to_lowercase().starts_with(c))
+                {
                     self.modal = Some(Modal::Menu { indice: i, sel: 0 });
                 }
             }
@@ -2247,16 +2802,28 @@ impl App {
     }
 
     fn tecla_modal(&mut self, k: KeyEvent) {
-        let Some(modal) = self.modal.take() else { return };
+        let Some(modal) = self.modal.take() else {
+            return;
+        };
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         let cerrar = k.code == KeyCode::Esc;
         match modal {
-            Modal::Paleta { mut filtro, mut sel, opciones } => {
+            Modal::Paleta {
+                mut filtro,
+                mut sel,
+                opciones,
+            } => {
                 if cerrar {
                     return;
                 }
-                let filtradas = paleta::filtrar(&filtro, &opciones.iter().map(|o| o.titulo.as_str()).collect::<Vec<_>>());
+                let filtradas = paleta::filtrar(
+                    &filtro,
+                    &opciones
+                        .iter()
+                        .map(|o| o.titulo.as_str())
+                        .collect::<Vec<_>>(),
+                );
                 match k.code {
                     KeyCode::Enter => {
                         if let Some(o) = filtradas.get(sel).map(|&i| opciones[i].clone()) {
@@ -2272,19 +2839,33 @@ impl App {
                         }
                     }
                 }
-                self.modal = Some(Modal::Paleta { filtro, sel, opciones });
+                self.modal = Some(Modal::Paleta {
+                    filtro,
+                    sel,
+                    opciones,
+                });
             }
-            Modal::Abrir { mut filtro, mut sel, archivos } => {
+            Modal::Abrir {
+                mut filtro,
+                mut sel,
+                archivos,
+            } => {
                 if cerrar {
                     return;
                 }
                 let filtrados = paleta::filtrar(&filtro, &archivos);
                 match k.code {
                     KeyCode::Enter => {
-                        let rel = filtrados.get(sel).map(|&i| archivos[i].clone()).unwrap_or_else(|| filtro.clone());
+                        let rel = filtrados
+                            .get(sel)
+                            .map(|&i| archivos[i].clone())
+                            .unwrap_or_else(|| filtro.clone());
                         if !rel.trim().is_empty() {
                             let ruta = self.proyecto.raiz.join(rel.trim());
-                            if self.examen.is_some() && !ruta.exists() && !ruta.starts_with(&self.proyecto.raiz) {
+                            if self.examen.is_some()
+                                && !ruta.exists()
+                                && !ruta.starts_with(&self.proyecto.raiz)
+                            {
                                 return;
                             }
                             self.abrir_archivo(&ruta, true);
@@ -2299,7 +2880,11 @@ impl App {
                         }
                     }
                 }
-                self.modal = Some(Modal::Abrir { filtro, sel, archivos });
+                self.modal = Some(Modal::Abrir {
+                    filtro,
+                    sel,
+                    archivos,
+                });
             }
             Modal::Buscar { mut texto } => {
                 if cerrar {
@@ -2339,22 +2924,35 @@ impl App {
                 editar_campo(&mut texto, &k);
                 self.modal = Some(Modal::IrALinea { texto });
             }
-            Modal::Confirmar { titulo, mensaje, que } => match k.code {
+            Modal::Confirmar {
+                titulo,
+                mensaje,
+                que,
+            } => match k.code {
                 KeyCode::Char('s' | 'S' | 'y' | 'Y') | KeyCode::Enter => match que {
                     Confirmacion::Salir => self.salir = true,
                     Confirmacion::CerrarBuffer => self.cerrar_buffer(true),
                     Confirmacion::Entregar => self.entregar(),
                 },
                 KeyCode::Char('n' | 'N') | KeyCode::Esc => {}
-                _ => self.modal = Some(Modal::Confirmar { titulo, mensaje, que }),
+                _ => {
+                    self.modal = Some(Modal::Confirmar {
+                        titulo,
+                        mensaje,
+                        que,
+                    })
+                }
             },
             Modal::Commit { mut mensaje } => {
                 if cerrar {
                     return;
                 }
-                let confirmar = (k.code == KeyCode::Enter && (ctrl || alt)) || (k.code == KeyCode::Char('s') && ctrl);
+                let confirmar = (k.code == KeyCode::Enter && (ctrl || alt))
+                    || (k.code == KeyCode::Char('s') && ctrl);
                 if confirmar {
-                    self.modal = Some(Modal::Commit { mensaje: mensaje.clone() });
+                    self.modal = Some(Modal::Commit {
+                        mensaje: mensaje.clone(),
+                    });
                     self.git_commit(&mensaje);
                     return;
                 }
@@ -2365,7 +2963,11 @@ impl App {
                 }
                 self.modal = Some(Modal::Commit { mensaje });
             }
-            Modal::Visor { titulo, lineas, mut desplazamiento } => {
+            Modal::Visor {
+                titulo,
+                lineas,
+                mut desplazamiento,
+            } => {
                 let alto = self.tam.1.saturating_sub(8) as usize;
                 match k.code {
                     KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return,
@@ -2377,9 +2979,16 @@ impl App {
                     _ => {}
                 }
                 let desplazamiento = desplazamiento.min(lineas.len().saturating_sub(1));
-                self.modal = Some(Modal::Visor { titulo, lineas, desplazamiento });
+                self.modal = Some(Modal::Visor {
+                    titulo,
+                    lineas,
+                    desplazamiento,
+                });
             }
-            Modal::Menu { mut indice, mut sel } => {
+            Modal::Menu {
+                mut indice,
+                mut sel,
+            } => {
                 let menus = accion::menus(self.examen.is_some());
                 match k.code {
                     KeyCode::Esc | KeyCode::F(10) => return,
@@ -2413,12 +3022,19 @@ impl App {
                     let b = &self.buf().buf;
                     let (l, col) = b.linea_columna();
                     let ctx = Contexto {
-                        archivo: b.ruta.as_ref().map(|r| r.to_string_lossy().into_owned()).unwrap_or_default(),
+                        archivo: b
+                            .ruta
+                            .as_ref()
+                            .map(|r| r.to_string_lossy().into_owned())
+                            .unwrap_or_default(),
                         texto: b.contenido(),
                         linea: l + 1,
                         columna: col + 1,
                     };
-                    self.tel(TelemetryEvent::CommandExec { command: format!("plugin:{}", c.titulo()), exit_code: None });
+                    self.tel(TelemetryEvent::CommandExec {
+                        command: format!("plugin:{}", c.titulo()),
+                        exit_code: None,
+                    });
                     p.pedir(PedidoPlugin::Ejecutar { comando: c, ctx });
                 }
             }
@@ -2432,18 +3048,35 @@ impl App {
         let dentro = |r: Rect| x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
         match m.kind {
             MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                let delta: isize = if m.kind == MouseEventKind::ScrollUp { -3 } else { 3 };
-                if let Some(Modal::Visor { desplazamiento, lineas, .. }) = &mut self.modal {
-                    *desplazamiento = (*desplazamiento as isize + delta).clamp(0, lineas.len().saturating_sub(1) as isize) as usize;
+                let delta: isize = if m.kind == MouseEventKind::ScrollUp {
+                    -3
+                } else {
+                    3
+                };
+                if let Some(Modal::Visor {
+                    desplazamiento,
+                    lineas,
+                    ..
+                }) = &mut self.modal
+                {
+                    *desplazamiento = (*desplazamiento as isize + delta)
+                        .clamp(0, lineas.len().saturating_sub(1) as isize)
+                        as usize;
                     return;
                 }
                 if self.zonas.preview.is_some_and(dentro) {
                     let b = self.buf_mut();
-                    b.preview_desplazamiento = (b.preview_desplazamiento as isize + delta).max(0) as usize;
-                } else if self.zonas.editor.is_some_and(|z| dentro(z.texto) || dentro(z.gutter)) {
+                    b.preview_desplazamiento =
+                        (b.preview_desplazamiento as isize + delta).max(0) as usize;
+                } else if self
+                    .zonas
+                    .editor
+                    .is_some_and(|z| dentro(z.texto) || dentro(z.gutter))
+                {
                     let b = &mut self.buf_mut().buf;
                     let max = b.lineas().saturating_sub(1);
-                    b.desplazamiento = ((b.desplazamiento as isize + delta).max(0) as usize).min(max);
+                    b.desplazamiento =
+                        ((b.desplazamiento as isize + delta).max(0) as usize).min(max);
                     self.desplazado_por_mouse = true;
                 } else if self.areas.consigna.is_some_and(dentro) {
                     if let Some(c) = &mut self.consigna {
@@ -2461,16 +3094,23 @@ impl App {
                     }
                 } else if self.areas.inferior.is_some_and(dentro) {
                     match self.pestana {
-                        Pestana::Salida => self.salida_desplazamiento = (self.salida_desplazamiento as isize - delta).max(0) as usize,
+                        Pestana::Salida => {
+                            self.salida_desplazamiento =
+                                (self.salida_desplazamiento as isize - delta).max(0) as usize
+                        }
                         Pestana::Problemas => {
                             let total = self.diagnosticos().len();
-                            self.sel_problema = ((self.sel_problema as isize + delta.signum()).max(0) as usize).min(total.saturating_sub(1));
+                            self.sel_problema = ((self.sel_problema as isize + delta.signum())
+                                .max(0) as usize)
+                                .min(total.saturating_sub(1));
                         }
                         _ => {}
                     }
                 }
             }
-            MouseEventKind::Down(MouseButton::Left) => self.clic(x, y, m.modifiers.contains(KeyModifiers::SHIFT)),
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.clic(x, y, m.modifiers.contains(KeyModifiers::SHIFT))
+            }
             MouseEventKind::Drag(MouseButton::Left) => match self.arrastre {
                 Some(Arrastre::Seleccion) => {
                     if let Some(p) = self.posicion_en_editor(x, y) {
@@ -2479,11 +3119,14 @@ impl App {
                 }
                 Some(Arrastre::SeparadorVertical) => {
                     let ancho = self.tam.0.max(1);
-                    self.ancho_consigna = Some(((x as u32 * 100 / ancho as u32) as u16).clamp(15, 60));
+                    self.ancho_consigna =
+                        Some(((x as u32 * 100 / ancho as u32) as u16).clamp(15, 60));
                 }
                 Some(Arrastre::SeparadorHorizontal) => {
                     let alto_total = self.tam.1.saturating_sub(2);
-                    self.alto_inferior = alto_total.saturating_sub(y.saturating_sub(1)).clamp(4, alto_total.saturating_sub(6).max(4));
+                    self.alto_inferior = alto_total
+                        .saturating_sub(y.saturating_sub(1))
+                        .clamp(4, alto_total.saturating_sub(6).max(4));
                 }
                 None => {}
             },
@@ -2494,12 +3137,20 @@ impl App {
 
     fn clic(&mut self, x: u16, y: u16, shift: bool) {
         let dentro = |r: Rect| x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
-        let doble = self.ultimo_clic.is_some_and(|(t, cx, cy)| t.elapsed() < Duration::from_millis(400) && cx == x && cy == y);
+        let doble = self.ultimo_clic.is_some_and(|(t, cx, cy)| {
+            t.elapsed() < Duration::from_millis(400) && cx == x && cy == y
+        });
         self.ultimo_clic = Some((Instant::now(), x, y));
 
         // Menú desplegado y modales.
         if let Some(Modal::Menu { .. }) = self.modal {
-            if let Some((_, a)) = self.zonas.items_menu.iter().find(|(r, _)| dentro(*r)).copied() {
+            if let Some((_, a)) = self
+                .zonas
+                .items_menu
+                .iter()
+                .find(|(r, _)| dentro(*r))
+                .copied()
+            {
                 self.modal = None;
                 self.accion(a);
                 return;
@@ -2512,7 +3163,9 @@ impl App {
             return;
         }
         if let Some(modal) = &mut self.modal {
-            if let (Some((r, base)), Modal::Paleta { sel, .. } | Modal::Abrir { sel, .. }) = (self.zonas.modal_items, &mut *modal) {
+            if let (Some((r, base)), Modal::Paleta { sel, .. } | Modal::Abrir { sel, .. }) =
+                (self.zonas.modal_items, &mut *modal)
+            {
                 if dentro(r) {
                     *sel = base + (y - r.y) as usize;
                     let k = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
@@ -2530,15 +3183,34 @@ impl App {
             self.modal = Some(Modal::Menu { indice: i, sel: 0 });
             return;
         }
-        if let Some((_, a)) = self.zonas.botones.iter().chain(self.zonas.botones_depurador.iter()).find(|(r, _)| dentro(*r)).copied() {
+        if let Some((_, a)) = self
+            .zonas
+            .botones
+            .iter()
+            .chain(self.zonas.botones_depurador.iter())
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
             self.accion(a);
             return;
         }
-        if let Some((_, i)) = self.zonas.pestanas_buffers.iter().find(|(r, _)| dentro(*r)).copied() {
+        if let Some((_, i)) = self
+            .zonas
+            .pestanas_buffers
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
             self.cambiar_buffer(i);
             return;
         }
-        if let Some((_, p)) = self.zonas.pestanas_inferior.iter().find(|(r, _)| dentro(*r)).copied() {
+        if let Some((_, p)) = self
+            .zonas
+            .pestanas_inferior
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
             self.pestana = p;
             self.cambiar_foco(Foco::Inferior);
             if p == Pestana::Terminal && self.terminal.is_none() {
@@ -2547,7 +3219,15 @@ impl App {
             return;
         }
         // Separadores arrastrables.
-        if self.areas.sep_vertical.is_some_and(|sx| x == sx || x + 1 == sx) && self.areas.consigna.is_some_and(|c| y >= c.y && y < c.y + c.height) {
+        if self
+            .areas
+            .sep_vertical
+            .is_some_and(|sx| x == sx || x + 1 == sx)
+            && self
+                .areas
+                .consigna
+                .is_some_and(|c| y >= c.y && y < c.y + c.height)
+        {
             self.arrastre = Some(Arrastre::SeparadorVertical);
             return;
         }
@@ -2582,8 +3262,15 @@ impl App {
                 let b = self.buf();
                 let linea = b.preview_desplazamiento + (y - r.y) as usize;
                 let col = (x - r.x) as usize;
-                let destino = b.preview.as_ref().and_then(|(_, _, d)| enlace_en(d, linea, col));
-                let base = b.buf.ruta.as_ref().and_then(|p| p.parent().map(Path::to_path_buf));
+                let destino = b
+                    .preview
+                    .as_ref()
+                    .and_then(|(_, _, d)| enlace_en(d, linea, col));
+                let base = b
+                    .buf
+                    .ruta
+                    .as_ref()
+                    .and_then(|p| p.parent().map(Path::to_path_buf));
                 if let (Some(d), Some(base)) = (destino, base) {
                     self.abrir_enlace(&base, &d);
                 }
@@ -2632,8 +3319,19 @@ impl App {
                     }
                     Some(Lateral::Reglas) => {
                         self.sel_regla = i;
-                        let d = self.reglas_agrupadas().into_iter().flat_map(|(_, v)| v).nth(i).cloned();
-                        if let Some(Diagnostico { archivo: Some(a), linea, columna, .. }) = d {
+                        let d = self
+                            .reglas_agrupadas()
+                            .into_iter()
+                            .flat_map(|(_, v)| v)
+                            .nth(i)
+                            .cloned();
+                        if let Some(Diagnostico {
+                            archivo: Some(a),
+                            linea,
+                            columna,
+                            ..
+                        }) = d
+                        {
                             self.ir_a(&a, linea, columna);
                         }
                     }
@@ -2684,7 +3382,9 @@ impl App {
     fn posicion_en_editor(&self, x: u16, y: u16) -> Option<usize> {
         let z = self.zonas.editor?;
         let b = &self.buf().buf;
-        let fila = y.saturating_sub(z.texto.y).min(z.texto.height.saturating_sub(1)) as usize;
+        let fila = y
+            .saturating_sub(z.texto.y)
+            .min(z.texto.height.saturating_sub(1)) as usize;
         let linea = (b.desplazamiento + fila).min(b.lineas().saturating_sub(1));
         let objetivo = b.desplazamiento_h + x.saturating_sub(z.texto.x) as usize;
         let chars: Vec<char> = b.linea_texto(linea).chars().collect();
@@ -2696,7 +3396,11 @@ impl App {
 // ------------------------------------------------------------------ ayudas
 
 pub fn mismo_archivo(a: &Path, b: &Path) -> bool {
-    a == b || a.canonicalize().ok().zip(b.canonicalize().ok()).is_some_and(|(x, y)| x == y)
+    a == b
+        || a.canonicalize()
+            .ok()
+            .zip(b.canonicalize().ok())
+            .is_some_and(|(x, y)| x == y)
 }
 
 pub const ANCHO_TAB: usize = 4;
@@ -2717,7 +3421,9 @@ pub fn ancho_char(c: char, col: usize) -> usize {
     if c == '\t' {
         ANCHO_TAB - col % ANCHO_TAB
     } else {
-        unicode_width::UnicodeWidthChar::width(c).unwrap_or(0).max(1)
+        unicode_width::UnicodeWidthChar::width(c)
+            .unwrap_or(0)
+            .max(1)
     }
 }
 
@@ -2726,7 +3432,11 @@ pub fn columna_de_visual(chars: &[char], objetivo: usize) -> usize {
     let cols = columnas_visuales(chars);
     for i in 0..chars.len() {
         if cols[i + 1] > objetivo {
-            return if objetivo - cols[i] > (cols[i + 1] - cols[i]) / 2 { i + 1 } else { i };
+            return if objetivo - cols[i] > (cols[i + 1] - cols[i]) / 2 {
+                i + 1
+            } else {
+                i
+            };
         }
     }
     chars.len()
@@ -2781,7 +3491,11 @@ pub fn editar_campo(campo: &mut String, k: &KeyEvent) -> bool {
             campo.clear();
             true
         }
-        KeyCode::Char(c) if !k.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
+        KeyCode::Char(c)
+            if !k
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) =>
+        {
             campo.push(c);
             true
         }
@@ -2816,7 +3530,10 @@ pub fn bytes_tecla(k: &KeyEvent) -> Option<Vec<u8>> {
 }
 
 fn enlace_en(d: &Documento, linea: usize, col: usize) -> Option<String> {
-    d.enlaces.iter().find(|e| e.linea == linea && col >= e.ini && col < e.fin.max(e.ini + 1)).map(|e| e.destino.clone())
+    d.enlaces
+        .iter()
+        .find(|e| e.linea == linea && col >= e.ini && col < e.fin.max(e.ini + 1))
+        .map(|e| e.destino.clone())
 }
 
 /// Colorea un diff unificado.
@@ -2825,7 +3542,11 @@ pub fn lineas_diff(texto: &str) -> Vec<Line<'static>> {
     texto
         .lines()
         .map(|l| {
-            let estilo = if l.starts_with("+++") || l.starts_with("---") || l.starts_with("diff ") || l.starts_with("index ") {
+            let estilo = if l.starts_with("+++")
+                || l.starts_with("---")
+                || l.starts_with("diff ")
+                || l.starts_with("index ")
+            {
                 Style::default().add_modifier(Modifier::BOLD)
             } else if l.starts_with('+') {
                 Style::default().fg(tema::OK)
@@ -2834,7 +3555,9 @@ pub fn lineas_diff(texto: &str) -> Vec<Line<'static>> {
             } else if l.starts_with("@@") {
                 Style::default().fg(tema::NOTA)
             } else if l.starts_with("commit ") {
-                Style::default().fg(tema::ADVERTENCIA).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(tema::ADVERTENCIA)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };

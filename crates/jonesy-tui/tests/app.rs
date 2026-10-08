@@ -23,7 +23,13 @@ fn proyecto(archivos: &[(&str, &str)]) -> tempfile::TempDir {
 
 fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
     let (tx, rx) = channel();
-    let op = Opciones { raiz: dir.to_path_buf(), archivos: vec![], examen, ascii: false, telemetria: false };
+    let op = Opciones {
+        raiz: dir.to_path_buf(),
+        archivos: vec![],
+        examen,
+        ascii: false,
+        telemetria: false,
+    };
     (App::nueva(op, tx), rx)
 }
 
@@ -32,7 +38,11 @@ fn pantalla(app: &mut App, w: u16, h: u16) -> String {
     t.draw(|f| jonesy_tui::dibujo::dibujar(f, app)).unwrap();
     let buf = t.backend().buffer().clone();
     (0..h)
-        .map(|y| (0..w).map(|x| buf[(x, y)].symbol().to_string()).collect::<String>())
+        .map(|y| {
+            (0..w)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect::<String>()
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -51,18 +61,25 @@ fn escribir(app: &mut App, s: &str) {
 fn esperar(app: &mut App, rx: &Receiver<Aviso>, mut cond: impl FnMut(&App) -> bool) {
     let fin = Instant::now() + Duration::from_secs(20);
     while !cond(app) {
-        assert!(Instant::now() < fin, "tiempo agotado esperando la condición");
+        assert!(
+            Instant::now() < fin,
+            "tiempo agotado esperando la condición"
+        );
         if let Ok(a) = rx.recv_timeout(Duration::from_millis(50)) {
             app.procesar(a);
         }
     }
 }
 
-const MAIN: &str = "#include <stdio.h>\n\nint main(void)\n{\n    printf(\"hola\\n\");\n    return 0;\n}\n";
+const MAIN: &str =
+    "#include <stdio.h>\n\nint main(void)\n{\n    printf(\"hola\\n\");\n    return 0;\n}\n";
 
 #[test]
 fn layout_en_los_tres_modos() {
-    let dir = proyecto(&[("main.c", MAIN), ("consigna.md", "# Ejercicio 1\n\nEscribí un programa.\n")]);
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("consigna.md", "# Ejercicio 1\n\nEscribí un programa.\n"),
+    ]);
     let (mut a, _rx) = app(dir.path(), false);
     let p = pantalla(&mut a, 160, 40);
     assert!(p.contains("Consigna"), "{p}");
@@ -76,7 +93,10 @@ fn layout_en_los_tres_modos() {
     assert!(p.contains("Consigna") && p.contains("printf"));
 
     let p = pantalla(&mut a, 80, 24);
-    assert!(!p.contains("Ejercicio 1"), "en compacto sólo se ve el código");
+    assert!(
+        !p.contains("Ejercicio 1"),
+        "en compacto sólo se ve el código"
+    );
     assert!(p.contains("F8 código"));
     tecla(&mut a, KeyCode::F(7), KeyModifiers::NONE);
     let p = pantalla(&mut a, 80, 24);
@@ -93,7 +113,9 @@ fn editar_guardar_deshacer() {
     assert!(a.buf().buf.modificado());
     tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
     assert!(!a.buf().buf.modificado());
-    assert!(std::fs::read_to_string(dir.path().join("main.c")).unwrap().ends_with("// fin"));
+    assert!(std::fs::read_to_string(dir.path().join("main.c"))
+        .unwrap()
+        .ends_with("// fin"));
     // El deshacer agrupa el tipeo por palabra: «// » y «fin» son dos pasos.
     tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
     assert!(a.buf().buf.contenido().ends_with("// "));
@@ -111,24 +133,42 @@ fn editar_guardar_deshacer() {
 
 #[test]
 fn quickdoc_muestra_firma_con_parametro_activo() {
-    let dir = proyecto(&[("main.c", "#include <string.h>\nint main(void)\n{\n    strncpy(a, \n}\n")]);
+    let dir = proyecto(&[(
+        "main.c",
+        "#include <string.h>\nint main(void)\n{\n    strncpy(a, \n}\n",
+    )]);
     let (mut a, _rx) = app(dir.path(), false);
     let pos = a.buf().buf.linea_columna_a_pos(3, 15);
     a.buf_mut().buf.mover_a(pos, false);
     let (titulo, lineas) = jonesy_tui::dibujo::lineas_quickdoc(&mut a, 60);
     assert!(titulo.contains("strncpy"));
     let firma = &lineas[0];
-    let activo = firma.spans.iter().find(|s| s.style.add_modifier.contains(ratatui::style::Modifier::BOLD)).unwrap();
+    let activo = firma
+        .spans
+        .iter()
+        .find(|s| {
+            s.style
+                .add_modifier
+                .contains(ratatui::style::Modifier::BOLD)
+        })
+        .unwrap();
     assert!(activo.content.contains("src"), "{:?}", firma);
 }
 
 #[test]
 fn compila_y_salta_al_error() {
-    if std::process::Command::new("gcc").arg("--version").output().is_err() {
+    if std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         return;
     }
     let roto = "int main(void)\n{\n    return x;\n}\n";
-    let dir = proyecto(&[("prueba.c", roto), (".jonesy.toml", "[ripley]\nactivo = false\n")]);
+    let dir = proyecto(&[
+        ("prueba.c", roto),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
     let (mut a, rx) = app(dir.path(), false);
     pantalla(&mut a, 120, 30);
     tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
@@ -151,7 +191,10 @@ fn examen_registra_pegado_y_entrega() {
         ("main.c", MAIN),
         ("consigna.md", "# Examen\n"),
         ("Makefile", "all:\n\ttrue\ntest:\n\t@echo 'tests ok'\n"),
-        (".jonesy.toml", "[examen]\nduracion_min = 90\n[ripley]\nactivo = false\n"),
+        (
+            ".jonesy.toml",
+            "[examen]\nduracion_min = 90\n[ripley]\nactivo = false\n",
+        ),
     ]);
     let (mut a, rx) = app(dir.path(), true);
     let p = pantalla(&mut a, 160, 40);
@@ -171,16 +214,24 @@ fn examen_registra_pegado_y_entrega() {
     let e = &a.examen.as_ref().unwrap().estado;
     let paquete = dir.path().join(e.paquete.as_ref().unwrap());
     assert!(paquete.is_file());
-    assert_eq!(e.sha256.as_deref().unwrap(), jonesy_core::sha256_hex(&std::fs::read(&paquete).unwrap()));
+    assert_eq!(
+        e.sha256.as_deref().unwrap(),
+        jonesy_core::sha256_hex(&std::fs::read(&paquete).unwrap())
+    );
     assert!(a.buffers.iter().all(|b| b.buf.solo_lectura));
     let log = dir.path().join(".jonesy/telemetry.log");
     let v = jonesy_telemetry::verificar(&log).unwrap();
     assert!(v.integra(), "{v:?}");
     assert!(v.cerrada);
     assert_eq!(v.pegados, 1);
-    assert!(std::fs::read_to_string(dir.path().join("main.c")).unwrap().contains("int pegado = 1;"));
+    assert!(std::fs::read_to_string(dir.path().join("main.c"))
+        .unwrap()
+        .contains("int pegado = 1;"));
     let texto = std::fs::read_to_string(&log).unwrap();
-    assert!(texto.contains("\"BufferSave\""), "el autoguardado de la entrega queda registrado");
+    assert!(
+        texto.contains("\"BufferSave\""),
+        "el autoguardado de la entrega queda registrado"
+    );
     assert!(texto.contains("make test"));
 }
 
@@ -204,7 +255,14 @@ fn breakpoint_por_clic_en_el_margen() {
     let (mut a, _rx) = app(dir.path(), false);
     pantalla(&mut a, 120, 30);
     let z = a.zonas.editor.unwrap();
-    let clic = |x, y| Event::Mouse(MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: x, row: y, modifiers: KeyModifiers::NONE });
+    let clic = |x, y| {
+        Event::Mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: x,
+            row: y,
+            modifiers: KeyModifiers::NONE,
+        })
+    };
     a.evento(clic(z.gutter.x, z.gutter.y + 4));
     assert_eq!(a.breakpoints.len(), 1);
     assert_eq!(a.breakpoints.iter().next().unwrap().1, 5);
@@ -217,7 +275,11 @@ fn breakpoint_por_clic_en_el_margen() {
 
 #[test]
 fn ripley_al_guardar() {
-    if std::process::Command::new("ripley").arg("--version").output().is_err() {
+    if std::process::Command::new("ripley")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
         return;
     }
     let dir = proyecto(&[("main.c", "#include <stdlib.h>\nint main(void)\n{\n    int *p = malloc(4);\n    free(p);\n    return 0;\n}\n")]);
@@ -234,8 +296,14 @@ fn ripley_al_guardar() {
         }
     }
     let d: Vec<_> = a.diag_ripley.values().flatten().collect();
-    assert!(d.iter().any(|d| d.codigo.as_deref() == Some("0x3001h")), "{d:?}");
+    assert!(
+        d.iter().any(|d| d.codigo.as_deref() == Some("0x3001h")),
+        "{d:?}"
+    );
     assert!(a.tareas_en_curso().is_empty());
     let p = pantalla(&mut a, 120, 30);
-    assert!(p.contains("■ ") && p.contains("0x3001h"), "texto virtual de ripley: {p}");
+    assert!(
+        p.contains("■ ") && p.contains("0x3001h"),
+        "texto virtual de ripley: {p}"
+    );
 }

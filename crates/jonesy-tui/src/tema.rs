@@ -10,7 +10,7 @@ pub struct Simbolos {
     pub ascii: bool,
     pub h: char,
     pub v: char,
-    pub esq: [char; 4], // ┌ ┐ └ ┘
+    pub esq: [char; 4],  // ┌ ┐ └ ┘
     pub cruz: [char; 5], // ┬ ┴ ├ ┤ ┼
     pub h_grueso: char,
     pub breakpoint: &'static str,

@@ -90,7 +90,10 @@ impl Registro {
     }
 
     pub fn diagnosticar(&mut self, archivo: &Path, texto: &str) -> Vec<Diagnostico> {
-        self.diagnosticos.iter_mut().flat_map(|d| d.diagnosticar(archivo, texto)).collect()
+        self.diagnosticos
+            .iter_mut()
+            .flat_map(|d| d.diagnosticar(archivo, texto))
+            .collect()
     }
 
     pub fn notificar(&mut self, evento: &TelemetryEvent) {
@@ -110,7 +113,10 @@ impl DiagnosticProvider for SangriaMezclada {
     }
 
     fn diagnosticar(&mut self, archivo: &Path, texto: &str) -> Vec<Diagnostico> {
-        let es_c = matches!(archivo.extension().and_then(|e| e.to_str()), Some("c" | "h"));
+        let es_c = matches!(
+            archivo.extension().and_then(|e| e.to_str()),
+            Some("c" | "h")
+        );
         if !es_c {
             return vec![];
         }
@@ -155,7 +161,10 @@ impl std::fmt::Display for ErrorPlugin {
         match self {
             ErrorPlugin::SinPlugins => write!(f, "no hay plugins en .jonesy/plugins"),
             ErrorPlugin::Lanzamiento(e) => write!(f, "no se pudo lanzar el worker de Python: {e}"),
-            ErrorPlugin::TiempoAgotado => write!(f, "el plugin superó el tiempo límite; se reinició el worker"),
+            ErrorPlugin::TiempoAgotado => write!(
+                f,
+                "el plugin superó el tiempo límite; se reinició el worker"
+            ),
             ErrorPlugin::Caido => write!(f, "el worker de Python terminó inesperadamente"),
             ErrorPlugin::Remoto(e) => write!(f, "{e}"),
         }
@@ -189,7 +198,8 @@ mod tempfile_lite {
         pub fn escribir(contenido: &str) -> std::io::Result<Temporal> {
             static CONTADOR: AtomicU32 = AtomicU32::new(0);
             let n = CONTADOR.fetch_add(1, Ordering::Relaxed);
-            let ruta = std::env::temp_dir().join(format!("jonesy-worker-{}-{n}.py", std::process::id()));
+            let ruta =
+                std::env::temp_dir().join(format!("jonesy-worker-{}-{n}.py", std::process::id()));
             std::fs::write(&ruta, contenido)?;
             Ok(Temporal(ruta))
         }
@@ -251,7 +261,9 @@ impl Supervisor {
         let mut rechazados = vec![];
         if let Some(lista) = permitidos {
             let (ok, no): (Vec<_>, Vec<_>) = scripts.into_iter().partition(|p| {
-                sha256_archivo(p).map(|h| lista.iter().any(|x| x.eq_ignore_ascii_case(&h))).unwrap_or(false)
+                sha256_archivo(p)
+                    .map(|h| lista.iter().any(|x| x.eq_ignore_ascii_case(&h)))
+                    .unwrap_or(false)
             });
             scripts = ok;
             rechazados = no;
@@ -282,7 +294,8 @@ impl Supervisor {
     }
 
     fn lanzar(&mut self) -> Result<(), ErrorPlugin> {
-        let script = tempfile_lite::Temporal::escribir(WORKER_PY).map_err(|e| ErrorPlugin::Lanzamiento(e.to_string()))?;
+        let script = tempfile_lite::Temporal::escribir(WORKER_PY)
+            .map_err(|e| ErrorPlugin::Lanzamiento(e.to_string()))?;
         let mut hijo = Command::new(&self.python)
             .arg("-I")
             .arg(script.ruta())
@@ -307,15 +320,29 @@ impl Supervisor {
                 }
             })
             .map_err(|e| ErrorPlugin::Lanzamiento(e.to_string()))?;
-        self.worker = Some(Worker { hijo, entrada, respuestas: rx, _script: script });
-        let rutas: Vec<String> = self.scripts.iter().map(|p| p.to_string_lossy().into_owned()).collect();
+        self.worker = Some(Worker {
+            hijo,
+            entrada,
+            respuestas: rx,
+            _script: script,
+        });
+        let rutas: Vec<String> = self
+            .scripts
+            .iter()
+            .map(|p| p.to_string_lossy().into_owned())
+            .collect();
         let r = self.enviar("cargar", json!({ "rutas": rutas }))?;
         self.plugins = serde_json::from_value(r["plugins"].clone()).unwrap_or_default();
         self.errores_carga = r["errores"]
             .as_array()
             .map(|v| {
                 v.iter()
-                    .map(|e| (e["plugin"].as_str().unwrap_or("").to_string(), e["error"].as_str().unwrap_or("").to_string()))
+                    .map(|e| {
+                        (
+                            e["plugin"].as_str().unwrap_or("").to_string(),
+                            e["error"].as_str().unwrap_or("").to_string(),
+                        )
+                    })
                     .collect()
             })
             .unwrap_or_default();
@@ -340,7 +367,9 @@ impl Supervisor {
             match w.respuestas.recv_timeout(resta) {
                 Ok(v) if v["id"].as_u64() == Some(id) => {
                     if let Some(e) = v.get("error") {
-                        return Err(ErrorPlugin::Remoto(e["message"].as_str().unwrap_or("error").to_string()));
+                        return Err(ErrorPlugin::Remoto(
+                            e["message"].as_str().unwrap_or("error").to_string(),
+                        ));
                     }
                     return Ok(v["result"].clone());
                 }
@@ -375,11 +404,22 @@ impl Supervisor {
     }
 
     /// Diagnósticos de los plugins con `al_guardar`.
-    pub fn al_guardar(&mut self, archivo: &Path, texto: &str) -> Result<Vec<Diagnostico>, ErrorPlugin> {
-        let r = self.llamar("al_guardar", json!({"archivo": archivo.to_string_lossy(), "texto": texto}))?;
+    pub fn al_guardar(
+        &mut self,
+        archivo: &Path,
+        texto: &str,
+    ) -> Result<Vec<Diagnostico>, ErrorPlugin> {
+        let r = self.llamar(
+            "al_guardar",
+            json!({"archivo": archivo.to_string_lossy(), "texto": texto}),
+        )?;
         Ok(r["diagnosticos"]
             .as_array()
-            .map(|v| v.iter().filter_map(|d| diagnostico_de_json(archivo, d)).collect())
+            .map(|v| {
+                v.iter()
+                    .filter_map(|d| diagnostico_de_json(archivo, d))
+                    .collect()
+            })
             .unwrap_or_default())
     }
 
@@ -397,7 +437,11 @@ impl Supervisor {
             .unwrap_or_default())
     }
 
-    pub fn ejecutar(&mut self, comando: &ComandoPlugin, ctx: &Contexto) -> Result<String, ErrorPlugin> {
+    pub fn ejecutar(
+        &mut self,
+        comando: &ComandoPlugin,
+        ctx: &Contexto,
+    ) -> Result<String, ErrorPlugin> {
         let r = self.llamar(
             "ejecutar",
             json!({"plugin": comando.plugin, "comando": comando.comando, "ctx": ctx}),
@@ -428,16 +472,28 @@ fn diagnostico_de_json(archivo: &Path, d: &Value) -> Option<Diagnostico> {
 
 /// Servicio que corre el supervisor en un hilo propio para no bloquear la interfaz.
 pub enum Pedido {
-    AlGuardar { archivo: PathBuf, texto: String },
+    AlGuardar {
+        archivo: PathBuf,
+        texto: String,
+    },
     Comandos,
-    Ejecutar { comando: ComandoPlugin, ctx: Contexto },
+    Ejecutar {
+        comando: ComandoPlugin,
+        ctx: Contexto,
+    },
 }
 
 #[derive(Debug)]
 pub enum Respuesta {
-    Diagnosticos { archivo: PathBuf, resultado: Result<Vec<Diagnostico>, ErrorPlugin> },
+    Diagnosticos {
+        archivo: PathBuf,
+        resultado: Result<Vec<Diagnostico>, ErrorPlugin>,
+    },
     Comandos(Result<Vec<ComandoPlugin>, ErrorPlugin>),
-    Ejecutado { comando: ComandoPlugin, resultado: Result<String, ErrorPlugin> },
+    Ejecutado {
+        comando: ComandoPlugin,
+        resultado: Result<String, ErrorPlugin>,
+    },
 }
 
 pub struct Servicio {
@@ -445,7 +501,10 @@ pub struct Servicio {
 }
 
 impl Servicio {
-    pub fn iniciar(mut sup: Supervisor, responder: impl Fn(Respuesta) + Send + 'static) -> Servicio {
+    pub fn iniciar(
+        mut sup: Supervisor,
+        responder: impl Fn(Respuesta) + Send + 'static,
+    ) -> Servicio {
         let (tx, rx) = mpsc::channel::<Pedido>();
         std::thread::Builder::new()
             .name("plugins".into())
@@ -505,7 +564,10 @@ def comando_contar_lineas(ctx):
     fn sin_plugins_no_lanza_worker() {
         let dir = proyecto(&[]);
         let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
-        assert_eq!(s.al_guardar(Path::new("a.c"), "x"), Err(ErrorPlugin::SinPlugins));
+        assert_eq!(
+            s.al_guardar(Path::new("a.c"), "x"),
+            Err(ErrorPlugin::SinPlugins)
+        );
         assert!(!s.activo());
     }
 
@@ -516,13 +578,18 @@ def comando_contar_lineas(ctx):
         }
         let dir = proyecto(&[("todo.py", TODO)]);
         let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
-        let d = s.al_guardar(Path::new("a.c"), "int x;\n// TODO: algo\n").unwrap();
+        let d = s
+            .al_guardar(Path::new("a.c"), "int x;\n// TODO: algo\n")
+            .unwrap();
         assert_eq!(d.len(), 1);
         assert_eq!((d[0].linea, d[0].columna), (2, 4));
         assert!(d[0].mensaje.contains("[todo]"));
         assert_eq!(s.plugins[0].comandos, vec!["contar_lineas".to_string()]);
         let cmds = s.comandos().unwrap();
-        let ctx = Contexto { texto: "a\nb\nc".into(), ..Default::default() };
+        let ctx = Contexto {
+            texto: "a\nb\nc".into(),
+            ..Default::default()
+        };
         assert_eq!(s.ejecutar(&cmds[0], &ctx).unwrap(), "3 líneas");
     }
 
@@ -534,10 +601,19 @@ def comando_contar_lineas(ctx):
         let dir = proyecto(&[("colgado.py", "def comando_colgar(ctx):\n    while True: pass\n\ndef comando_ok(ctx):\n    return 'ok'\n")]);
         let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
         s.tiempo_limite = Duration::from_millis(500);
-        let colgar = ComandoPlugin { plugin: "colgado".into(), comando: "colgar".into() };
-        assert_eq!(s.ejecutar(&colgar, &Contexto::default()), Err(ErrorPlugin::TiempoAgotado));
+        let colgar = ComandoPlugin {
+            plugin: "colgado".into(),
+            comando: "colgar".into(),
+        };
+        assert_eq!(
+            s.ejecutar(&colgar, &Contexto::default()),
+            Err(ErrorPlugin::TiempoAgotado)
+        );
         assert!(!s.activo());
-        let ok = ComandoPlugin { plugin: "colgado".into(), comando: "ok".into() };
+        let ok = ComandoPlugin {
+            plugin: "colgado".into(),
+            comando: "ok".into(),
+        };
         assert_eq!(s.ejecutar(&ok, &Contexto::default()).unwrap(), "ok");
         assert_eq!(s.reinicios, 1);
     }
@@ -547,7 +623,10 @@ def comando_contar_lineas(ctx):
         if !hay_python() {
             return;
         }
-        let dir = proyecto(&[("a_roto.py", "import modulo_inexistente\n"), ("todo.py", TODO)]);
+        let dir = proyecto(&[
+            ("a_roto.py", "import modulo_inexistente\n"),
+            ("todo.py", TODO),
+        ]);
         let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
         assert!(s.al_guardar(Path::new("a.c"), "TODO").unwrap().len() == 1);
         assert_eq!(s.errores_carga.len(), 1);

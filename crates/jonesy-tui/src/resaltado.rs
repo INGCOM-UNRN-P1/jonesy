@@ -34,21 +34,78 @@ pub struct Estado {
 pub type Tramos = Vec<(usize, usize, Clase)>;
 
 const PALABRAS_C: &[&str] = &[
-    "auto", "break", "case", "const", "continue", "default", "do", "else", "enum", "extern", "for", "goto", "if",
-    "inline", "register", "restrict", "return", "sizeof", "static", "struct", "switch", "typedef", "union",
-    "volatile", "while", "_Alignas", "_Alignof", "_Atomic", "_Generic", "_Noreturn", "_Static_assert",
-    "_Thread_local", "NULL", "true", "false",
+    "auto",
+    "break",
+    "case",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "else",
+    "enum",
+    "extern",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "register",
+    "restrict",
+    "return",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "volatile",
+    "while",
+    "_Alignas",
+    "_Alignof",
+    "_Atomic",
+    "_Generic",
+    "_Noreturn",
+    "_Static_assert",
+    "_Thread_local",
+    "NULL",
+    "true",
+    "false",
 ];
 
 const TIPOS_C: &[&str] = &[
-    "void", "char", "short", "int", "long", "float", "double", "signed", "unsigned", "_Bool", "bool", "size_t",
-    "ssize_t", "FILE", "int8_t", "int16_t", "int32_t", "int64_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
-    "uintptr_t", "intptr_t", "ptrdiff_t", "pid_t", "off_t", "time_t", "clock_t",
+    "void",
+    "char",
+    "short",
+    "int",
+    "long",
+    "float",
+    "double",
+    "signed",
+    "unsigned",
+    "_Bool",
+    "bool",
+    "size_t",
+    "ssize_t",
+    "FILE",
+    "int8_t",
+    "int16_t",
+    "int32_t",
+    "int64_t",
+    "uint8_t",
+    "uint16_t",
+    "uint32_t",
+    "uint64_t",
+    "uintptr_t",
+    "intptr_t",
+    "ptrdiff_t",
+    "pid_t",
+    "off_t",
+    "time_t",
+    "clock_t",
 ];
 
 const PALABRAS_BASH: &[&str] = &[
-    "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac", "in", "function",
-    "return", "local", "export", "set", "echo", "cd", "exit",
+    "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac",
+    "in", "function", "return", "local", "export", "set", "echo", "cd", "exit",
 ];
 
 fn es_ident(c: char) -> bool {
@@ -102,7 +159,11 @@ fn resaltar_c(cs: &[char], estado: &mut Estado) -> Tramos {
         t.push((p, j, Clase::Preproc));
         i = j;
         if i < cs.len() && cs[i] == '<' {
-            let f = cs[i..].iter().position(|&c| c == '>').map(|x| i + x + 1).unwrap_or(cs.len());
+            let f = cs[i..]
+                .iter()
+                .position(|&c| c == '>')
+                .map(|x| i + x + 1)
+                .unwrap_or(cs.len());
             t.push((i, f, Clase::Cadena));
             i = f;
         }
@@ -213,7 +274,10 @@ fn resaltar_bash(cs: &[char]) -> Tramos {
 
 fn resaltar_clave_valor(cs: &[char], separador: char) -> Tramos {
     let mut t = vec![];
-    let ini = cs.iter().position(|c| !c.is_whitespace()).unwrap_or(cs.len());
+    let ini = cs
+        .iter()
+        .position(|c| !c.is_whitespace())
+        .unwrap_or(cs.len());
     if ini == cs.len() {
         return t;
     }
@@ -247,7 +311,12 @@ fn resaltar_clave_valor(cs: &[char], separador: char) -> Tramos {
             i = f;
             continue;
         }
-        if (c.is_ascii_digit() || c == '-') && (i == 0 || !es_ident(cs[i - 1])) && cs.get(i + 1).is_none_or(|n| n.is_ascii_digit() || c.is_ascii_digit()) {
+        if (c.is_ascii_digit() || c == '-')
+            && (i == 0 || !es_ident(cs[i - 1]))
+            && cs
+                .get(i + 1)
+                .is_none_or(|n| n.is_ascii_digit() || c.is_ascii_digit())
+        {
             let f = numero(cs, i + 1);
             t.push((i, f, Clase::Numero));
             i = f;
@@ -299,7 +368,11 @@ fn resaltar_markdown(cs: &[char], estado: &mut Estado) -> Tramos {
     while i < cs.len() {
         match cs[i] {
             '`' => {
-                let f = cs[i + 1..].iter().position(|&c| c == '`').map(|p| i + p + 2).unwrap_or(cs.len());
+                let f = cs[i + 1..]
+                    .iter()
+                    .position(|&c| c == '`')
+                    .map(|p| i + p + 2)
+                    .unwrap_or(cs.len());
                 t.push((i, f, Clase::Codigo));
                 i = f;
             }
@@ -307,7 +380,8 @@ fn resaltar_markdown(cs: &[char], estado: &mut Estado) -> Tramos {
                 let marca = cs[i];
                 let doble = cs.get(i + 1) == Some(&marca);
                 let largo = if doble { 2 } else { 1 };
-                let cierre = (i + largo + 1..cs.len()).find(|&j| cs[j] == marca && (!doble || cs.get(j + 1) == Some(&marca)));
+                let cierre = (i + largo + 1..cs.len())
+                    .find(|&j| cs[j] == marca && (!doble || cs.get(j + 1) == Some(&marca)));
                 match cierre {
                     Some(j) if !(marca == '_' && i > 0 && es_ident(cs[i - 1])) => {
                         t.push((i, j + largo, Clase::Enfasis));
@@ -320,7 +394,11 @@ fn resaltar_markdown(cs: &[char], estado: &mut Estado) -> Tramos {
                 let cierre = cs[i..].iter().position(|&c| c == ']').map(|p| i + p);
                 match cierre {
                     Some(j) if cs.get(j + 1) == Some(&'(') => {
-                        let f = cs[j..].iter().position(|&c| c == ')').map(|p| j + p + 1).unwrap_or(cs.len());
+                        let f = cs[j..]
+                            .iter()
+                            .position(|&c| c == ')')
+                            .map(|p| j + p + 1)
+                            .unwrap_or(cs.len());
                         t.push((i, f, Clase::Enlace));
                         i = f;
                     }
@@ -364,7 +442,13 @@ pub struct Cache {
 
 impl Cache {
     /// Estado al inicio de `linea`, con `obtener(i)` devolviendo la línea i.
-    pub fn estado_en(&mut self, version: u64, lenguaje: Lenguaje, linea: usize, obtener: impl Fn(usize) -> Vec<char>) -> Estado {
+    pub fn estado_en(
+        &mut self,
+        version: u64,
+        lenguaje: Lenguaje,
+        linea: usize,
+        obtener: impl Fn(usize) -> Vec<char>,
+    ) -> Estado {
         if self.version != version {
             self.version = version;
             self.estados.clear();
@@ -388,7 +472,10 @@ mod tests {
 
     fn clases(l: Lenguaje, s: &str) -> Vec<(String, Clase)> {
         let cs: Vec<char> = s.chars().collect();
-        resaltar(l, &cs, &mut Estado::default()).into_iter().map(|(a, b, c)| (cs[a..b].iter().collect(), c)).collect()
+        resaltar(l, &cs, &mut Estado::default())
+            .into_iter()
+            .map(|(a, b, c)| (cs[a..b].iter().collect(), c))
+            .collect()
     }
 
     #[test]
@@ -403,7 +490,10 @@ mod tests {
                 ("// fin".into(), Clase::Comentario)
             ]
         );
-        assert_eq!(clases(Lenguaje::C, "#include <stdio.h>")[1], ("<stdio.h>".into(), Clase::Cadena));
+        assert_eq!(
+            clases(Lenguaje::C, "#include <stdio.h>")[1],
+            ("<stdio.h>".into(), Clase::Cadena)
+        );
         assert!(clases(Lenguaje::C, "x = 0x1F;").contains(&("0x1F".into(), Clase::Numero)));
     }
 
@@ -422,9 +512,18 @@ mod tests {
 
     #[test]
     fn markdown_y_toml() {
-        assert_eq!(clases(Lenguaje::Markdown, "# Título")[0].1, Clase::Encabezado);
+        assert_eq!(
+            clases(Lenguaje::Markdown, "# Título")[0].1,
+            Clase::Encabezado
+        );
         let r = clases(Lenguaje::Markdown, "usar `malloc` y **validar**");
-        assert_eq!(r, vec![("`malloc`".into(), Clase::Codigo), ("**validar**".into(), Clase::Enfasis)]);
+        assert_eq!(
+            r,
+            vec![
+                ("`malloc`".into(), Clase::Codigo),
+                ("**validar**".into(), Clase::Enfasis)
+            ]
+        );
         let r = clases(Lenguaje::Toml, "comando = \"make\" # x");
         assert_eq!(r[0], ("comando ".into(), Clase::Clave));
         assert_eq!(r[1].1, Clase::Cadena);

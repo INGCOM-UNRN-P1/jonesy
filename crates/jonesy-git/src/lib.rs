@@ -36,7 +36,10 @@ impl Entrada {
     }
 
     pub fn sin_stage(&self) -> bool {
-        matches!(self.tipo, TipoEntrada::SinSeguimiento | TipoEntrada::Conflicto) || self.arbol != '.'
+        matches!(
+            self.tipo,
+            TipoEntrada::SinSeguimiento | TipoEntrada::Conflicto
+        ) || self.arbol != '.'
     }
 
     /// Descripción corta en español para el panel.
@@ -45,7 +48,11 @@ impl Entrada {
             TipoEntrada::SinSeguimiento => "nuevo",
             TipoEntrada::Ignorado => "ignorado",
             TipoEntrada::Conflicto => "conflicto",
-            TipoEntrada::Cambio => match if self.arbol != '.' { self.arbol } else { self.indice } {
+            TipoEntrada::Cambio => match if self.arbol != '.' {
+                self.arbol
+            } else {
+                self.indice
+            } {
                 'M' => "modificado",
                 'A' => "agregado",
                 'D' => "borrado",
@@ -69,7 +76,9 @@ pub struct Estado {
 
 impl Estado {
     pub fn limpio(&self) -> bool {
-        self.entradas.iter().all(|e| e.tipo == TipoEntrada::Ignorado)
+        self.entradas
+            .iter()
+            .all(|e| e.tipo == TipoEntrada::Ignorado)
     }
 
     pub fn cantidad_modificados(&self) -> usize {
@@ -137,7 +146,11 @@ pub fn parsear_estado(salida: &str) -> Estado {
                     continue;
                 }
                 let xy: Vec<char> = partes[1].chars().collect();
-                let origen = if tipo == '2' { campos.next().map(String::from) } else { None };
+                let origen = if tipo == '2' {
+                    campos.next().map(String::from)
+                } else {
+                    None
+                };
                 estado.entradas.push(Entrada {
                     ruta: partes[n_campos - 1].to_string(),
                     indice: *xy.first().unwrap_or(&'.'),
@@ -163,7 +176,11 @@ pub fn parsear_estado(salida: &str) -> Estado {
                     ruta: registro[2..].to_string(),
                     indice: '.',
                     arbol: '.',
-                    tipo: if tipo == '?' { TipoEntrada::SinSeguimiento } else { TipoEntrada::Ignorado },
+                    tipo: if tipo == '?' {
+                        TipoEntrada::SinSeguimiento
+                    } else {
+                        TipoEntrada::Ignorado
+                    },
                     origen: None,
                 });
             }
@@ -199,9 +216,13 @@ pub struct Repo {
 impl Repo {
     /// El repositorio que contiene `dir`, si `git` está y `dir` está dentro de uno.
     pub fn abrir(dir: &Path) -> Option<Repo> {
-        let repo = Repo { dir: dir.to_path_buf() };
+        let repo = Repo {
+            dir: dir.to_path_buf(),
+        };
         let (codigo, salida, _) = repo.git(&["rev-parse", "--show-toplevel"]).ok()?;
-        (codigo == 0).then(|| Repo { dir: PathBuf::from(salida.trim()) })
+        (codigo == 0).then(|| Repo {
+            dir: PathBuf::from(salida.trim()),
+        })
     }
 
     fn git(&self, args: &[&str]) -> std::io::Result<(i32, String, String)> {
@@ -229,7 +250,11 @@ impl Repo {
             match self.git(args) {
                 Ok((0, salida, _)) => return Ok(salida),
                 Ok((_, salida, error)) => {
-                    let texto = if error.trim().is_empty() { salida } else { error };
+                    let texto = if error.trim().is_empty() {
+                        salida
+                    } else {
+                        error
+                    };
                     if texto.contains("index.lock") && intento < 3 {
                         std::thread::sleep(Duration::from_millis(100 * (intento + 1)));
                         ultimo = texto;
@@ -244,7 +269,8 @@ impl Repo {
     }
 
     pub fn estado(&self) -> Result<Estado, ErrorGit> {
-        self.ejecutar(&["status", "--porcelain=v2", "--branch", "-z"]).map(|s| parsear_estado(&s))
+        self.ejecutar(&["status", "--porcelain=v2", "--branch", "-z"])
+            .map(|s| parsear_estado(&s))
     }
 
     pub fn agregar(&self, ruta: &str) -> Result<(), ErrorGit> {
@@ -253,9 +279,11 @@ impl Repo {
 
     pub fn quitar_del_stage(&self, ruta: &str) -> Result<(), ErrorGit> {
         if self.tiene_commits() {
-            self.ejecutar(&["restore", "--staged", "--", ruta]).map(|_| ())
+            self.ejecutar(&["restore", "--staged", "--", ruta])
+                .map(|_| ())
         } else {
-            self.ejecutar(&["rm", "--cached", "-q", "--", ruta]).map(|_| ())
+            self.ejecutar(&["rm", "--cached", "-q", "--", ruta])
+                .map(|_| ())
         }
     }
 
@@ -265,14 +293,19 @@ impl Repo {
 
     pub fn quitar_todo_del_stage(&self) -> Result<(), ErrorGit> {
         if self.tiene_commits() {
-            self.ejecutar(&["restore", "--staged", "--", "."]).map(|_| ())
+            self.ejecutar(&["restore", "--staged", "--", "."])
+                .map(|_| ())
         } else {
-            self.ejecutar(&["rm", "-r", "--cached", "-q", "--", "."]).map(|_| ())
+            self.ejecutar(&["rm", "-r", "--cached", "-q", "--", "."])
+                .map(|_| ())
         }
     }
 
     fn tiene_commits(&self) -> bool {
-        matches!(self.git(&["rev-parse", "--verify", "-q", "HEAD"]), Ok((0, _, _)))
+        matches!(
+            self.git(&["rev-parse", "--verify", "-q", "HEAD"]),
+            Ok((0, _, _))
+        )
     }
 
     /// `git commit -m`: respeta identidad, firma y hooks del host. Devuelve la salida de git.
@@ -285,7 +318,8 @@ impl Repo {
 
     pub fn log(&self, cantidad: usize) -> Result<Vec<Commit>, ErrorGit> {
         let n = format!("-n{cantidad}");
-        let salida = match self.ejecutar(&["log", &n, "--pretty=format:%h%x1f%an%x1f%ar%x1f%s%x1e"]) {
+        let salida = match self.ejecutar(&["log", &n, "--pretty=format:%h%x1f%an%x1f%ar%x1f%s%x1e"])
+        {
             Ok(s) => s,
             Err(e) if e.0.contains("does not have any commits") => return Ok(Vec::new()),
             Err(e) => return Err(e),
@@ -323,7 +357,10 @@ impl Repo {
     pub fn marca(&self) -> Option<(SystemTime, SystemTime)> {
         let git = self.dir.join(".git");
         let m = |p: PathBuf| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-        Some((m(git.join("HEAD"))?, m(git.join("index")).unwrap_or(SystemTime::UNIX_EPOCH)))
+        Some((
+            m(git.join("HEAD"))?,
+            m(git.join("index")).unwrap_or(SystemTime::UNIX_EPOCH),
+        ))
     }
 }
 
@@ -331,7 +368,9 @@ impl Repo {
 pub fn aviso_mensaje(mensaje: &str) -> Option<String> {
     let primera = mensaje.lines().next().unwrap_or("");
     let n = primera.chars().count();
-    (n > LARGO_RESUMEN).then(|| format!("La primera línea tiene {n} caracteres; conviene que no pase de {LARGO_RESUMEN}."))
+    (n > LARGO_RESUMEN).then(|| {
+        format!("La primera línea tiene {n} caracteres; conviene que no pase de {LARGO_RESUMEN}.")
+    })
 }
 
 #[cfg(test)]
@@ -359,7 +398,8 @@ mod tests {
 
     #[test]
     fn rutas_con_espacios() {
-        let e = parsear_estado("1 .M N... 100644 100644 100644 a b mi archivo.c\0? otro archivo.md\0");
+        let e =
+            parsear_estado("1 .M N... 100644 100644 100644 a b mi archivo.c\0? otro archivo.md\0");
         assert_eq!(e.entradas[0].ruta, "mi archivo.c");
         assert_eq!(e.entradas[1].ruta, "otro archivo.md");
     }
@@ -371,7 +411,13 @@ mod tests {
         }
         let dir = tempfile::tempdir().unwrap();
         let d = dir.path();
-        let correr = |args: &[&str]| Command::new("git").args(args).current_dir(d).output().unwrap();
+        let correr = |args: &[&str]| {
+            Command::new("git")
+                .args(args)
+                .current_dir(d)
+                .output()
+                .unwrap()
+        };
         correr(&["init", "-q", "-b", "main"]);
         correr(&["config", "user.name", "Alumna"]);
         correr(&["config", "user.email", "alumna@example.com"]);
@@ -384,7 +430,10 @@ mod tests {
         repo.agregar("lista.c").unwrap();
         assert!(repo.estado().unwrap().entradas[0].en_stage());
         repo.quitar_del_stage("lista.c").unwrap();
-        assert_eq!(repo.estado().unwrap().entradas[0].tipo, TipoEntrada::SinSeguimiento);
+        assert_eq!(
+            repo.estado().unwrap().entradas[0].tipo,
+            TipoEntrada::SinSeguimiento
+        );
         repo.agregar_todo().unwrap();
         repo.commit("Primer commit").unwrap();
         assert!(repo.estado().unwrap().limpio());

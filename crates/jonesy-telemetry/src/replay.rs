@@ -24,7 +24,8 @@ impl Documento {
         let nuevos: Vec<char> = insertado.chars().collect();
         let n = nuevos.len();
         self.texto.splice(offset..offset, nuevos);
-        self.pegado.splice(offset..offset, std::iter::repeat_n(es_pegado, n));
+        self.pegado
+            .splice(offset..offset, std::iter::repeat_n(es_pegado, n));
     }
 
     pub fn como_texto(&self) -> String {
@@ -62,10 +63,17 @@ impl Reproduccion {
         let registro = self.registros.get(self.posicion)?.clone();
         self.posicion += 1;
         match &registro.event {
-            TelemetryEvent::BracketedPaste { buffer_id, length, .. } => {
+            TelemetryEvent::BracketedPaste {
+                buffer_id, length, ..
+            } => {
                 self.pegado_pendiente = Some((buffer_id.clone(), *length));
             }
-            TelemetryEvent::TextDelta { buffer_id, offset, inserted, deleted_len } => {
+            TelemetryEvent::TextDelta {
+                buffer_id,
+                offset,
+                inserted,
+                deleted_len,
+            } => {
                 let es_pegado = match &self.pegado_pendiente {
                     Some((id, _)) if id == buffer_id && !inserted.is_empty() => {
                         self.pegado_pendiente = None;
@@ -73,10 +81,14 @@ impl Reproduccion {
                     }
                     _ => false,
                 };
-                self.documentos.entry(buffer_id.clone()).or_default().aplicar(*offset, inserted, *deleted_len, es_pegado);
+                self.documentos
+                    .entry(buffer_id.clone())
+                    .or_default()
+                    .aplicar(*offset, inserted, *deleted_len, es_pegado);
                 self.buffer_activo = Some(buffer_id.clone());
             }
-            TelemetryEvent::CursorMove { buffer_id, .. } | TelemetryEvent::BufferSave { buffer_id, .. } => {
+            TelemetryEvent::CursorMove { buffer_id, .. }
+            | TelemetryEvent::BufferSave { buffer_id, .. } => {
                 self.documentos.entry(buffer_id.clone()).or_default();
                 self.buffer_activo = Some(buffer_id.clone());
             }
@@ -157,7 +169,11 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
             }
         }
         match &reg.event {
-            TelemetryEvent::BracketedPaste { buffer_id, length, content_hash } => {
+            TelemetryEvent::BracketedPaste {
+                buffer_id,
+                length,
+                content_hash,
+            } => {
                 r.caracteres_pegados += length;
                 r.pegados.push(Pegado {
                     seq: reg.seq,
@@ -168,7 +184,11 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
                 });
                 pegado_pendiente = true;
             }
-            TelemetryEvent::TextDelta { inserted, deleted_len, .. } => {
+            TelemetryEvent::TextDelta {
+                inserted,
+                deleted_len,
+                ..
+            } => {
                 r.caracteres_borrados += deleted_len;
                 if pegado_pendiente && !inserted.is_empty() {
                     pegado_pendiente = false;
@@ -177,7 +197,9 @@ pub fn resumir(registros: &[TelemetryRecord]) -> Resumen {
                 }
             }
             TelemetryEvent::BufferSave { .. } => r.guardados += 1,
-            TelemetryEvent::CommandExec { command, exit_code } => r.comandos.push((command.clone(), *exit_code)),
+            TelemetryEvent::CommandExec { command, exit_code } => {
+                r.comandos.push((command.clone(), *exit_code))
+            }
             _ => {}
         }
     }
@@ -201,7 +223,12 @@ mod tests {
     }
 
     fn delta(offset: usize, ins: &str, del: usize) -> TelemetryEvent {
-        TelemetryEvent::TextDelta { buffer_id: "a.c".into(), offset, inserted: ins.into(), deleted_len: del }
+        TelemetryEvent::TextDelta {
+            buffer_id: "a.c".into(),
+            offset,
+            inserted: ins.into(),
+            deleted_len: del,
+        }
     }
 
     #[test]
@@ -210,7 +237,14 @@ mod tests {
             (0, delta(0, "int x;", 0)),
             (1_000_000, delta(4, "", 1)),
             (2_000_000, delta(4, "y", 0)),
-            (3_000_000, TelemetryEvent::BracketedPaste { buffer_id: "a.c".into(), length: 9, content_hash: "h".into() }),
+            (
+                3_000_000,
+                TelemetryEvent::BracketedPaste {
+                    buffer_id: "a.c".into(),
+                    length: 9,
+                    content_hash: "h".into(),
+                },
+            ),
             (3_000_100, delta(6, "\nint z;\n", 0)),
         ]);
         let mut rep = Reproduccion::nueva(regs.clone());
@@ -223,7 +257,14 @@ mod tests {
         assert_eq!(rep.documentos["a.c"].como_texto(), "int y;");
 
         let r = resumir(&regs);
-        assert_eq!((r.caracteres_tipeados, r.caracteres_borrados, r.caracteres_pegados), (7, 1, 9));
+        assert_eq!(
+            (
+                r.caracteres_tipeados,
+                r.caracteres_borrados,
+                r.caracteres_pegados
+            ),
+            (7, 1, 9)
+        );
         assert_eq!(r.pegados.len(), 1);
     }
 

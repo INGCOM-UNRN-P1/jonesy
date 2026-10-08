@@ -67,10 +67,21 @@ pub fn glob(patron: &str, texto: &str) -> bool {
 /// Archivos que forman la entrega, relativos a la raíz y ordenados.
 pub fn archivos_de_entrega(p: &Proyecto) -> Vec<String> {
     let patrones: Vec<String> = if p.config.examen.archivos.is_empty() {
-        ["*.c", "*.h", "*.md", "Makefile", "makefile", "src/*.c", "src/*.h", "test/*.c", "tests/*.c", "include/*.h"]
-            .iter()
-            .map(|s| s.to_string())
-            .collect()
+        [
+            "*.c",
+            "*.h",
+            "*.md",
+            "Makefile",
+            "makefile",
+            "src/*.c",
+            "src/*.h",
+            "test/*.c",
+            "tests/*.c",
+            "include/*.h",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect()
     } else {
         p.config.examen.archivos.clone()
     };
@@ -78,7 +89,11 @@ pub fn archivos_de_entrega(p: &Proyecto) -> Vec<String> {
         .archivos(5000)
         .iter()
         .map(|a| p.relativa(a))
-        .chain(["Makefile".to_string(), "makefile".to_string()].into_iter().filter(|m| p.raiz.join(m).is_file()))
+        .chain(
+            ["Makefile".to_string(), "makefile".to_string()]
+                .into_iter()
+                .filter(|m| p.raiz.join(m).is_file()),
+        )
         .filter(|rel| patrones.iter().any(|pat| glob(pat, rel)))
         .collect();
     rels.sort();
@@ -99,9 +114,16 @@ pub fn empaquetar(
     let mut archivos = vec![];
     for rel in archivos_de_entrega(p) {
         let datos = std::fs::read(p.raiz.join(&rel))?;
-        archivos.push(ArchivoEntregado { ruta: rel, bytes: datos.len() as u64, sha256: sha256_hex(&datos) });
+        archivos.push(ArchivoEntregado {
+            ruta: rel,
+            bytes: datos.len() as u64,
+            sha256: sha256_hex(&datos),
+        });
     }
-    let (ultimo_hash, registros) = telemetria.as_ref().map(|(_, h, n)| (h.clone(), *n)).unwrap_or((None, 0));
+    let (ultimo_hash, registros) = telemetria
+        .as_ref()
+        .map(|(_, h, n)| (h.clone(), *n))
+        .unwrap_or((None, 0));
     let manifiesto = Manifiesto {
         usuario: usuario.clone(),
         momento_unix: ahora_unix,
@@ -111,14 +133,20 @@ pub fn empaquetar(
         telemetria_registros: registros,
         archivos,
     };
-    let nombre: String = usuario.chars().map(|c| if c.is_ascii_alphanumeric() { c } else { '_' }).collect();
+    let nombre: String = usuario
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+        .collect();
     let ruta = dir.join(format!("entrega-{nombre}-{ahora_unix}.tar"));
     let tmp = dir.join(format!(".entrega-{ahora_unix}.tar.tmp"));
     {
         let f = std::fs::File::create(&tmp)?;
         let mut tar = tar::Builder::new(f);
         tar.mode(tar::HeaderMode::Deterministic);
-        let agregar = |tar: &mut tar::Builder<std::fs::File>, nombre: &str, datos: &[u8]| -> std::io::Result<()> {
+        let agregar = |tar: &mut tar::Builder<std::fs::File>,
+                       nombre: &str,
+                       datos: &[u8]|
+         -> std::io::Result<()> {
             let mut h = tar::Header::new_gnu();
             h.set_size(datos.len() as u64);
             h.set_mode(0o644);
@@ -127,7 +155,11 @@ pub fn empaquetar(
             tar.append_data(&mut h, nombre, datos)
         };
         for a in &manifiesto.archivos {
-            agregar(&mut tar, &format!("entrega/{}", a.ruta), &std::fs::read(p.raiz.join(&a.ruta))?)?;
+            agregar(
+                &mut tar,
+                &format!("entrega/{}", a.ruta),
+                &std::fs::read(p.raiz.join(&a.ruta))?,
+            )?;
         }
         if let Some((log, _, _)) = &telemetria {
             if let Ok(datos) = std::fs::read(log) {
@@ -140,8 +172,18 @@ pub fn empaquetar(
     }
     std::fs::rename(&tmp, &ruta)?;
     let sha256 = sha256_hex(&std::fs::read(&ruta)?);
-    std::fs::write(ruta.with_extension("tar.sha256"), format!("{sha256}  {}\n", ruta.file_name().unwrap().to_string_lossy()))?;
-    Ok(Paquete { ruta, sha256, manifiesto })
+    std::fs::write(
+        ruta.with_extension("tar.sha256"),
+        format!(
+            "{sha256}  {}\n",
+            ruta.file_name().unwrap().to_string_lossy()
+        ),
+    )?;
+    Ok(Paquete {
+        ruta,
+        sha256,
+        manifiesto,
+    })
 }
 
 /// Recorta una salida larga a sus últimas `n` líneas.
@@ -174,9 +216,22 @@ mod tests {
         let log = dir.path().join(".jonesy/telemetry.log");
         std::fs::write(&log, "{}\n").unwrap();
         let p = Proyecto::abrir(dir.path());
-        assert_eq!(archivos_de_entrega(&p), vec!["Makefile".to_string(), "main.c".to_string()]);
-        let v = Verificacion { comando: "make test".into(), codigo: Some(0), salida: "ok".into() };
-        let paq = empaquetar(&p, Some((&log, Some("ab".into()), 1)), Some(v), 1_700_000_000).unwrap();
+        assert_eq!(
+            archivos_de_entrega(&p),
+            vec!["Makefile".to_string(), "main.c".to_string()]
+        );
+        let v = Verificacion {
+            comando: "make test".into(),
+            codigo: Some(0),
+            salida: "ok".into(),
+        };
+        let paq = empaquetar(
+            &p,
+            Some((&log, Some("ab".into()), 1)),
+            Some(v),
+            1_700_000_000,
+        )
+        .unwrap();
         assert!(paq.ruta.is_file());
         assert_eq!(paq.sha256, sha256_hex(&std::fs::read(&paq.ruta).unwrap()));
         let mut nombres: Vec<String> = tar::Archive::new(std::fs::File::open(&paq.ruta).unwrap())
@@ -185,7 +240,19 @@ mod tests {
             .map(|e| e.unwrap().path().unwrap().to_string_lossy().into_owned())
             .collect();
         nombres.sort();
-        assert_eq!(nombres, ["entrega.json", "entrega/Makefile", "entrega/main.c", "telemetry.log"]);
-        assert!(std::fs::read_to_string(paq.ruta.with_extension("tar.sha256")).unwrap().starts_with(&paq.sha256));
+        assert_eq!(
+            nombres,
+            [
+                "entrega.json",
+                "entrega/Makefile",
+                "entrega/main.c",
+                "telemetry.log"
+            ]
+        );
+        assert!(
+            std::fs::read_to_string(paq.ruta.with_extension("tar.sha256"))
+                .unwrap()
+                .starts_with(&paq.sha256)
+        );
     }
 }

@@ -106,12 +106,29 @@ pub struct Areas {
 
 fn partir_h(r: Rect, izq: u16) -> (Rect, Rect) {
     let izq = izq.min(r.width);
-    (Rect { width: izq, ..r }, Rect { x: r.x + izq, width: r.width - izq, ..r })
+    (
+        Rect { width: izq, ..r },
+        Rect {
+            x: r.x + izq,
+            width: r.width - izq,
+            ..r
+        },
+    )
 }
 
 fn partir_v(r: Rect, arriba: u16) -> (Rect, Rect) {
     let arriba = arriba.min(r.height);
-    (Rect { height: arriba, ..r }, Rect { y: r.y + arriba, height: r.height - arriba, ..r })
+    (
+        Rect {
+            height: arriba,
+            ..r
+        },
+        Rect {
+            y: r.y + arriba,
+            height: r.height - arriba,
+            ..r
+        },
+    )
 }
 
 pub fn calcular(p: &Pedido) -> Areas {
@@ -119,7 +136,11 @@ pub fn calcular(p: &Pedido) -> Areas {
     let modo = Modo::de_tamano(a.width, a.height);
     let (menu, resto) = partir_v(a, 1);
     let (cuerpo, estado) = partir_v(resto, resto.height.saturating_sub(1));
-    let mut r = Areas { menu, estado, ..Default::default() };
+    let mut r = Areas {
+        menu,
+        estado,
+        ..Default::default()
+    };
 
     if modo == Modo::Compacto {
         match p.vista {
@@ -140,7 +161,9 @@ pub fn calcular(p: &Pedido) -> Areas {
     // Panel lateral derecho: por defecto 30 % del ancho, mín. 28 columnas.
     let mut centro = cuerpo;
     if p.lateral {
-        let w = (cuerpo.width * p.ancho_lateral.clamp(20, 60) / 100).max(28).min(cuerpo.width * 6 / 10);
+        let w = (cuerpo.width * p.ancho_lateral.clamp(20, 60) / 100)
+            .max(28)
+            .min(cuerpo.width * 6 / 10);
         let (c, l) = partir_h(cuerpo, cuerpo.width - w);
         centro = c;
         r.lateral = Some(l);
@@ -149,14 +172,18 @@ pub fn calcular(p: &Pedido) -> Areas {
     // Panel inferior bajo demanda.
     let mut arriba = centro;
     if p.panel_inferior {
-        let alto = p.alto_inferior.clamp(4, centro.height.saturating_sub(6).max(4));
+        let alto = p
+            .alto_inferior
+            .clamp(4, centro.height.saturating_sub(6).max(4));
         let (ar, ab) = partir_v(centro, centro.height - alto);
         arriba = ar;
         r.inferior = Some(ab);
         r.sep_horizontal = Some(ab.y);
     }
 
-    let doc_derecha = modo == Modo::Espacioso && p.quickdoc_posicion == PosicionDoc::Derecha && p.quickdoc_visible;
+    let doc_derecha = modo == Modo::Espacioso
+        && p.quickdoc_posicion == PosicionDoc::Derecha
+        && p.quickdoc_visible;
     let (pct_consigna, pct_doc) = match modo {
         Modo::Espacioso => (25, if doc_derecha { 25 } else { 0 }),
         _ => (35, 0),
@@ -186,7 +213,12 @@ pub fn calcular(p: &Pedido) -> Areas {
             r.quickdoc_flotante = true;
             let w = (editor.width * 6 / 10).max(40).min(editor.width);
             let h = (editor.height / 2).max(8).min(editor.height);
-            r.quickdoc = Some(Rect { x: editor.x + editor.width - w, y: editor.y, width: w, height: h });
+            r.quickdoc = Some(Rect {
+                x: editor.x + editor.width - w,
+                y: editor.y,
+                width: w,
+                height: h,
+            });
         }
     }
     r.editor = Some(editor);

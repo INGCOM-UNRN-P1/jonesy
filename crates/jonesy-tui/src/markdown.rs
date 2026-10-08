@@ -75,7 +75,11 @@ impl R<'_> {
         }
         if !p.is_empty() {
             self.col = UnicodeWidthStr::width(p.as_str());
-            let estilo = if p.contains(self.sim.cita.trim()) { Style::default().fg(tema::ATENUADO) } else { Style::default().fg(tema::ACENTO) };
+            let estilo = if p.contains(self.sim.cita.trim()) {
+                Style::default().fg(tema::ATENUADO)
+            } else {
+                Style::default().fg(tema::ACENTO)
+            };
             self.actual.push(Span::styled(p, estilo));
         } else {
             self.col = 0;
@@ -94,7 +98,10 @@ impl R<'_> {
         }
         if self.doc.lineas.last().is_some_and(|l| l.width() > 0) {
             let pre = self.prefijos.concat();
-            self.doc.lineas.push(Line::from(Span::styled(pre.trim_end().to_string(), Style::default().fg(tema::ATENUADO))));
+            self.doc.lineas.push(Line::from(Span::styled(
+                pre.trim_end().to_string(),
+                Style::default().fg(tema::ATENUADO),
+            )));
         }
     }
 
@@ -143,26 +150,49 @@ impl R<'_> {
     fn cerrar_enlace(&mut self) {
         if let Some((destino, linea, ini)) = self.enlace.take() {
             if linea != usize::MAX {
-                let fin = if linea == self.doc.lineas.len() { self.col } else { self.ancho };
-                self.doc.enlaces.push(Enlace { linea, ini, fin, destino });
+                let fin = if linea == self.doc.lineas.len() {
+                    self.col
+                } else {
+                    self.ancho
+                };
+                self.doc.enlaces.push(Enlace {
+                    linea,
+                    ini,
+                    fin,
+                    destino,
+                });
             }
         }
     }
 
     fn regla(&mut self, c: char, estilo: Style) {
         let pre = self.prefijos.concat();
-        let n = self.ancho.saturating_sub(UnicodeWidthStr::width(pre.as_str()));
-        self.doc.lineas.push(Line::from(vec![Span::raw(pre), Span::styled(c.to_string().repeat(n), estilo)]));
+        let n = self
+            .ancho
+            .saturating_sub(UnicodeWidthStr::width(pre.as_str()));
+        self.doc.lineas.push(Line::from(vec![
+            Span::raw(pre),
+            Span::styled(c.to_string().repeat(n), estilo),
+        ]));
     }
 
     fn bloque_codigo(&mut self, etiqueta: &str, codigo: &str) {
         let pre = self.prefijos.concat();
         let fondo = Style::default().bg(tema::FONDO_CODIGO);
-        let interior = self.ancho.saturating_sub(UnicodeWidthStr::width(pre.as_str()) + 2).max(1);
+        let interior = self
+            .ancho
+            .saturating_sub(UnicodeWidthStr::width(pre.as_str()) + 2)
+            .max(1);
         if !etiqueta.is_empty() {
             self.doc.lineas.push(Line::from(vec![
                 Span::raw(pre.clone()),
-                Span::styled(format!(" {etiqueta} "), Style::default().fg(tema::ATENUADO).bg(tema::FONDO_CODIGO).add_modifier(Modifier::ITALIC)),
+                Span::styled(
+                    format!(" {etiqueta} "),
+                    Style::default()
+                        .fg(tema::ATENUADO)
+                        .bg(tema::FONDO_CODIGO)
+                        .add_modifier(Modifier::ITALIC),
+                ),
             ]));
         }
         let mut estado = Estado::default();
@@ -172,8 +202,15 @@ impl R<'_> {
             let mut spans = vec![Span::raw(pre.clone()), Span::styled(" ", fondo)];
             let mut i = 0;
             let mut usado = 0;
-            let poner = |spans: &mut Vec<Span<'static>>, a: usize, b: usize, st: Style, usado: &mut usize| {
-                let s: String = cs[a..b].iter().take(interior.saturating_sub(*usado)).collect();
+            let poner = |spans: &mut Vec<Span<'static>>,
+                         a: usize,
+                         b: usize,
+                         st: Style,
+                         usado: &mut usize| {
+                let s: String = cs[a..b]
+                    .iter()
+                    .take(interior.saturating_sub(*usado))
+                    .collect();
                 *usado += UnicodeWidthStr::width(s.as_str());
                 if !s.is_empty() {
                     spans.push(Span::styled(s, st));
@@ -183,13 +220,22 @@ impl R<'_> {
                 if a > i {
                     poner(&mut spans, i, a, fondo, &mut usado);
                 }
-                poner(&mut spans, a, b, tema::estilo_clase(clase).bg(tema::FONDO_CODIGO), &mut usado);
+                poner(
+                    &mut spans,
+                    a,
+                    b,
+                    tema::estilo_clase(clase).bg(tema::FONDO_CODIGO),
+                    &mut usado,
+                );
                 i = b;
             }
             if i < cs.len() {
                 poner(&mut spans, i, cs.len(), fondo, &mut usado);
             }
-            spans.push(Span::styled(" ".repeat(interior.saturating_sub(usado) + 1), fondo));
+            spans.push(Span::styled(
+                " ".repeat(interior.saturating_sub(usado) + 1),
+                fondo,
+            ));
             self.doc.lineas.push(Line::from(spans));
         }
     }
@@ -207,7 +253,10 @@ impl R<'_> {
             }
         }
         // Encoge las columnas más anchas hasta que entre.
-        let disponible = self.ancho.saturating_sub(UnicodeWidthStr::width(pre.as_str()) + 1 + ncol * 3).max(ncol);
+        let disponible = self
+            .ancho
+            .saturating_sub(UnicodeWidthStr::width(pre.as_str()) + 1 + ncol * 3)
+            .max(ncol);
         while anchos.iter().sum::<usize>() > disponible {
             let (i, _) = anchos.iter().enumerate().max_by_key(|(_, w)| **w).unwrap();
             if anchos[i] <= 3 {
@@ -226,14 +275,20 @@ impl R<'_> {
             }
             x
         };
-        let mut lineas = vec![Line::from(vec![Span::raw(pre.clone()), Span::styled(separador(s.esq[0], s.cruz[0], s.esq[1]), borde)])];
+        let mut lineas = vec![Line::from(vec![
+            Span::raw(pre.clone()),
+            Span::styled(separador(s.esq[0], s.cruz[0], s.esq[1]), borde),
+        ])];
         for (n, fila) in t.filas.iter().enumerate() {
             let mut spans = vec![Span::raw(pre.clone()), Span::styled(s.v.to_string(), borde)];
             for (i, w) in anchos.iter().enumerate() {
                 let texto = fila.get(i).map(String::as_str).unwrap_or("");
                 let mut celda: String = String::new();
                 for c in texto.chars() {
-                    if UnicodeWidthStr::width(celda.as_str()) + unicode_width::UnicodeWidthChar::width(c).unwrap_or(0) > *w {
+                    if UnicodeWidthStr::width(celda.as_str())
+                        + unicode_width::UnicodeWidthChar::width(c).unwrap_or(0)
+                        > *w
+                    {
                         break;
                     }
                     celda.push(c);
@@ -244,16 +299,31 @@ impl R<'_> {
                     Some(Alignment::Center) => (resto / 2, resto - resto / 2),
                     _ => (0, resto),
                 };
-                let estilo = if n < t.encabezado { Style::default().add_modifier(Modifier::BOLD).fg(tema::ACENTO) } else { Style::default() };
-                spans.push(Span::styled(format!(" {}{}{} ", " ".repeat(izq), celda, " ".repeat(der)), estilo));
+                let estilo = if n < t.encabezado {
+                    Style::default()
+                        .add_modifier(Modifier::BOLD)
+                        .fg(tema::ACENTO)
+                } else {
+                    Style::default()
+                };
+                spans.push(Span::styled(
+                    format!(" {}{}{} ", " ".repeat(izq), celda, " ".repeat(der)),
+                    estilo,
+                ));
                 spans.push(Span::styled(s.v.to_string(), borde));
             }
             lineas.push(Line::from(spans));
             if n + 1 == t.encabezado && t.filas.len() > t.encabezado {
-                lineas.push(Line::from(vec![Span::raw(pre.clone()), Span::styled(separador(s.cruz[2], s.cruz[4], s.cruz[3]), borde)]));
+                lineas.push(Line::from(vec![
+                    Span::raw(pre.clone()),
+                    Span::styled(separador(s.cruz[2], s.cruz[4], s.cruz[3]), borde),
+                ]));
             }
         }
-        lineas.push(Line::from(vec![Span::raw(pre), Span::styled(separador(s.esq[2], s.cruz[1], s.esq[3]), borde)]));
+        lineas.push(Line::from(vec![
+            Span::raw(pre),
+            Span::styled(separador(s.esq[2], s.cruz[1], s.esq[3]), borde),
+        ]));
         self.doc.lineas.extend(lineas);
     }
 
@@ -287,7 +357,11 @@ impl R<'_> {
             }
             Event::TaskListMarker(hecho) => {
                 let marca = self.sim.tarea[hecho as usize];
-                let estilo = if hecho { Style::default().fg(tema::OK) } else { Style::default().fg(tema::ATENUADO) };
+                let estilo = if hecho {
+                    Style::default().fg(tema::OK)
+                } else {
+                    Style::default().fg(tema::ATENUADO)
+                };
                 self.prefijo();
                 self.actual.push(Span::styled(marca.to_string(), estilo));
                 self.col += UnicodeWidthStr::width(marca);
@@ -333,7 +407,9 @@ impl R<'_> {
             Tag::CodeBlock(kind) => {
                 self.linea_en_blanco();
                 let etiqueta = match kind {
-                    CodeBlockKind::Fenced(e) => e.split_whitespace().next().unwrap_or("").to_string(),
+                    CodeBlockKind::Fenced(e) => {
+                        e.split_whitespace().next().unwrap_or("").to_string()
+                    }
                     CodeBlockKind::Indented => String::new(),
                 };
                 self.codigo = Some((etiqueta, String::new()));
@@ -358,7 +434,8 @@ impl R<'_> {
                     }
                     _ => self.sim.vineta.to_string(),
                 };
-                self.prefijos.push(" ".repeat(UnicodeWidthStr::width(marca.as_str())));
+                self.prefijos
+                    .push(" ".repeat(UnicodeWidthStr::width(marca.as_str())));
                 self.vineta = Some(marca);
             }
             Tag::Emphasis => self.empujar_estilo(|s| s.add_modifier(Modifier::ITALIC)),
@@ -375,7 +452,12 @@ impl R<'_> {
             }
             Tag::Table(alineaciones) => {
                 self.linea_en_blanco();
-                self.tabla = Some(Tabla { alineaciones, filas: vec![], celda: String::new(), encabezado: 0 });
+                self.tabla = Some(Tabla {
+                    alineaciones,
+                    filas: vec![],
+                    celda: String::new(),
+                    encabezado: 0,
+                });
             }
             Tag::TableHead | Tag::TableRow => {
                 if let Some(t) = &mut self.tabla {
@@ -404,10 +486,14 @@ impl R<'_> {
                     self.cortar();
                 }
                 if let Some((_, titulo)) = self.encabezado.take() {
-                    self.doc.encabezados.push((self.doc.lineas.len().saturating_sub(1), titulo));
+                    self.doc
+                        .encabezados
+                        .push((self.doc.lineas.len().saturating_sub(1), titulo));
                 }
                 match level {
-                    HeadingLevel::H1 => self.regla(self.sim.h_grueso, Style::default().fg(tema::ACENTO)),
+                    HeadingLevel::H1 => {
+                        self.regla(self.sim.h_grueso, Style::default().fg(tema::ACENTO))
+                    }
                     HeadingLevel::H2 => self.regla(self.sim.h, Style::default().fg(tema::NOTA)),
                     _ => {}
                 }
@@ -491,7 +577,8 @@ pub fn renderizar(fuente: &str, ancho: u16, sim: &Simbolos) -> Documento {
         enlace: None,
         encabezado: None,
     };
-    let opciones = Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
+    let opciones =
+        Options::ENABLE_TABLES | Options::ENABLE_TASKLISTS | Options::ENABLE_STRIKETHROUGH;
     for e in Parser::new_ext(fuente, opciones) {
         r.evento(e);
     }
@@ -531,38 +618,64 @@ mod tests {
 
     #[test]
     fn encabezados_y_enfasis() {
-        let d = renderizar("# Título\n\nTexto con **negrita** y *cursiva*.\n", 30, &Simbolos::unicode());
+        let d = renderizar(
+            "# Título\n\nTexto con **negrita** y *cursiva*.\n",
+            30,
+            &Simbolos::unicode(),
+        );
         let t = texto(&d);
         assert_eq!(t[0], "Título");
         assert!(t[1].starts_with("━━━━"));
         assert_eq!(t[3], "Texto con negrita y cursiva.");
-        let negrita = d.lineas[3].spans.iter().find(|s| s.content == "negrita").unwrap();
+        let negrita = d.lineas[3]
+            .spans
+            .iter()
+            .find(|s| s.content == "negrita")
+            .unwrap();
         assert!(negrita.style.add_modifier.contains(Modifier::BOLD));
         assert_eq!(d.encabezados, vec![(0, "Título".to_string())]);
     }
 
     #[test]
     fn ajuste_de_linea_y_citas() {
-        let d = renderizar("> una cita bastante larga que debe partirse en varias líneas\n", 24, &Simbolos::unicode());
+        let d = renderizar(
+            "> una cita bastante larga que debe partirse en varias líneas\n",
+            24,
+            &Simbolos::unicode(),
+        );
         let t = texto(&d);
         assert!(t.len() >= 3, "{t:?}");
         assert!(t.iter().all(|l| l.starts_with("│ ")), "{t:?}");
-        assert!(t.iter().all(|l| UnicodeWidthStr::width(l.as_str()) <= 24), "{t:?}");
+        assert!(
+            t.iter().all(|l| UnicodeWidthStr::width(l.as_str()) <= 24),
+            "{t:?}"
+        );
     }
 
     #[test]
     fn listas_y_tareas() {
-        let d = renderizar("- uno\n- [x] hecho\n- [ ] pendiente\n\n1. a\n2. b\n", 40, &Simbolos::unicode());
+        let d = renderizar(
+            "- uno\n- [x] hecho\n- [ ] pendiente\n\n1. a\n2. b\n",
+            40,
+            &Simbolos::unicode(),
+        );
         let t = texto(&d);
         assert!(t.contains(&"• uno".to_string()), "{t:?}");
         assert!(t.contains(&"• ☑ hecho".to_string()), "{t:?}");
         assert!(t.contains(&"• ☐ pendiente".to_string()), "{t:?}");
-        assert!(t.contains(&"1. a".to_string()) && t.contains(&"2. b".to_string()), "{t:?}");
+        assert!(
+            t.contains(&"1. a".to_string()) && t.contains(&"2. b".to_string()),
+            "{t:?}"
+        );
     }
 
     #[test]
     fn tabla_gfm() {
-        let d = renderizar("| Func | Retorno |\n|:-----|--------:|\n| malloc | NULL |\n", 40, &Simbolos::unicode());
+        let d = renderizar(
+            "| Func | Retorno |\n|:-----|--------:|\n| malloc | NULL |\n",
+            40,
+            &Simbolos::unicode(),
+        );
         let t = texto(&d);
         assert_eq!(t[0], "┌────────┬─────────┐");
         assert_eq!(t[1], "│ Func   │ Retorno │");
@@ -575,15 +688,26 @@ mod tests {
 
     #[test]
     fn codigo_y_enlaces() {
-        let d = renderizar("Ver [la guía](guia.md).\n\n```c\nint x = 0;\n```\n", 40, &Simbolos::unicode());
+        let d = renderizar(
+            "Ver [la guía](guia.md).\n\n```c\nint x = 0;\n```\n",
+            40,
+            &Simbolos::unicode(),
+        );
         assert_eq!(d.enlaces.len(), 1);
         let e = &d.enlaces[0];
         assert_eq!(e.destino, "guia.md");
         assert_eq!((e.linea, e.ini), (0, 4));
         let t = texto(&d);
         assert!(t.iter().any(|l| l.contains("int x = 0;")), "{t:?}");
-        let linea = d.lineas.iter().find(|l| texto_linea(l).contains("int")).unwrap();
-        assert!(linea.spans.iter().any(|s| s.content == "int" && s.style.fg.is_some()));
+        let linea = d
+            .lineas
+            .iter()
+            .find(|l| texto_linea(l).contains("int"))
+            .unwrap();
+        assert!(linea
+            .spans
+            .iter()
+            .any(|s| s.content == "int" && s.style.fg.is_some()));
         assert!(es_enlace_local("guia.md"));
         assert!(!es_enlace_local("https://x.org"));
     }

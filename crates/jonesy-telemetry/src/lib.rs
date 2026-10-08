@@ -40,15 +40,45 @@ pub struct TelemetryRecord {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type", content = "data")]
 pub enum TelemetryEvent {
-    SessionStart { user: String, exam_mode: bool },
-    KeyPress { key: String, modifiers: u8 },
-    TextDelta { buffer_id: String, offset: usize, inserted: String, deleted_len: usize },
-    BracketedPaste { buffer_id: String, length: usize, content_hash: String },
-    CursorMove { buffer_id: String, line: usize, col: usize },
-    BufferSave { buffer_id: String, total_bytes: usize },
-    CommandExec { command: String, exit_code: Option<i32> },
-    FocusChange { panel: String, focused: bool },
-    SessionEnd { reason: String },
+    SessionStart {
+        user: String,
+        exam_mode: bool,
+    },
+    KeyPress {
+        key: String,
+        modifiers: u8,
+    },
+    TextDelta {
+        buffer_id: String,
+        offset: usize,
+        inserted: String,
+        deleted_len: usize,
+    },
+    BracketedPaste {
+        buffer_id: String,
+        length: usize,
+        content_hash: String,
+    },
+    CursorMove {
+        buffer_id: String,
+        line: usize,
+        col: usize,
+    },
+    BufferSave {
+        buffer_id: String,
+        total_bytes: usize,
+    },
+    CommandExec {
+        command: String,
+        exit_code: Option<i32>,
+    },
+    FocusChange {
+        panel: String,
+        focused: bool,
+    },
+    SessionEnd {
+        reason: String,
+    },
 }
 
 impl TelemetryEvent {
@@ -76,7 +106,10 @@ pub fn json_canonico<T: Serialize>(valor: &T) -> String {
 }
 
 pub fn ahora_micros() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_micros() as u64).unwrap_or(0)
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_micros() as u64)
+        .unwrap_or(0)
 }
 
 /// Estado de la cadena: lo que hace falta para agregar el siguiente registro.
@@ -88,7 +121,10 @@ pub struct Cadena {
 
 impl Default for Cadena {
     fn default() -> Self {
-        Cadena { siguiente_seq: 0, ultimo_hash: HASH_INICIAL.to_string() }
+        Cadena {
+            siguiente_seq: 0,
+            ultimo_hash: HASH_INICIAL.to_string(),
+        }
     }
 }
 
@@ -155,7 +191,11 @@ impl Telemetria {
         let hilo = std::thread::Builder::new()
             .name("jonesy-telemetria".into())
             .spawn(move || bucle_escritura(rx, archivo, cadena))?;
-        Ok(Telemetria { tx, hilo: Some(hilo), ruta })
+        Ok(Telemetria {
+            tx,
+            hilo: Some(hilo),
+            ruta,
+        })
     }
 
     pub fn ruta(&self) -> &Path {
@@ -204,7 +244,11 @@ fn bucle_escritura(rx: Receiver<Mensaje>, archivo: File, mut cadena: Cadena) {
         }
     };
     loop {
-        let mensaje = if pendientes > 0 { rx.recv_timeout(VENTANA) } else { rx.recv().map_err(|_| RecvTimeoutError::Disconnected) };
+        let mensaje = if pendientes > 0 {
+            rx.recv_timeout(VENTANA)
+        } else {
+            rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
+        };
         match mensaje {
             Ok(Mensaje::Evento(evento, ts)) => {
                 let sincronizar = evento.fuerza_sincronizacion();
@@ -283,11 +327,20 @@ pub fn verificar(ruta: &Path) -> std::io::Result<Verificacion> {
             }
         };
         if registro.seq != esperado_seq {
-            v.error = Some((n, format!("secuencia {} donde se esperaba {esperado_seq}", registro.seq)));
+            v.error = Some((
+                n,
+                format!(
+                    "secuencia {} donde se esperaba {esperado_seq}",
+                    registro.seq
+                ),
+            ));
             return Ok(v);
         }
         if registro.prev_hash != v.ultimo_hash {
-            v.error = Some((n, "el hash del registro anterior no coincide: la bitácora fue alterada".into()));
+            v.error = Some((
+                n,
+                "el hash del registro anterior no coincide: la bitácora fue alterada".into(),
+            ));
             return Ok(v);
         }
         if sha256_hex(json_canonico(&registro.event).as_bytes()) != registro.payload_hash {
@@ -330,7 +383,12 @@ mod tests {
     use super::*;
 
     fn delta(texto: &str, offset: usize) -> TelemetryEvent {
-        TelemetryEvent::TextDelta { buffer_id: "a.c".into(), offset, inserted: texto.into(), deleted_len: 0 }
+        TelemetryEvent::TextDelta {
+            buffer_id: "a.c".into(),
+            offset,
+            inserted: texto.into(),
+            deleted_len: 0,
+        }
     }
 
     #[test]
@@ -339,12 +397,21 @@ mod tests {
         let ruta = dir.path().join("telemetry.log");
         {
             let t = Telemetria::abrir(&ruta).unwrap();
-            t.registrar(TelemetryEvent::SessionStart { user: "ana".into(), exam_mode: true });
+            t.registrar(TelemetryEvent::SessionStart {
+                user: "ana".into(),
+                exam_mode: true,
+            });
             for i in 0..40 {
                 t.registrar(delta("x", i));
             }
-            t.registrar(TelemetryEvent::BracketedPaste { buffer_id: "a.c".into(), length: 120, content_hash: "ab".into() });
-            t.registrar(TelemetryEvent::SessionEnd { reason: "entrega".into() });
+            t.registrar(TelemetryEvent::BracketedPaste {
+                buffer_id: "a.c".into(),
+                length: 120,
+                content_hash: "ab".into(),
+            });
+            t.registrar(TelemetryEvent::SessionEnd {
+                reason: "entrega".into(),
+            });
             t.cerrar();
         }
         let v = verificar(&ruta).unwrap();
@@ -353,7 +420,10 @@ mod tests {
         assert_eq!((v.pegados, v.caracteres_pegados, v.cerrada), (1, 120, true));
 
         // Cambiar un carácter de un evento rompe la verificación.
-        let texto = std::fs::read_to_string(&ruta).unwrap().replacen("\"offset\":5", "\"offset\":6", 1);
+        let texto =
+            std::fs::read_to_string(&ruta)
+                .unwrap()
+                .replacen("\"offset\":5", "\"offset\":6", 1);
         std::fs::write(&ruta, texto).unwrap();
         let v = verificar(&ruta).unwrap();
         assert_eq!(v.error.as_ref().map(|e| e.0), Some(7));
@@ -368,8 +438,17 @@ mod tests {
             t.registrar(delta("y", i));
         }
         t.cerrar();
-        let lineas: Vec<String> = std::fs::read_to_string(&ruta).unwrap().lines().map(String::from).collect();
-        let sin_una: Vec<&str> = lineas.iter().enumerate().filter(|(i, _)| *i != 2).map(|(_, l)| l.as_str()).collect();
+        let lineas: Vec<String> = std::fs::read_to_string(&ruta)
+            .unwrap()
+            .lines()
+            .map(String::from)
+            .collect();
+        let sin_una: Vec<&str> = lineas
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *i != 2)
+            .map(|(_, l)| l.as_str())
+            .collect();
         std::fs::write(&ruta, sin_una.join("\n") + "\n").unwrap();
         assert!(!verificar(&ruta).unwrap().integra());
     }
@@ -399,7 +478,10 @@ mod tests {
         }
         // Sin sincronizar: el lote de 32 o la ventana de 500 ms vacían solos.
         std::thread::sleep(VENTANA + Duration::from_millis(300));
-        assert_eq!(std::fs::read_to_string(&ruta).unwrap().lines().count(), LOTE);
+        assert_eq!(
+            std::fs::read_to_string(&ruta).unwrap().lines().count(),
+            LOTE
+        );
         t.cerrar();
     }
 }

@@ -86,7 +86,10 @@ pub struct Sitio {
 
 impl Sitio {
     fn corto(&self) -> String {
-        let archivo = Path::new(&self.file).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+        let archivo = Path::new(&self.file)
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
         format!("{archivo}:{}", self.line)
     }
 }
@@ -103,23 +106,33 @@ impl Bloque {
 
 impl Traza {
     pub fn cargar(ruta: &Path) -> Result<Traza, String> {
-        let texto = std::fs::read_to_string(ruta).map_err(|e| format!("{}: {e}", ruta.display()))?;
+        let texto =
+            std::fs::read_to_string(ruta).map_err(|e| format!("{}: {e}", ruta.display()))?;
         serde_json::from_str(&texto).map_err(|e| format!("trace.json inválido: {e}"))
     }
 
     /// Paso que corresponde a una parada del depurador en `funcion` / `linea` con
     /// `profundidad` marcos. Busca hacia adelante desde `desde` (las paradas avanzan) y,
     /// si no encuentra, desde el principio.
-    pub fn alinear(&self, funcion: &str, linea: usize, profundidad: usize, desde: usize) -> Option<usize> {
+    pub fn alinear(
+        &self,
+        funcion: &str,
+        linea: usize,
+        profundidad: usize,
+        desde: usize,
+    ) -> Option<usize> {
         let coincide = |p: &Paso| {
-            p.line == linea && p.func == funcion && (profundidad == 0 || p.frames.len() == profundidad)
+            p.line == linea
+                && p.func == funcion
+                && (profundidad == 0 || p.frames.len() == profundidad)
         };
         (desde..self.steps.len())
             .chain(0..desde.min(self.steps.len()))
             .find(|&i| coincide(&self.steps[i]))
             .or_else(|| {
                 // Sin coincidencia exacta de profundidad (recursión), alcanza con función y línea.
-                (0..self.steps.len()).find(|&i| self.steps[i].line == linea && self.steps[i].func == funcion)
+                (0..self.steps.len())
+                    .find(|&i| self.steps[i].line == linea && self.steps[i].func == funcion)
             })
     }
 }
@@ -158,7 +171,19 @@ pub struct Lienzo {
 
 impl Lienzo {
     fn nuevo(ancho: usize, alto: usize) -> Lienzo {
-        Lienzo { filas: vec![vec![Celda { c: ' ', tono: Tono::Normal }; ancho]; alto], ancho }
+        Lienzo {
+            filas: vec![
+                vec![
+                    Celda {
+                        c: ' ',
+                        tono: Tono::Normal
+                    };
+                    ancho
+                ];
+                alto
+            ],
+            ancho,
+        }
     }
 
     fn poner(&mut self, fila: usize, col: usize, c: char, tono: Tono) {
@@ -176,12 +201,26 @@ impl Lienzo {
     }
 
     fn get(&self, fila: usize, col: usize) -> char {
-        self.filas.get(fila).and_then(|f| f.get(col)).map(|c| c.c).unwrap_or(' ')
+        self.filas
+            .get(fila)
+            .and_then(|f| f.get(col))
+            .map(|c| c.c)
+            .unwrap_or(' ')
     }
 
     /// Texto plano (para pruebas y para copiar).
     pub fn a_texto(&self) -> String {
-        self.filas.iter().map(|f| f.iter().map(|c| c.c).collect::<String>().trim_end().to_string()).collect::<Vec<_>>().join("\n")
+        self.filas
+            .iter()
+            .map(|f| {
+                f.iter()
+                    .map(|c| c.c)
+                    .collect::<String>()
+                    .trim_end()
+                    .to_string()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
     }
 }
 
@@ -215,8 +254,14 @@ fn valor_corto(v: &Value) -> String {
             _ => format!("0x{:x}", v["addr"].as_u64().unwrap_or(0)),
         },
         Some("struct") => "{…}".into(),
-        Some("array") => format!("[{}]", v["elements"].as_array().map(|a| a.len()).unwrap_or(0)),
-        _ => v.get("value").map(|x| x.to_string()).unwrap_or_else(|| "?".into()),
+        Some("array") => format!(
+            "[{}]",
+            v["elements"].as_array().map(|a| a.len()).unwrap_or(0)
+        ),
+        _ => v
+            .get("value")
+            .map(|x| x.to_string())
+            .unwrap_or_else(|| "?".into()),
     }
 }
 
@@ -241,14 +286,24 @@ fn lineas_variable(paso: &Paso, nombre: &str, v: &Value, sangria: usize, out: &m
             Some(b) => {
                 apunta_a = Some(b.id);
                 colgante = !b.vivo();
-                segmentos.push((valor_corto(v), if colgante { Tono::Peligro } else { Tono::Direccion }));
+                segmentos.push((
+                    valor_corto(v),
+                    if colgante {
+                        Tono::Peligro
+                    } else {
+                        Tono::Direccion
+                    },
+                ));
                 if colgante {
                     segmentos.push((" ⚠ colgante".into(), Tono::Peligro));
                 }
             }
             None => {
                 let nulo = v["region"] == "null";
-                segmentos.push((valor_corto(v), if nulo { Tono::Valor } else { Tono::Direccion }));
+                segmentos.push((
+                    valor_corto(v),
+                    if nulo { Tono::Valor } else { Tono::Direccion },
+                ));
                 if !nulo && v["region"].as_str() == Some("heap") {
                     // Apunta al heap pero a ningún bloque conocido: liberado y reciclado o basura.
                     colgante = true;
@@ -259,10 +314,20 @@ fn lineas_variable(paso: &Paso, nombre: &str, v: &Value, sangria: usize, out: &m
     } else {
         segmentos.push((valor_corto(v), Tono::Valor));
     }
-    out.push(LineaCaja { segmentos, apunta_a, colgante });
+    out.push(LineaCaja {
+        segmentos,
+        apunta_a,
+        colgante,
+    });
     if v["kind"] == "struct" {
         for f in v["fields"].as_array().into_iter().flatten() {
-            lineas_variable(paso, f["name"].as_str().unwrap_or("?"), &f["value"], sangria + 2, out);
+            lineas_variable(
+                paso,
+                f["name"].as_str().unwrap_or("?"),
+                &f["value"],
+                sangria + 2,
+                out,
+            );
         }
     }
 }
@@ -283,7 +348,11 @@ fn contenido_bloque(paso: &Paso, b: &Bloque) -> Option<Value> {
         }
         buscar(&v["target"], b, prof + 1)
     }
-    paso.frames.iter().flat_map(|m| m.locals.iter()).chain(paso.globals.iter()).find_map(|var| buscar(&var.val, b, 0))
+    paso.frames
+        .iter()
+        .flat_map(|m| m.locals.iter())
+        .chain(paso.globals.iter())
+        .find_map(|var| buscar(&var.val, b, 0))
 }
 
 fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
@@ -293,7 +362,12 @@ fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
         for g in &paso.globals {
             lineas_variable(paso, &g.name, &g.val, 0, &mut lineas);
         }
-        pila.push(Caja { titulo: "globales".into(), tono_titulo: Tono::Titulo, lineas, id_bloque: None });
+        pila.push(Caja {
+            titulo: "globales".into(),
+            tono_titulo: Tono::Titulo,
+            lineas,
+            id_bloque: None,
+        });
     }
     for m in &paso.frames {
         let mut lineas = vec![];
@@ -301,21 +375,39 @@ fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
             lineas_variable(paso, &l.name, &l.val, 0, &mut lineas);
         }
         if lineas.is_empty() {
-            lineas.push(LineaCaja { segmentos: vec![("(sin variables)".into(), Tono::Tipo)], apunta_a: None, colgante: false });
+            lineas.push(LineaCaja {
+                segmentos: vec![("(sin variables)".into(), Tono::Tipo)],
+                apunta_a: None,
+                colgante: false,
+            });
         }
-        let archivo = Path::new(&m.file).file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
-        pila.push(Caja { titulo: format!("{}() {archivo}:{}", m.func, m.line), tono_titulo: Tono::Titulo, lineas, id_bloque: None });
+        let archivo = Path::new(&m.file)
+            .file_name()
+            .map(|f| f.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        pila.push(Caja {
+            titulo: format!("{}() {archivo}:{}", m.func, m.line),
+            tono_titulo: Tono::Titulo,
+            lineas,
+            id_bloque: None,
+        });
     }
     let mut heap = vec![];
     for b in &paso.heap.blocks {
         let mut lineas = vec![LineaCaja {
-            segmentos: vec![(format!("{} B en ", b.size), Tono::Normal), (b.site.corto(), Tono::Direccion)],
+            segmentos: vec![
+                (format!("{} B en ", b.size), Tono::Normal),
+                (b.site.corto(), Tono::Direccion),
+            ],
             apunta_a: None,
             colgante: false,
         }];
         if let Some(fs) = &b.free_site {
             lineas.push(LineaCaja {
-                segmentos: vec![("free en ".into(), Tono::Liberado), (fs.corto(), Tono::Liberado)],
+                segmentos: vec![
+                    ("free en ".into(), Tono::Liberado),
+                    (fs.corto(), Tono::Liberado),
+                ],
                 apunta_a: None,
                 colgante: false,
             });
@@ -324,7 +416,13 @@ fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
                 Some("struct") => {
                     for f in c["fields"].as_array().into_iter().flatten() {
                         let mut ls = vec![];
-                        lineas_variable(paso, f["name"].as_str().unwrap_or("?"), &f["value"], 0, &mut ls);
+                        lineas_variable(
+                            paso,
+                            f["name"].as_str().unwrap_or("?"),
+                            &f["value"],
+                            0,
+                            &mut ls,
+                        );
                         for mut l in ls {
                             // Punteros entre bloques: se indican con texto (las flechas
                             // ruteadas son sólo stack → heap).
@@ -336,14 +434,26 @@ fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
                     }
                 }
                 _ => lineas.push(LineaCaja {
-                    segmentos: vec![(format!("{} ", tipo_de(&c)), Tono::Tipo), (valor_corto(&c), Tono::Valor)],
+                    segmentos: vec![
+                        (format!("{} ", tipo_de(&c)), Tono::Tipo),
+                        (valor_corto(&c), Tono::Valor),
+                    ],
                     apunta_a: None,
                     colgante: false,
                 }),
             }
         }
-        let (estado, tono) = if b.vivo() { ("vivo", Tono::Vivo) } else { ("liberado", Tono::Liberado) };
-        heap.push(Caja { titulo: format!("#{} 0x{:x} {estado}", b.id, b.addr), tono_titulo: tono, lineas, id_bloque: Some(b.id) });
+        let (estado, tono) = if b.vivo() {
+            ("vivo", Tono::Vivo)
+        } else {
+            ("liberado", Tono::Liberado)
+        };
+        heap.push(Caja {
+            titulo: format!("#{} 0x{:x} {estado}", b.id, b.addr),
+            tono_titulo: tono,
+            lineas,
+            id_bloque: Some(b.id),
+        });
     }
     (pila, heap)
 }
@@ -354,14 +464,30 @@ fn ancho_linea(l: &LineaCaja) -> usize {
 
 /// Dibuja una caja en (fila, col) con ancho interior `ancho`; devuelve la fila siguiente
 /// y, por cada línea con puntero, (fila, id de bloque, colgante).
-fn dibujar_caja(l: &mut Lienzo, caja: &Caja, fila: usize, col: usize, ancho: usize) -> (usize, Vec<(usize, u64, bool)>) {
-    let borde = if caja.tono_titulo == Tono::Liberado { Tono::Liberado } else { Tono::Borde };
+fn dibujar_caja(
+    l: &mut Lienzo,
+    caja: &Caja,
+    fila: usize,
+    col: usize,
+    ancho: usize,
+) -> (usize, Vec<(usize, u64, bool)>) {
+    let borde = if caja.tono_titulo == Tono::Liberado {
+        Tono::Liberado
+    } else {
+        Tono::Borde
+    };
     l.poner(fila, col, '┌', borde);
     for i in 0..ancho + 2 {
         l.poner(fila, col + 1 + i, '─', borde);
     }
     l.poner(fila, col + ancho + 3, '┐', borde);
-    l.texto(fila, col + 2, &format!(" {} ", caja.titulo), caja.tono_titulo, ancho);
+    l.texto(
+        fila,
+        col + 2,
+        &format!(" {} ", caja.titulo),
+        caja.tono_titulo,
+        ancho,
+    );
     let mut f = fila + 1;
     let mut salidas = vec![];
     for linea in &caja.lineas {
@@ -401,13 +527,28 @@ fn trazar(l: &mut Lienzo, fila: usize, col: usize, c: char, tono: Tono) {
 pub fn dibujar(paso: &Paso, ancho: usize) -> Lienzo {
     let (pila, heap) = cajas(paso);
     let max_interior = |cs: &[Caja]| {
-        cs.iter().flat_map(|c| c.lineas.iter().map(ancho_linea).chain([c.titulo.chars().count() + 2])).max().unwrap_or(10)
+        cs.iter()
+            .flat_map(|c| {
+                c.lineas
+                    .iter()
+                    .map(ancho_linea)
+                    .chain([c.titulo.chars().count() + 2])
+            })
+            .max()
+            .unwrap_or(10)
     };
-    let carriles = pila.iter().flat_map(|c| c.lineas.iter()).filter(|l| l.apunta_a.is_some()).count().min(8);
+    let carriles = pila
+        .iter()
+        .flat_map(|c| c.lineas.iter())
+        .filter(|l| l.apunta_a.is_some())
+        .count()
+        .min(8);
     let gutter = 3 + carriles;
     let disponible = ancho.saturating_sub(gutter + 8).max(20);
     let mut ip = max_interior(&pila).min(disponible * 55 / 100).max(12);
-    let mut ih = max_interior(&heap).min(disponible.saturating_sub(ip)).max(12);
+    let mut ih = max_interior(&heap)
+        .min(disponible.saturating_sub(ip))
+        .max(12);
     if heap.is_empty() {
         ip = max_interior(&pila).min(ancho.saturating_sub(4)).max(12);
         ih = 0;
@@ -415,7 +556,11 @@ pub fn dibujar(paso: &Paso, ancho: usize) -> Lienzo {
     let col_heap = ip + 4 + gutter;
     let alto_pila: usize = pila.iter().map(|c| c.lineas.len() + 2).sum::<usize>() + 1;
     let alto_heap: usize = heap.iter().map(|c| c.lineas.len() + 2).sum::<usize>() + 1;
-    let ancho_total = if heap.is_empty() { ip + 4 } else { col_heap + ih + 4 };
+    let ancho_total = if heap.is_empty() {
+        ip + 4
+    } else {
+        col_heap + ih + 4
+    };
     let mut l = Lienzo::nuevo(ancho_total, alto_pila.max(alto_heap) + 1);
 
     l.texto(0, 0, "STACK", Tono::Titulo, ip + 4);
@@ -440,8 +585,14 @@ pub fn dibujar(paso: &Paso, ancho: usize) -> Lienzo {
     // Flechas: sale por el borde derecho de la caja, baja o sube por su carril y entra
     // por la izquierda del bloque a la altura de su título.
     for (i, (fila, id, colgante)) in salidas.into_iter().enumerate() {
-        let Some(&destino) = filas_bloque.get(&id) else { continue };
-        let tono = if colgante { Tono::Peligro } else { Tono::Flecha };
+        let Some(&destino) = filas_bloque.get(&id) else {
+            continue;
+        };
+        let tono = if colgante {
+            Tono::Peligro
+        } else {
+            Tono::Flecha
+        };
         let carril = ip + 5 + (i % carriles.max(1));
         for x in ip + 4..carril {
             trazar(&mut l, fila, x, '─', tono);
@@ -449,11 +600,19 @@ pub fn dibujar(paso: &Paso, ancho: usize) -> Lienzo {
         if destino == fila {
             trazar(&mut l, fila, carril, '─', tono);
         } else {
-            let (ini, fin) = if destino > fila { (fila, destino) } else { (destino, fila) };
+            let (ini, fin) = if destino > fila {
+                (fila, destino)
+            } else {
+                (destino, fila)
+            };
             for y in ini + 1..fin {
                 trazar(&mut l, y, carril, '│', tono);
             }
-            let (esq_origen, esq_destino) = if destino > fila { ('┐', '└') } else { ('┘', '┌') };
+            let (esq_origen, esq_destino) = if destino > fila {
+                ('┐', '└')
+            } else {
+                ('┘', '┌')
+            };
             l.poner(fila, carril, esq_origen, tono);
             l.poner(destino, carril, esq_destino, tono);
         }
@@ -470,7 +629,8 @@ mod tests {
     use super::*;
 
     fn traza() -> Traza {
-        Traza::cargar(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/datos/trace.json")).unwrap()
+        Traza::cargar(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/datos/trace.json"))
+            .unwrap()
     }
 
     #[test]
@@ -478,7 +638,11 @@ mod tests {
         let t = traza();
         assert_eq!(t.steps.len(), 11);
         assert_eq!(t.alinear("main", 10, 1, 0), Some(7));
-        assert_eq!(t.alinear("main", 6, 1, 8), Some(2), "vuelve a buscar desde el principio");
+        assert_eq!(
+            t.alinear("main", 6, 1, 8),
+            Some(2),
+            "vuelve a buscar desde el principio"
+        );
         assert_eq!(t.alinear("otra", 6, 1, 0), None);
     }
 
@@ -503,7 +667,11 @@ mod tests {
         let s = l.a_texto();
         assert!(s.contains("⚠ colgante"), "{s}");
         assert!(s.contains("liberado"), "{s}");
-        assert!(l.filas.iter().flatten().any(|c| c.tono == Tono::Peligro && c.c == '►'));
+        assert!(l
+            .filas
+            .iter()
+            .flatten()
+            .any(|c| c.tono == Tono::Peligro && c.c == '►'));
     }
 
     #[test]

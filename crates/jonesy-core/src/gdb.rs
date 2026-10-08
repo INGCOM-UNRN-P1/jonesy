@@ -56,7 +56,11 @@ impl Valor {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Registro {
     /// `^done`, `^running`, `^error`, `^exit`, `^connected` con su token.
-    Resultado { token: Option<u64>, clase: String, datos: Valor },
+    Resultado {
+        token: Option<u64>,
+        clase: String,
+        datos: Valor,
+    },
     /// `*stopped`, `*running`.
     Ejecucion { clase: String, datos: Valor },
     /// `=breakpoint-modified`, `=thread-group-exited`, ...
@@ -210,13 +214,28 @@ pub fn parsear_linea(linea: &str) -> Registro {
     let bytes = linea.as_bytes();
     let digitos = bytes.iter().take_while(|b| b.is_ascii_digit()).count();
     let token = linea[..digitos].parse().ok();
-    let mut l = Lector { s: bytes, i: digitos };
-    let Some(prefijo) = l.ver() else { return Registro::Otro(linea.into()) };
+    let mut l = Lector {
+        s: bytes,
+        i: digitos,
+    };
+    let Some(prefijo) = l.ver() else {
+        return Registro::Otro(linea.into());
+    };
     l.i += 1;
     let r = match prefijo {
-        b'^' => l.clase_y_resultados().map(|(clase, datos)| Registro::Resultado { token, clase, datos }),
-        b'*' => l.clase_y_resultados().map(|(clase, datos)| Registro::Ejecucion { clase, datos }),
-        b'=' => l.clase_y_resultados().map(|(clase, datos)| Registro::Notificacion { clase, datos }),
+        b'^' => l
+            .clase_y_resultados()
+            .map(|(clase, datos)| Registro::Resultado {
+                token,
+                clase,
+                datos,
+            }),
+        b'*' => l
+            .clase_y_resultados()
+            .map(|(clase, datos)| Registro::Ejecucion { clase, datos }),
+        b'=' => l
+            .clase_y_resultados()
+            .map(|(clase, datos)| Registro::Notificacion { clase, datos }),
         b'~' => l.cadena_c().map(Registro::Consola),
         b'@' => l.cadena_c().map(Registro::Programa),
         b'&' => l.cadena_c().map(Registro::Log),
@@ -261,7 +280,11 @@ pub struct Variable {
 pub enum Parada {
     Breakpoint(Marco),
     Paso(Marco),
-    Senal { nombre: String, significado: String, marco: Marco },
+    Senal {
+        nombre: String,
+        significado: String,
+        marco: Marco,
+    },
     Termino(Option<i32>),
     Otra(String, Marco),
 }
@@ -275,7 +298,11 @@ pub enum EventoGdb {
     Variables(Vec<Variable>),
     Consola(String),
     Error(String),
-    BreakpointCreado { numero: u32, archivo: PathBuf, linea: usize },
+    BreakpointCreado {
+        numero: u32,
+        archivo: PathBuf,
+        linea: usize,
+    },
     Salio,
 }
 
@@ -286,14 +313,20 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
             let razon = datos.texto("reason").unwrap_or("");
             let parada = match razon {
                 "breakpoint-hit" => Parada::Breakpoint(marco),
-                "end-stepping-range" | "function-finished" | "location-reached" => Parada::Paso(marco),
+                "end-stepping-range" | "function-finished" | "location-reached" => {
+                    Parada::Paso(marco)
+                }
                 "signal-received" => Parada::Senal {
                     nombre: datos.texto("signal-name").unwrap_or("").into(),
                     significado: datos.texto("signal-meaning").unwrap_or("").into(),
                     marco,
                 },
                 "exited-normally" => Parada::Termino(Some(0)),
-                "exited" => Parada::Termino(datos.texto("exit-code").and_then(|c| i32::from_str_radix(c.trim_start_matches('0'), 8).ok().or(Some(0)))),
+                "exited" => Parada::Termino(datos.texto("exit-code").and_then(|c| {
+                    i32::from_str_radix(c.trim_start_matches('0'), 8)
+                        .ok()
+                        .or(Some(0))
+                })),
                 "exited-signalled" => Parada::Termino(None),
                 otra => Parada::Otra(otra.into(), marco),
             };
@@ -302,12 +335,19 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
         Registro::Ejecucion { clase, .. } if clase == "running" => vec![EventoGdb::Corriendo],
         Registro::Consola(t) | Registro::Programa(t) => vec![EventoGdb::Consola(t.clone())],
         Registro::Resultado { clase, datos, .. } if clase == "error" => {
-            vec![EventoGdb::Error(datos.texto("msg").unwrap_or("error de GDB").to_string())]
+            vec![EventoGdb::Error(
+                datos.texto("msg").unwrap_or("error de GDB").to_string(),
+            )]
         }
         Registro::Resultado { clase, .. } if clase == "exit" => vec![EventoGdb::Salio],
         Registro::Resultado { datos, .. } => match pedido {
             Some(Pedido::Marcos) => {
-                vec![EventoGdb::Marcos(datos.get("stack").map(|s| s.lista().iter().map(Marco::de_valor).collect()).unwrap_or_default())]
+                vec![EventoGdb::Marcos(
+                    datos
+                        .get("stack")
+                        .map(|s| s.lista().iter().map(Marco::de_valor).collect())
+                        .unwrap_or_default(),
+                )]
             }
             Some(Pedido::Variables) => vec![EventoGdb::Variables(
                 datos
@@ -388,17 +428,23 @@ impl Gdb {
         let salida = hijo.stdout.take().expect("stdout entubado");
         let (tx, rx) = mpsc::channel();
         let notificar = Arc::new(notificar);
-        std::thread::Builder::new().name("gdb-mi".into()).spawn(move || {
-            for linea in BufReader::new(salida).lines() {
-                let Ok(linea) = linea else { break };
-                if tx.send(parsear_linea(&linea)).is_err() {
-                    break;
+        std::thread::Builder::new()
+            .name("gdb-mi".into())
+            .spawn(move || {
+                for linea in BufReader::new(salida).lines() {
+                    let Ok(linea) = linea else { break };
+                    if tx.send(parsear_linea(&linea)).is_err() {
+                        break;
+                    }
+                    notificar();
                 }
+                let _ = tx.send(Registro::Resultado {
+                    token: None,
+                    clase: "exit".into(),
+                    datos: Valor::Tupla(BTreeMap::new()),
+                });
                 notificar();
-            }
-            let _ = tx.send(Registro::Resultado { token: None, clase: "exit".into(), datos: Valor::Tupla(BTreeMap::new()) });
-            notificar();
-        })?;
+            })?;
         let mut g = Gdb {
             hijo,
             entrada,
@@ -432,8 +478,14 @@ impl Gdb {
     }
 
     pub fn poner_breakpoint(&mut self, archivo: &Path, linea: usize) -> std::io::Result<()> {
-        self.enviar(&format!("-break-insert {}", comillas_mi(&format!("{}:{linea}", archivo.display()))), Pedido::Breakpoint)
-            .map(|_| ())
+        self.enviar(
+            &format!(
+                "-break-insert {}",
+                comillas_mi(&format!("{}:{linea}", archivo.display()))
+            ),
+            Pedido::Breakpoint,
+        )
+        .map(|_| ())
     }
 
     pub fn quitar_breakpoint(&mut self, archivo: &Path, linea: usize) -> std::io::Result<()> {
@@ -488,7 +540,11 @@ impl Gdb {
 
     /// Comando de consola (`print x`, `info breakpoints`...).
     pub fn consola(&mut self, comando: &str) -> std::io::Result<()> {
-        self.enviar(&format!("-interpreter-exec console {}", comillas_mi(comando)), Pedido::Otro).map(|_| ())
+        self.enviar(
+            &format!("-interpreter-exec console {}", comillas_mi(comando)),
+            Pedido::Otro,
+        )
+        .map(|_| ())
     }
 
     /// Eventos pendientes, ya interpretados.
@@ -508,7 +564,11 @@ impl Gdb {
                             self.iniciado = false;
                         }
                     }
-                    EventoGdb::BreakpointCreado { numero, archivo, linea } => {
+                    EventoGdb::BreakpointCreado {
+                        numero,
+                        archivo,
+                        linea,
+                    } => {
                         self.breakpoints.insert((archivo.clone(), *linea), *numero);
                     }
                     _ => {}
@@ -561,7 +621,9 @@ mod tests {
             r#"*stopped,reason="breakpoint-hit",disp="keep",bkptno="1",frame={addr="0x401136",func="main",args=[],file="a.c",fullname="/tmp/a.c",line="4",arch="i386:x86-64"},thread-id="1",stopped-threads="all""#,
         );
         let ev = interpretar(&r, None);
-        let EventoGdb::Detenido(Parada::Breakpoint(m)) = &ev[0] else { panic!("{ev:?}") };
+        let EventoGdb::Detenido(Parada::Breakpoint(m)) = &ev[0] else {
+            panic!("{ev:?}")
+        };
         assert_eq!(m.funcion, "main");
         assert_eq!(m.linea, Some(4));
         assert_eq!(m.archivo.as_deref(), Some(Path::new("/tmp/a.c")));
@@ -569,24 +631,41 @@ mod tests {
 
     #[test]
     fn parsea_variables_y_consola() {
-        let r = parsear_linea(r#"7^done,variables=[{name="x",arg="1",type="int",value="3"},{name="s",type="char *",value="0x4006 \"hola\""}]"#);
+        let r = parsear_linea(
+            r#"7^done,variables=[{name="x",arg="1",type="int",value="3"},{name="s",type="char *",value="0x4006 \"hola\""}]"#,
+        );
         assert!(matches!(r, Registro::Resultado { token: Some(7), .. }));
         let ev = interpretar(&r, Some(&Pedido::Variables));
-        let EventoGdb::Variables(v) = &ev[0] else { panic!() };
+        let EventoGdb::Variables(v) = &ev[0] else {
+            panic!()
+        };
         assert_eq!(v.len(), 2);
         assert!(v[0].argumento);
         assert_eq!(v[1].valor, "0x4006 \"hola\"");
-        assert_eq!(parsear_linea(r#"~"$1 = 42\n""#), Registro::Consola("$1 = 42\n".into()));
+        assert_eq!(
+            parsear_linea(r#"~"$1 = 42\n""#),
+            Registro::Consola("$1 = 42\n".into())
+        );
         assert_eq!(parsear_linea("(gdb) "), Registro::Indicador);
-        assert_eq!(parsear_linea(r#"~"\303\261""#), Registro::Consola("ñ".into()));
+        assert_eq!(
+            parsear_linea(r#"~"\303\261""#),
+            Registro::Consola("ñ".into())
+        );
     }
 
     #[test]
     fn parsea_lista_de_marcos() {
-        let r = parsear_linea(r#"3^done,stack=[frame={level="0",addr="0x1",func="f",file="a.c",line="2"},frame={level="1",addr="0x2",func="main",file="a.c",line="9"}]"#);
+        let r = parsear_linea(
+            r#"3^done,stack=[frame={level="0",addr="0x1",func="f",file="a.c",line="2"},frame={level="1",addr="0x2",func="main",file="a.c",line="9"}]"#,
+        );
         let ev = interpretar(&r, Some(&Pedido::Marcos));
-        let EventoGdb::Marcos(m) = &ev[0] else { panic!() };
-        assert_eq!(m.iter().map(|m| m.funcion.as_str()).collect::<Vec<_>>(), ["f", "main"]);
+        let EventoGdb::Marcos(m) = &ev[0] else {
+            panic!()
+        };
+        assert_eq!(
+            m.iter().map(|m| m.funcion.as_str()).collect::<Vec<_>>(),
+            ["f", "main"]
+        );
         assert_eq!(m[1].nivel, 1);
     }
 
@@ -607,27 +686,53 @@ mod tests {
 
     #[test]
     fn sesion_real_con_gdb() {
-        if Command::new("gdb").arg("--version").output().is_err() || Command::new("gcc").arg("--version").output().is_err() {
+        if Command::new("gdb").arg("--version").output().is_err()
+            || Command::new("gcc").arg("--version").output().is_err()
+        {
             return;
         }
         let dir = tempfile::tempdir().unwrap();
         let fuente = dir.path().join("a.c");
         std::fs::write(&fuente, "int doble(int x)\n{\n    return 2 * x;\n}\n\nint main(void)\n{\n    int a = 21;\n    int b = doble(a);\n    return b - 42;\n}\n").unwrap();
-        let ok = Command::new("gcc").args(["-g", "-O0", "-o", "a", "a.c"]).current_dir(dir.path()).status().unwrap();
+        let ok = Command::new("gcc")
+            .args(["-g", "-O0", "-o", "a", "a.c"])
+            .current_dir(dir.path())
+            .status()
+            .unwrap();
         assert!(ok.success());
         let mut g = Gdb::lanzar(&dir.path().join("a"), &[], dir.path(), None, || {}).unwrap();
         g.poner_breakpoint(&fuente, 9).unwrap();
         esperar(&mut g, |e| matches!(e, EventoGdb::BreakpointCreado { .. }));
         g.correr().unwrap();
-        esperar(&mut g, |e| matches!(e, EventoGdb::Detenido(Parada::Breakpoint(m)) if m.linea == Some(9)));
+        esperar(
+            &mut g,
+            |e| matches!(e, EventoGdb::Detenido(Parada::Breakpoint(m)) if m.linea == Some(9)),
+        );
         g.pedir_estado().unwrap();
         let ev = esperar(&mut g, |e| matches!(e, EventoGdb::Variables(_)));
-        let vars = ev.iter().find_map(|e| if let EventoGdb::Variables(v) = e { Some(v.clone()) } else { None }).unwrap();
-        assert!(vars.iter().any(|v| v.nombre == "a" && v.valor == "21"), "{vars:?}");
+        let vars = ev
+            .iter()
+            .find_map(|e| {
+                if let EventoGdb::Variables(v) = e {
+                    Some(v.clone())
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+        assert!(
+            vars.iter().any(|v| v.nombre == "a" && v.valor == "21"),
+            "{vars:?}"
+        );
         g.entrar().unwrap();
-        esperar(&mut g, |e| matches!(e, EventoGdb::Detenido(Parada::Paso(m)) if m.funcion == "doble"));
+        esperar(
+            &mut g,
+            |e| matches!(e, EventoGdb::Detenido(Parada::Paso(m)) if m.funcion == "doble"),
+        );
         g.continuar().unwrap();
-        esperar(&mut g, |e| matches!(e, EventoGdb::Detenido(Parada::Termino(Some(0)))));
+        esperar(&mut g, |e| {
+            matches!(e, EventoGdb::Detenido(Parada::Termino(Some(0))))
+        });
         g.terminar();
     }
 }

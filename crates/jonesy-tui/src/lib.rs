@@ -23,12 +23,14 @@ pub fn ejecutar(op: Opciones) -> anyhow::Result<()> {
     sistema::hilo_entrada(tx.clone());
     sistema::hilo_senales(tx);
     let backend = ratatui::backend::CrosstermBackend::new(std::io::stdout());
-    let resultado = ratatui::Terminal::new(backend).map_err(anyhow::Error::from).and_then(|mut t| {
-        if let Ok(s) = t.size() {
-            app.tam = (s.width, s.height);
-        }
-        app.bucle(&mut t, rx)
-    });
+    let resultado = ratatui::Terminal::new(backend)
+        .map_err(anyhow::Error::from)
+        .and_then(|mut t| {
+            if let Ok(s) = t.size() {
+                app.tam = (s.width, s.height);
+            }
+            app.bucle(&mut t, rx)
+        });
     if !app.salir || resultado.is_err() {
         app.finalizar("error");
     } else {

@@ -7,7 +7,11 @@ pub fn puntaje(patron: &str, texto: &str) -> Option<i64> {
         return Some(0);
     }
     let t: Vec<char> = texto.chars().flat_map(char::to_lowercase).collect();
-    let p: Vec<char> = patron.chars().flat_map(char::to_lowercase).filter(|c| !c.is_whitespace()).collect();
+    let p: Vec<char> = patron
+        .chars()
+        .flat_map(char::to_lowercase)
+        .filter(|c| !c.is_whitespace())
+        .collect();
     let mut puntos = 0i64;
     let mut j = 0;
     let mut anterior: Option<usize> = None;
@@ -32,8 +36,11 @@ pub fn puntaje(patron: &str, texto: &str) -> Option<i64> {
 
 /// Índices de `opciones` que coinciden, mejores primero.
 pub fn filtrar<S: AsRef<str>>(patron: &str, opciones: &[S]) -> Vec<usize> {
-    let mut v: Vec<(i64, usize)> =
-        opciones.iter().enumerate().filter_map(|(i, o)| puntaje(patron, o.as_ref()).map(|p| (p, i))).collect();
+    let mut v: Vec<(i64, usize)> = opciones
+        .iter()
+        .enumerate()
+        .filter_map(|(i, o)| puntaje(patron, o.as_ref()).map(|p| (p, i)))
+        .collect();
     v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
     v.into_iter().map(|(_, i)| i).collect()
 }

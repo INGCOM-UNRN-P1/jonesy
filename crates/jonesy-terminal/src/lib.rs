@@ -20,7 +20,12 @@ pub use vt100::Screen;
 const SCROLLBACK: usize = 1000;
 
 fn tamano(filas: u16, cols: u16) -> PtySize {
-    PtySize { rows: filas.max(2), cols: cols.max(2), pixel_width: 0, pixel_height: 0 }
+    PtySize {
+        rows: filas.max(2),
+        cols: cols.max(2),
+        pixel_width: 0,
+        pixel_height: 0,
+    }
 }
 
 /// Hilo lector compartido por el deck y el PTY del inferior.
@@ -77,7 +82,9 @@ impl Deck {
         notificar: impl Fn() + Send + Sync + 'static,
     ) -> std::io::Result<Deck> {
         let sistema = native_pty_system();
-        let par = sistema.openpty(tamano(filas, cols)).map_err(std::io::Error::other)?;
+        let par = sistema
+            .openpty(tamano(filas, cols))
+            .map_err(std::io::Error::other)?;
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
         let prog = programa.map(str::to_string).unwrap_or(shell);
         let mut cmd = CommandBuilder::new(&prog);
@@ -85,16 +92,43 @@ impl Deck {
         cmd.cwd(dir);
         cmd.env("TERM", "xterm-256color");
         cmd.env("JONESY_DECK", "1");
-        let hijo = par.slave.spawn_command(cmd).map_err(std::io::Error::other)?;
+        let hijo = par
+            .slave
+            .spawn_command(cmd)
+            .map_err(std::io::Error::other)?;
         drop(par.slave);
-        let lector = par.master.try_clone_reader().map_err(std::io::Error::other)?;
+        let lector = par
+            .master
+            .try_clone_reader()
+            .map_err(std::io::Error::other)?;
         let escritor = par.master.take_writer().map_err(std::io::Error::other)?;
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(filas.max(2), cols.max(2), SCROLLBACK)));
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(
+            filas.max(2),
+            cols.max(2),
+            SCROLLBACK,
+        )));
         let vivo = Arc::new(AtomicBool::new(true));
         let pendiente = Arc::new(AtomicBool::new(false));
-        leer_en_hilo(lector, parser.clone(), vivo.clone(), pendiente.clone(), Arc::new(notificar));
-        let titulo = std::iter::once(prog.as_str()).chain(args.iter().map(String::as_str)).collect::<Vec<_>>().join(" ");
-        Ok(Deck { parser, escritor, master: par.master, hijo, vivo, pendiente, titulo })
+        leer_en_hilo(
+            lector,
+            parser.clone(),
+            vivo.clone(),
+            pendiente.clone(),
+            Arc::new(notificar),
+        );
+        let titulo = std::iter::once(prog.as_str())
+            .chain(args.iter().map(String::as_str))
+            .collect::<Vec<_>>()
+            .join(" ");
+        Ok(Deck {
+            parser,
+            escritor,
+            master: par.master,
+            hijo,
+            vivo,
+            pendiente,
+            titulo,
+        })
     }
 
     /// Envía bytes al proceso (teclas ya traducidas a secuencias de terminal).
@@ -169,16 +203,45 @@ pub struct PtyInferior {
 }
 
 impl PtyInferior {
-    pub fn abrir(filas: u16, cols: u16, notificar: impl Fn() + Send + Sync + 'static) -> std::io::Result<PtyInferior> {
-        let par = native_pty_system().openpty(tamano(filas, cols)).map_err(std::io::Error::other)?;
-        let fd = par.master.as_raw_fd().ok_or_else(|| std::io::Error::other("el PTY no expone su descriptor"))?;
+    pub fn abrir(
+        filas: u16,
+        cols: u16,
+        notificar: impl Fn() + Send + Sync + 'static,
+    ) -> std::io::Result<PtyInferior> {
+        let par = native_pty_system()
+            .openpty(tamano(filas, cols))
+            .map_err(std::io::Error::other)?;
+        let fd = par
+            .master
+            .as_raw_fd()
+            .ok_or_else(|| std::io::Error::other("el PTY no expone su descriptor"))?;
         let ruta = ruta_esclavo(fd)?;
-        let lector = par.master.try_clone_reader().map_err(std::io::Error::other)?;
+        let lector = par
+            .master
+            .try_clone_reader()
+            .map_err(std::io::Error::other)?;
         let escritor = par.master.take_writer().map_err(std::io::Error::other)?;
-        let parser = Arc::new(Mutex::new(vt100::Parser::new(filas.max(2), cols.max(2), SCROLLBACK)));
+        let parser = Arc::new(Mutex::new(vt100::Parser::new(
+            filas.max(2),
+            cols.max(2),
+            SCROLLBACK,
+        )));
         let pendiente = Arc::new(AtomicBool::new(false));
-        leer_en_hilo(lector, parser.clone(), Arc::new(AtomicBool::new(true)), pendiente.clone(), Arc::new(notificar));
-        Ok(PtyInferior { parser, escritor, master: par.master, _esclavo: par.slave, pendiente, ruta })
+        leer_en_hilo(
+            lector,
+            parser.clone(),
+            Arc::new(AtomicBool::new(true)),
+            pendiente.clone(),
+            Arc::new(notificar),
+        );
+        Ok(PtyInferior {
+            parser,
+            escritor,
+            master: par.master,
+            _esclavo: par.slave,
+            pendiente,
+            ruta,
+        })
     }
 
     /// Ruta del dispositivo (/dev/pts/N) para `-inferior-tty-set`.
@@ -299,9 +362,20 @@ mod tests {
     #[test]
     fn ejecuta_comando_y_muestra_salida() {
         let dir = tempfile::tempdir().unwrap();
-        let mut deck =
-            Deck::iniciar(Some("sh"), &["-c".into(), "echo hola deck".into()], dir.path(), 10, 40, || {}).unwrap();
-        assert!(esperar(|| deck.texto().contains("hola deck")), "pantalla: {:?}", deck.texto());
+        let mut deck = Deck::iniciar(
+            Some("sh"),
+            &["-c".into(), "echo hola deck".into()],
+            dir.path(),
+            10,
+            40,
+            || {},
+        )
+        .unwrap();
+        assert!(
+            esperar(|| deck.texto().contains("hola deck")),
+            "pantalla: {:?}",
+            deck.texto()
+        );
         assert!(esperar(|| !deck.vivo()));
         assert!(deck.tomar_pendiente());
     }
@@ -311,7 +385,11 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let mut deck = Deck::iniciar(Some("sh"), &[], dir.path(), 10, 40, || {}).unwrap();
         deck.escribir(b"echo $((6*7))\r").unwrap();
-        assert!(esperar(|| deck.texto().contains("42")), "pantalla: {:?}", deck.texto());
+        assert!(
+            esperar(|| deck.texto().contains("42")),
+            "pantalla: {:?}",
+            deck.texto()
+        );
         deck.escribir(&bytes_de_tecla(Tecla::Ctrl('d'))).unwrap();
         assert!(esperar(|| !deck.vivo()));
     }
@@ -320,8 +398,15 @@ mod tests {
     fn pty_inferior_tiene_ruta() {
         let pty = PtyInferior::abrir(5, 20, || {}).unwrap();
         assert!(pty.ruta().starts_with("/dev/"));
-        std::fs::OpenOptions::new().write(true).open(pty.ruta()).unwrap().write_all(b"inferior").unwrap();
-        assert!(esperar(|| pty.con_pantalla(|s| s.contents()).contains("inferior")));
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(pty.ruta())
+            .unwrap()
+            .write_all(b"inferior")
+            .unwrap();
+        assert!(esperar(|| pty
+            .con_pantalla(|s| s.contents())
+            .contains("inferior")));
     }
 
     #[test]

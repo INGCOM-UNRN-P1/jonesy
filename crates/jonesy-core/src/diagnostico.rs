@@ -70,13 +70,19 @@ fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
     // archivo:L:C: tipo: mensaje   o   archivo:L: tipo: mensaje
     let mut partes = linea.splitn(5, ':');
     let archivo = partes.next()?.trim();
-    if archivo.is_empty() || archivo.contains(' ') && !archivo.ends_with(".c") && !archivo.ends_with(".h") {
+    if archivo.is_empty()
+        || archivo.contains(' ') && !archivo.ends_with(".c") && !archivo.ends_with(".h")
+    {
         return None;
     }
     let l: usize = partes.next()?.trim().parse().ok()?;
     let tercero = partes.next()?;
     let (columna, tipo, resto) = match tercero.trim().parse::<usize>() {
-        Ok(c) => (c, partes.next()?.trim().to_string(), partes.next().unwrap_or("").to_string()),
+        Ok(c) => (
+            c,
+            partes.next()?.trim().to_string(),
+            partes.next().unwrap_or("").to_string(),
+        ),
         Err(_) => {
             let resto: Vec<&str> = partes.collect();
             (1, tercero.trim().to_string(), resto.join(":"))
@@ -87,7 +93,11 @@ fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
         return None;
     }
     let ruta = PathBuf::from(archivo);
-    let ruta = if ruta.is_absolute() { ruta } else { dir.join(ruta) };
+    let ruta = if ruta.is_absolute() {
+        ruta
+    } else {
+        dir.join(ruta)
+    };
     Some(Diagnostico {
         archivo: Some(ruta),
         linea: l,
@@ -152,11 +162,17 @@ pub fn parsear_ripley(json: &str, dir: &Path) -> Result<Vec<Diagnostico>, String
         .map(|h| Diagnostico {
             archivo: h.file.or(h.archivo).map(|f| {
                 let p = PathBuf::from(f);
-                if p.is_absolute() { p } else { dir.join(p) }
+                if p.is_absolute() {
+                    p
+                } else {
+                    dir.join(p)
+                }
             }),
             linea: h.line.or(h.linea).unwrap_or(1).max(1),
             columna: h.column.or(h.columna).unwrap_or(1).max(1),
-            severidad: Severidad::de_texto(h.severity.or(h.severidad).as_deref().unwrap_or("estilo")),
+            severidad: Severidad::de_texto(
+                h.severity.or(h.severidad).as_deref().unwrap_or("estilo"),
+            ),
             mensaje: h.message.or(h.mensaje).unwrap_or_default(),
             codigo: h.rule_code.or(h.codigo),
             sugerencia: h.suggestion.or(h.sugerencia).filter(|s| !s.is_empty()),
@@ -213,9 +229,15 @@ mod tests {
         let d = parsear_gcc(salida, Path::new("/tp"));
         assert_eq!(d.len(), 3);
         assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/lista.c")));
-        assert_eq!((d[0].linea, d[0].columna, d[0].severidad), (12, 5, Severidad::Error));
+        assert_eq!(
+            (d[0].linea, d[0].columna, d[0].severidad),
+            (12, 5, Severidad::Error)
+        );
         assert_eq!(d[1].severidad, Severidad::Advertencia);
-        assert_eq!(d[2].archivo.as_deref(), Some(Path::new("/usr/include/stdio.h")));
+        assert_eq!(
+            d[2].archivo.as_deref(),
+            Some(Path::new("/usr/include/stdio.h"))
+        );
     }
 
     #[test]

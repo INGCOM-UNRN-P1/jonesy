@@ -34,7 +34,8 @@ Dentro del IDE: F1/Ctrl+K paleta, F10 menú, Ayuda → Atajos de teclado.
 
 /// Raíz del proyecto para un archivo: el ancestro más cercano con .jonesy.toml o .git.
 fn raiz_de(archivo: &Path) -> PathBuf {
-    let absoluto = std::fs::canonicalize(archivo).unwrap_or_else(|_| std::env::current_dir().unwrap_or_default().join(archivo));
+    let absoluto = std::fs::canonicalize(archivo)
+        .unwrap_or_else(|_| std::env::current_dir().unwrap_or_default().join(archivo));
     let inicio = absoluto.parent().map(Path::to_path_buf).unwrap_or_default();
     let mut dir = Some(inicio.as_path());
     while let Some(d) = dir {
@@ -59,7 +60,13 @@ fn main() -> ExitCode {
 
 fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
     let tiene = |f: &str| args.iter().any(|a| a == f);
-    let valor = |f: &str| args.iter().position(|a| a == f).and_then(|i| args.get(i + 1)).filter(|v| !v.starts_with("--")).cloned();
+    let valor = |f: &str| {
+        args.iter()
+            .position(|a| a == f)
+            .and_then(|i| args.get(i + 1))
+            .filter(|v| !v.starts_with("--"))
+            .cloned()
+    };
     if tiene("-h") || tiene("--help") {
         print!("{AYUDA}");
         return Ok(ExitCode::SUCCESS);
@@ -70,41 +77,65 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
     }
     match args.first().map(String::as_str) {
         Some("replay") => {
-            let Some(log) = args.get(1) else { anyhow::bail!("uso: jonesy replay <telemetry.log>") };
+            let Some(log) = args.get(1) else {
+                anyhow::bail!("uso: jonesy replay <telemetry.log>")
+            };
             let log = Path::new(log);
             if tiene("--resumen") || tiene("--json") {
                 let registros = jonesy_telemetry::leer(log)?;
                 let v = jonesy_telemetry::verificar(log)?;
                 let r = jonesy_telemetry::replay::resumir(&registros);
                 if tiene("--json") {
-                    println!("{}", serde_json::to_string_pretty(&serde_json::json!({"verificacion": v, "resumen": r}))?);
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(
+                            &serde_json::json!({"verificacion": v, "resumen": r})
+                        )?
+                    );
                 } else {
                     imprimir_resumen(&r, &v);
                 }
-                return Ok(if v.integra() { ExitCode::SUCCESS } else { ExitCode::from(1) });
+                return Ok(if v.integra() {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::from(1)
+                });
             }
             jonesy_tui::reproductor::ejecutar(log)?;
             return Ok(ExitCode::SUCCESS);
         }
         Some("verificar") => {
-            let Some(log) = args.get(1) else { anyhow::bail!("uso: jonesy verificar <telemetry.log>") };
+            let Some(log) = args.get(1) else {
+                anyhow::bail!("uso: jonesy verificar <telemetry.log>")
+            };
             let v = jonesy_telemetry::verificar(Path::new(log))?;
             match &v.error {
-                None => println!("✓ cadena íntegra: {} registros, último hash {}", v.registros, v.ultimo_hash),
+                None => println!(
+                    "✓ cadena íntegra: {} registros, último hash {}",
+                    v.registros, v.ultimo_hash
+                ),
                 Some((l, m)) => println!("✗ cadena rota en la línea {l}: {m}"),
             }
-            return Ok(if v.integra() { ExitCode::SUCCESS } else { ExitCode::from(1) });
+            return Ok(if v.integra() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            });
         }
         _ => {}
     }
 
     // Benchmarks.
     if tiene("--benchmark-startup") {
-        let dir = posicional(args).map(PathBuf::from).unwrap_or(std::env::current_dir()?);
+        let dir = posicional(args)
+            .map(PathBuf::from)
+            .unwrap_or(std::env::current_dir()?);
         return bench::arranque(&dir);
     }
     if let Some(dir) = valor("--benchmark-session") {
-        let segundos = valor("--segundos").and_then(|s| s.parse().ok()).unwrap_or(10);
+        let segundos = valor("--segundos")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(10);
         return bench::sesion(Path::new(&dir), segundos);
     }
     if let Some(f) = valor("--benchmark-doc-lookup") {
@@ -123,12 +154,17 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
         return bench::plugins(Path::new(&dir));
     }
 
-    let examen = tiene("--exam") || std::env::var("JONESY_EXAM_MODE").is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
+    let examen = tiene("--exam")
+        || std::env::var("JONESY_EXAM_MODE")
+            .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
     let posicionales: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
     let (raiz, archivos) = match posicionales.first() {
         None => (std::env::current_dir()?, vec![]),
         Some(p) if Path::new(p).is_dir() => (PathBuf::from(p), vec![]),
-        Some(p) => (raiz_de(Path::new(p)), posicionales.iter().map(PathBuf::from).collect()),
+        Some(p) => (
+            raiz_de(Path::new(p)),
+            posicionales.iter().map(PathBuf::from).collect(),
+        ),
     };
     if !raiz.is_dir() {
         anyhow::bail!("no existe el directorio {}", raiz.display());
@@ -144,7 +180,9 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
 }
 
 fn posicional(args: &[String]) -> Option<&str> {
-    args.iter().map(String::as_str).find(|a| !a.starts_with("--"))
+    args.iter()
+        .map(String::as_str)
+        .find(|a| !a.starts_with("--"))
 }
 
 fn imprimir_resumen(r: &jonesy_telemetry::replay::Resumen, v: &jonesy_telemetry::Verificacion) {
@@ -152,18 +190,39 @@ fn imprimir_resumen(r: &jonesy_telemetry::replay::Resumen, v: &jonesy_telemetry:
         None => println!("Cadena SHA-256: íntegra ({} registros)", v.registros),
         Some((l, m)) => println!("Cadena SHA-256: ROTA en la línea {l}: {m}"),
     }
-    println!("Sesiones: {} · cerrada: {}", v.sesiones, if v.cerrada { "sí" } else { "no" });
+    println!(
+        "Sesiones: {} · cerrada: {}",
+        v.sesiones,
+        if v.cerrada { "sí" } else { "no" }
+    );
     println!("Duración: {:.1} min", r.duracion_s / 60.0);
-    println!("Tipeado: {} car. · borrado: {} car. · velocidad: {:.0} car/min", r.caracteres_tipeados, r.caracteres_borrados, r.velocidad_cpm);
-    println!("Pegados: {} ({} car.)", r.pegados.len(), r.caracteres_pegados);
+    println!(
+        "Tipeado: {} car. · borrado: {} car. · velocidad: {:.0} car/min",
+        r.caracteres_tipeados, r.caracteres_borrados, r.velocidad_cpm
+    );
+    println!(
+        "Pegados: {} ({} car.)",
+        r.pegados.len(),
+        r.caracteres_pegados
+    );
     for p in &r.pegados {
-        println!("  seq {} · {} car. en {} · sha256 {}", p.seq, p.length, p.buffer_id, p.content_hash);
+        println!(
+            "  seq {} · {} car. en {} · sha256 {}",
+            p.seq, p.length, p.buffer_id, p.content_hash
+        );
     }
     println!("Pausas de más de 30 s: {}", r.pausas_largas.len());
-    println!("Guardados: {} · comandos: {}", r.guardados, r.comandos.len());
+    println!(
+        "Guardados: {} · comandos: {}",
+        r.guardados,
+        r.comandos.len()
+    );
     for (c, codigo) in &r.comandos {
         if !c.starts_with("accion:") {
-            println!("  {c}{}", codigo.map(|x| format!(" → {x}")).unwrap_or_default());
+            println!(
+                "  {c}{}",
+                codigo.map(|x| format!(" → {x}")).unwrap_or_default()
+            );
         }
     }
 }

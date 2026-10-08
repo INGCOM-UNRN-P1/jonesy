@@ -11,12 +11,19 @@ use ratatui::Terminal;
 
 fn informar(nombre: &str, valor: f64, unidad: &str, presupuesto: f64) -> bool {
     let ok = valor <= presupuesto;
-    println!("{nombre}: {valor:.3} {unidad} (presupuesto ≤ {presupuesto} {unidad}) {}", if ok { "OK" } else { "EXCEDE" });
+    println!(
+        "{nombre}: {valor:.3} {unidad} (presupuesto ≤ {presupuesto} {unidad}) {}",
+        if ok { "OK" } else { "EXCEDE" }
+    );
     ok
 }
 
 fn salida(ok: bool) -> anyhow::Result<ExitCode> {
-    Ok(if ok { ExitCode::SUCCESS } else { ExitCode::from(1) })
+    Ok(if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
 }
 
 /// RSS actual y pico (VmRSS, VmHWM) en MiB de un proceso.
@@ -40,7 +47,13 @@ pub fn rss_mib(pid: Option<u32>) -> (f64, f64) {
 
 fn app_sin_terminal(dir: &Path) -> (App, std::sync::mpsc::Receiver<jonesy_tui::sistema::Aviso>) {
     let (tx, rx) = std::sync::mpsc::channel();
-    let op = Opciones { raiz: dir.to_path_buf(), archivos: vec![], examen: false, ascii: false, telemetria: false };
+    let op = Opciones {
+        raiz: dir.to_path_buf(),
+        archivos: vec![],
+        examen: false,
+        ascii: false,
+        telemetria: false,
+    };
     (App::nueva(op, tx), rx)
 }
 
@@ -50,7 +63,12 @@ pub fn arranque(dir: &Path) -> anyhow::Result<ExitCode> {
     let mut term = Terminal::new(TestBackend::new(120, 30))?;
     term.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut app))?;
     let ms = t.elapsed().as_secs_f64() * 1000.0;
-    salida(informar("arranque (proyecto + primer cuadro)", ms, "ms", 50.0))
+    salida(informar(
+        "arranque (proyecto + primer cuadro)",
+        ms,
+        "ms",
+        50.0,
+    ))
 }
 
 pub fn sesion(dir: &Path, segundos: u64) -> anyhow::Result<ExitCode> {
@@ -71,12 +89,19 @@ pub fn sesion(dir: &Path, segundos: u64) -> anyhow::Result<ExitCode> {
     }
     let (rss, pico) = rss_mib(None);
     println!("sesión: {cuadros} cuadros en {segundos} s; RSS actual {rss:.1} MiB");
-    salida(informar("RSS pico (consigna + C + git + quick-doc + terminal)", pico, "MiB", 30.0))
+    salida(informar(
+        "RSS pico (consigna + C + git + quick-doc + terminal)",
+        pico,
+        "MiB",
+        30.0,
+    ))
 }
 
 pub fn doc_lookup(funcion: &str) -> anyhow::Result<ExitCode> {
     let dir = tempfile::tempdir()?;
-    let codigo = format!("#include <stdlib.h>\n\nint main(void)\n{{\n    int *p = {funcion}(sizeof(int) * 4, ");
+    let codigo = format!(
+        "#include <stdlib.h>\n\nint main(void)\n{{\n    int *p = {funcion}(sizeof(int) * 4, "
+    );
     std::fs::write(dir.path().join("main.c"), &codigo)?;
     let (mut app, _rx) = app_sin_terminal(dir.path());
     let fin = app.buf().buf.largo();
@@ -98,8 +123,17 @@ pub fn doc_lookup(funcion: &str) -> anyhow::Result<ExitCode> {
     term.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut app))?;
     let cuadro = t.elapsed().as_secs_f64() * 1000.0;
     println!("símbolo detectado: {}", titulo.trim());
-    let ok = informar("quick-doc: detección + documentación", por_consulta, "ms", 70.0);
-    salida(informar("quick-doc: cuadro completo", cuadro, "ms", 70.0) && ok && !titulo.contains("quick-doc"))
+    let ok = informar(
+        "quick-doc: detección + documentación",
+        por_consulta,
+        "ms",
+        70.0,
+    );
+    salida(
+        informar("quick-doc: cuadro completo", cuadro, "ms", 70.0)
+            && ok
+            && !titulo.contains("quick-doc"),
+    )
 }
 
 pub fn telemetria() -> anyhow::Result<ExitCode> {
@@ -109,7 +143,12 @@ pub fn telemetria() -> anyhow::Result<ExitCode> {
     let n = 20_000;
     let mut tiempos = Vec::with_capacity(n);
     for i in 0..n {
-        let e = TelemetryEvent::TextDelta { buffer_id: "main.c".into(), offset: i, inserted: "x".into(), deleted_len: 0 };
+        let e = TelemetryEvent::TextDelta {
+            buffer_id: "main.c".into(),
+            offset: i,
+            inserted: "x".into(),
+            deleted_len: 0,
+        };
         let ini = Instant::now();
         t.registrar(e);
         tiempos.push(ini.elapsed());
@@ -128,7 +167,9 @@ pub fn telemetria() -> anyhow::Result<ExitCode> {
 }
 
 pub fn git_status(dir: &Path) -> anyhow::Result<ExitCode> {
-    let Some(repo) = jonesy_git::Repo::abrir(dir) else { anyhow::bail!("{} no está en un repositorio git", dir.display()) };
+    let Some(repo) = jonesy_git::Repo::abrir(dir) else {
+        anyhow::bail!("{} no está en un repositorio git", dir.display())
+    };
     let _ = repo.estado();
     let mut tiempos = vec![];
     let mut entradas = 0;
@@ -139,7 +180,12 @@ pub fn git_status(dir: &Path) -> anyhow::Result<ExitCode> {
     }
     tiempos.sort_by(|a, b| a.partial_cmp(b).unwrap());
     println!("{entradas} entradas en el estado");
-    salida(informar("git status --porcelain=v2 (mediana de 21)", tiempos[10], "ms", 30.0))
+    salida(informar(
+        "git status --porcelain=v2 (mediana de 21)",
+        tiempos[10],
+        "ms",
+        30.0,
+    ))
 }
 
 const MUESTRA_MD: &str = "# Trabajo práctico 3: listas enlazadas
@@ -181,8 +227,17 @@ pub fn markdown(archivo: Option<&Path>) -> anyhow::Result<ExitCode> {
     let t = Instant::now();
     let doc = jonesy_tui::markdown::renderizar(&fuente, 100, &sim);
     let ms = t.elapsed().as_secs_f64() * 1000.0;
-    println!("{} líneas renderizadas, {} enlaces", doc.lineas.len(), doc.enlaces.len());
-    salida(informar("primer render de Markdown con estilos", ms, "ms", 15.0))
+    println!(
+        "{} líneas renderizadas, {} enlaces",
+        doc.lineas.len(),
+        doc.enlaces.len()
+    );
+    salida(informar(
+        "primer render de Markdown con estilos",
+        ms,
+        "ms",
+        15.0,
+    ))
 }
 
 pub fn plugins(dir: &Path) -> anyhow::Result<ExitCode> {
@@ -192,13 +247,19 @@ pub fn plugins(dir: &Path) -> anyhow::Result<ExitCode> {
     if !jonesy_plugins::Supervisor::nuevo(&dir_plugins, None).hay_plugins() {
         // Sin plugins en el proyecto se usa uno de ejemplo, para medir el worker.
         let t = tempfile::tempdir()?;
-        std::fs::write(t.path().join("ejemplo.py"), "def al_guardar(archivo, texto):\n    return []\n")?;
+        std::fs::write(
+            t.path().join("ejemplo.py"),
+            "def al_guardar(archivo, texto):\n    return []\n",
+        )?;
         dir_plugins = t.path().to_path_buf();
         _temporal = t;
     }
     let tel_dir = tempfile::tempdir()?;
     let tel = Telemetria::abrir(tel_dir.path().join("telemetry.log"))?;
-    tel.registrar(TelemetryEvent::SessionStart { user: "bench".into(), exam_mode: false });
+    tel.registrar(TelemetryEvent::SessionStart {
+        user: "bench".into(),
+        exam_mode: false,
+    });
     let (_, base) = rss_mib(None);
     let mut sup = jonesy_plugins::Supervisor::nuevo(&dir_plugins, None);
     let t = Instant::now();
@@ -211,5 +272,10 @@ pub fn plugins(dir: &Path) -> anyhow::Result<ExitCode> {
     let (worker, _) = rss_mib(sup.pid());
     tel.cerrar();
     println!("worker lanzado y primera llamada en {arranque:.1} ms; RSS jonesy {propio:.1} MiB (antes {base:.1}) + worker {worker:.1} MiB");
-    salida(informar("RSS jonesy + worker Python", propio + worker, "MiB", 50.0))
+    salida(informar(
+        "RSS jonesy + worker Python",
+        propio + worker,
+        "MiB",
+        50.0,
+    ))
 }

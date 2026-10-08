@@ -5,8 +5,8 @@ use std::io::Write;
 use std::sync::mpsc::Sender;
 
 use ratatui::crossterm::event::{
-    self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste, EnableFocusChange,
-    EnableMouseCapture, Event,
+    self, DisableBracketedPaste, DisableFocusChange, DisableMouseCapture, EnableBracketedPaste,
+    EnableFocusChange, EnableMouseCapture, Event,
 };
 use ratatui::crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use ratatui::crossterm::{cursor, execute};
@@ -24,13 +24,27 @@ pub enum Aviso {
 pub fn preparar() -> std::io::Result<()> {
     terminal::enable_raw_mode()?;
     let mut out = std::io::stdout();
-    execute!(out, EnterAlternateScreen, EnableMouseCapture, EnableBracketedPaste, EnableFocusChange, cursor::Hide)?;
+    execute!(
+        out,
+        EnterAlternateScreen,
+        EnableMouseCapture,
+        EnableBracketedPaste,
+        EnableFocusChange,
+        cursor::Hide
+    )?;
     Ok(())
 }
 
 pub fn restaurar() {
     let mut out = std::io::stdout();
-    let _ = execute!(out, DisableFocusChange, DisableBracketedPaste, DisableMouseCapture, LeaveAlternateScreen, cursor::Show);
+    let _ = execute!(
+        out,
+        DisableFocusChange,
+        DisableBracketedPaste,
+        DisableMouseCapture,
+        LeaveAlternateScreen,
+        cursor::Show
+    );
     let _ = terminal::disable_raw_mode();
     let _ = out.flush();
 }
@@ -65,7 +79,9 @@ pub fn hilo_entrada(tx: Sender<Aviso>) {
 /// telemetría antes de salir). Ctrl+C en modo crudo no genera SIGINT.
 pub fn hilo_senales(tx: Sender<Aviso>) {
     use signal_hook::consts::{SIGHUP, SIGINT, SIGTERM};
-    let Ok(mut senales) = signal_hook::iterator::Signals::new([SIGINT, SIGHUP, SIGTERM]) else { return };
+    let Ok(mut senales) = signal_hook::iterator::Signals::new([SIGINT, SIGHUP, SIGTERM]) else {
+        return;
+    };
     std::thread::Builder::new()
         .name("senales".into())
         .spawn(move || {
@@ -90,7 +106,10 @@ pub fn osc52(texto: &str) {
 
 pub fn secuencia_osc52(texto: &str) -> String {
     use base64::Engine;
-    format!("\x1b]52;c;{}\x07", base64::engine::general_purpose::STANDARD.encode(texto.as_bytes()))
+    format!(
+        "\x1b]52;c;{}\x07",
+        base64::engine::general_purpose::STANDARD.encode(texto.as_bytes())
+    )
 }
 
 #[cfg(test)]

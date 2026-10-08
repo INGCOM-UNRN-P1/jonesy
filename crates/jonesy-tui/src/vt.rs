@@ -38,12 +38,19 @@ fn estilo(celda: &vt100::Cell) -> Style {
 }
 
 /// Copia la pantalla al área; devuelve la posición del cursor si es visible.
-pub fn dibujar_pantalla(pantalla: &vt100::Screen, area: Rect, buf: &mut Buffer, mostrar_cursor: bool) -> Option<(u16, u16)> {
+pub fn dibujar_pantalla(
+    pantalla: &vt100::Screen,
+    area: Rect,
+    buf: &mut Buffer,
+    mostrar_cursor: bool,
+) -> Option<(u16, u16)> {
     let (filas, cols) = pantalla.size();
     for f in 0..filas.min(area.height) {
         let mut c = 0;
         while c < cols.min(area.width) {
-            let Some(celda) = pantalla.cell(f, c) else { break };
+            let Some(celda) = pantalla.cell(f, c) else {
+                break;
+            };
             let x = area.x + c;
             let y = area.y + f;
             let contenido = celda.contents();
@@ -58,7 +65,11 @@ pub fn dibujar_pantalla(pantalla: &vt100::Screen, area: Rect, buf: &mut Buffer, 
         }
     }
     let (cf, cc) = pantalla.cursor_position();
-    (mostrar_cursor && !pantalla.hide_cursor() && cf < area.height && cc < area.width && pantalla.scrollback() == 0)
+    (mostrar_cursor
+        && !pantalla.hide_cursor()
+        && cf < area.height
+        && cc < area.width
+        && pantalla.scrollback() == 0)
         .then_some((area.x + cc, area.y + cf))
 }
 
@@ -75,9 +86,15 @@ pub fn ansi_a_lineas(texto: &str, ancho: u16) -> Vec<Line<'static>> {
         let mut spans: Vec<Span<'static>> = vec![];
         let mut c = 0;
         while c < cols {
-            let Some(celda) = pantalla.cell(f, c) else { break };
+            let Some(celda) = pantalla.cell(f, c) else {
+                break;
+            };
             let s = estilo(celda);
-            let contenido = if celda.contents().is_empty() { " ".to_string() } else { celda.contents() };
+            let contenido = if celda.contents().is_empty() {
+                " ".to_string()
+            } else {
+                celda.contents()
+            };
             match spans.last_mut() {
                 Some(ult) if ult.style == s => ult.content.to_mut().push_str(&contenido),
                 _ => spans.push(Span::styled(contenido, s)),

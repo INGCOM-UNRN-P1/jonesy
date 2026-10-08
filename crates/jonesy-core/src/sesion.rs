@@ -73,14 +73,18 @@ impl EstadoExamen {
 
     /// Segundos restantes (negativo si se pasó el tiempo); None sin cronómetro.
     pub fn restante_s(&self, ahora_unix: u64) -> Option<i64> {
-        (self.duracion_min > 0).then(|| (self.inicio_unix + self.duracion_min * 60) as i64 - ahora_unix as i64)
+        (self.duracion_min > 0)
+            .then(|| (self.inicio_unix + self.duracion_min * 60) as i64 - ahora_unix as i64)
     }
 }
 
 /// Copias de recuperación: buffers modificados sin guardar al recibir SIGHUP fuera del
 /// modo examen (en examen se guardan en el lugar).
 pub fn ruta_recuperacion(dir_estado: &Path, relativa: &str) -> PathBuf {
-    let nombre: String = relativa.chars().map(|c| if c == '/' || c == '\\' { '%' } else { c }).collect();
+    let nombre: String = relativa
+        .chars()
+        .map(|c| if c == '/' || c == '\\' { '%' } else { c })
+        .collect();
     dir_estado.join("recuperacion").join(nombre)
 }
 
@@ -92,7 +96,11 @@ mod tests {
     fn ida_y_vuelta() {
         let dir = tempfile::tempdir().unwrap();
         let s = Sesion {
-            archivos: vec![ArchivoAbierto { ruta: "src/a.c".into(), cursor: 12, desplazamiento: 3 }],
+            archivos: vec![ArchivoAbierto {
+                ruta: "src/a.c".into(),
+                cursor: 12,
+                desplazamiento: 3,
+            }],
             activo: 0,
             quickdoc_visible: true,
             quickdoc_posicion: Some(PosicionDoc::Inferior),
@@ -106,7 +114,11 @@ mod tests {
 
     #[test]
     fn cronometro() {
-        let e = EstadoExamen { inicio_unix: 1000, duracion_min: 2, ..Default::default() };
+        let e = EstadoExamen {
+            inicio_unix: 1000,
+            duracion_min: 2,
+            ..Default::default()
+        };
         assert_eq!(e.restante_s(1060), Some(60));
         assert_eq!(e.restante_s(1200), Some(-80));
         assert_eq!(EstadoExamen::default().restante_s(5), None);
@@ -114,6 +126,9 @@ mod tests {
 
     #[test]
     fn nombre_de_recuperacion() {
-        assert_eq!(ruta_recuperacion(Path::new("/x"), "src/a.c"), PathBuf::from("/x/recuperacion/src%a.c"));
+        assert_eq!(
+            ruta_recuperacion(Path::new("/x"), "src/a.c"),
+            PathBuf::from("/x/recuperacion/src%a.c")
+        );
     }
 }

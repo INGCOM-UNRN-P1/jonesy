@@ -67,10 +67,19 @@ impl Base {
     pub fn embebida() -> &'static Base {
         static BASE: OnceLock<Base> = OnceLock::new();
         BASE.get_or_init(|| {
-            let archivo: Archivo = toml::from_str(DATOS).expect("data/libc.toml es válido (lo verifica un test)");
+            let archivo: Archivo =
+                toml::from_str(DATOS).expect("data/libc.toml es válido (lo verifica un test)");
             Base {
-                funciones: archivo.funcion.into_iter().map(|f| (f.nombre.clone(), f)).collect(),
-                tipos: archivo.tipo.into_iter().map(|t| (t.nombre.clone(), t)).collect(),
+                funciones: archivo
+                    .funcion
+                    .into_iter()
+                    .map(|f| (f.nombre.clone(), f))
+                    .collect(),
+                tipos: archivo
+                    .tipo
+                    .into_iter()
+                    .map(|t| (t.nombre.clone(), t))
+                    .collect(),
             }
         })
     }
@@ -96,7 +105,10 @@ impl Base {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Contexto {
     /// Dentro de los paréntesis de una llamada: función y parámetro activo (0-based).
-    Llamada { funcion: String, parametro: usize },
+    Llamada {
+        funcion: String,
+        parametro: usize,
+    },
     /// Sobre un identificador.
     Identificador(String),
     Nada,
@@ -122,9 +134,14 @@ pub fn contexto(texto: &[char], pos: usize) -> Contexto {
                 return Contexto::Identificador(id);
             }
         }
-        return Contexto::Llamada { funcion: c.0, parametro: c.1 };
+        return Contexto::Llamada {
+            funcion: c.0,
+            parametro: c.1,
+        };
     }
-    identificador_en(texto, pos).map(Contexto::Identificador).unwrap_or(Contexto::Nada)
+    identificador_en(texto, pos)
+        .map(Contexto::Identificador)
+        .unwrap_or(Contexto::Nada)
 }
 
 /// Verdadero si el cursor está sobre un identificador seguido de `(`.
@@ -222,7 +239,10 @@ fn llamada_abierta(texto: &[char], pos: usize) -> Option<(String, usize)> {
             continue;
         }
         let nombre: String = texto[j..fin].iter().collect();
-        if matches!(nombre.as_str(), "if" | "while" | "for" | "switch" | "return" | "sizeof") {
+        if matches!(
+            nombre.as_str(),
+            "if" | "while" | "for" | "switch" | "return" | "sizeof"
+        ) {
             continue;
         }
         return Some((nombre, comas));
@@ -264,11 +284,17 @@ pub fn funciones_del_codigo(codigo: &str) -> Vec<Funcion> {
             continue;
         }
         let nombre = palabras.last().unwrap().trim_start_matches('*');
-        if nombre.is_empty() || !nombre.chars().all(es_ident) || nombre.chars().next().unwrap().is_ascii_digit() {
+        if nombre.is_empty()
+            || !nombre.chars().all(es_ident)
+            || nombre.chars().next().unwrap().is_ascii_digit()
+        {
             continue;
         }
         let primero = palabras[0];
-        if matches!(primero, "return" | "if" | "while" | "for" | "switch" | "else" | "case" | "do" | "sizeof") {
+        if matches!(
+            primero,
+            "return" | "if" | "while" | "for" | "switch" | "else" | "case" | "do" | "sizeof"
+        ) {
             continue;
         }
         if l[..abre].contains('=') {
@@ -289,8 +315,15 @@ pub fn funciones_del_codigo(codigo: &str) -> Vec<Funcion> {
                 .split(',')
                 .map(|p| {
                     let p = p.trim();
-                    let corte = p.rfind(|c: char| c == ' ' || c == '*').map(|i| i + 1).unwrap_or(0);
-                    Parametro { tipo: p[..corte].trim().to_string(), nombre: p[corte..].trim().to_string(), desc: String::new() }
+                    let corte = p
+                        .rfind(|c: char| c == ' ' || c == '*')
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
+                    Parametro {
+                        tipo: p[..corte].trim().to_string(),
+                        nombre: p[corte..].trim().to_string(),
+                        desc: String::new(),
+                    }
                 })
                 .collect()
         };
@@ -326,28 +359,86 @@ mod tests {
         assert_eq!(m.firma, "void *malloc(size_t size)");
         assert!(m.reglas.contains(&"0x3001h".to_string()));
         for f in b.funciones.values() {
-            assert!(!f.firma.is_empty() && f.firma.contains(&f.nombre), "{}", f.nombre);
+            assert!(
+                !f.firma.is_empty() && f.firma.contains(&f.nombre),
+                "{}",
+                f.nombre
+            );
         }
         assert!(b.tipo("size_t").is_some());
     }
 
     #[test]
     fn parametro_activo_mientras_se_tipea() {
-        assert_eq!(ctx("p = malloc(|"), Contexto::Llamada { funcion: "malloc".into(), parametro: 0 });
-        assert_eq!(ctx("fgets(buf, sizeof buf, |"), Contexto::Llamada { funcion: "fgets".into(), parametro: 2 });
-        assert_eq!(ctx("printf(\"%d, %d\", a|"), Contexto::Llamada { funcion: "printf".into(), parametro: 1 });
+        assert_eq!(
+            ctx("p = malloc(|"),
+            Contexto::Llamada {
+                funcion: "malloc".into(),
+                parametro: 0
+            }
+        );
+        assert_eq!(
+            ctx("fgets(buf, sizeof buf, |"),
+            Contexto::Llamada {
+                funcion: "fgets".into(),
+                parametro: 2
+            }
+        );
+        assert_eq!(
+            ctx("printf(\"%d, %d\", a|"),
+            Contexto::Llamada {
+                funcion: "printf".into(),
+                parametro: 1
+            }
+        );
         assert_eq!(ctx("x = strlen(s); y = (|"), Contexto::Nada);
-        assert_eq!(ctx("if (strcmp(a, b|"), Contexto::Llamada { funcion: "strcmp".into(), parametro: 1 });
-        assert_eq!(ctx("memcpy(d, f(x, y), |"), Contexto::Llamada { funcion: "memcpy".into(), parametro: 2 });
-        assert_eq!(ctx("// malloc(\n free(|"), Contexto::Llamada { funcion: "free".into(), parametro: 0 });
-        assert_eq!(ctx("printf(\"(,\", |"), Contexto::Llamada { funcion: "printf".into(), parametro: 1 });
+        assert_eq!(
+            ctx("if (strcmp(a, b|"),
+            Contexto::Llamada {
+                funcion: "strcmp".into(),
+                parametro: 1
+            }
+        );
+        assert_eq!(
+            ctx("memcpy(d, f(x, y), |"),
+            Contexto::Llamada {
+                funcion: "memcpy".into(),
+                parametro: 2
+            }
+        );
+        assert_eq!(
+            ctx("// malloc(\n free(|"),
+            Contexto::Llamada {
+                funcion: "free".into(),
+                parametro: 0
+            }
+        );
+        assert_eq!(
+            ctx("printf(\"(,\", |"),
+            Contexto::Llamada {
+                funcion: "printf".into(),
+                parametro: 1
+            }
+        );
     }
 
     #[test]
     fn identificador_bajo_el_cursor() {
-        assert_eq!(ctx("int n = str|len(s);"), Contexto::Identificador("strlen".into()));
-        assert_eq!(ctx("printf(\"%zu\", str|len(s));"), Contexto::Identificador("strlen".into()));
-        assert_eq!(ctx("memcpy(d, sr|c, n);"), Contexto::Llamada { funcion: "memcpy".into(), parametro: 1 });
+        assert_eq!(
+            ctx("int n = str|len(s);"),
+            Contexto::Identificador("strlen".into())
+        );
+        assert_eq!(
+            ctx("printf(\"%zu\", str|len(s));"),
+            Contexto::Identificador("strlen".into())
+        );
+        assert_eq!(
+            ctx("memcpy(d, sr|c, n);"),
+            Contexto::Llamada {
+                funcion: "memcpy".into(),
+                parametro: 1
+            }
+        );
         assert_eq!(ctx("FI|LE *f;"), Contexto::Identificador("FILE".into()));
         assert_eq!(ctx("x = 3|;"), Contexto::Nada);
     }
@@ -358,7 +449,14 @@ mod tests {
         let f = funciones_del_codigo(codigo);
         let nombres: Vec<&str> = f.iter().map(|f| f.nombre.as_str()).collect();
         assert_eq!(nombres, vec!["suma", "crear_nodo", "main"]);
-        assert_eq!(f[0].parametros[1], Parametro { tipo: "int".into(), nombre: "b".into(), desc: String::new() });
+        assert_eq!(
+            f[0].parametros[1],
+            Parametro {
+                tipo: "int".into(),
+                nombre: "b".into(),
+                desc: String::new()
+            }
+        );
         assert_eq!(f[1].parametros[0].nombre, "v");
         assert!(f[2].parametros.is_empty());
     }
