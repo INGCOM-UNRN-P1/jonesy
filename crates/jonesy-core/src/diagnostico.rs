@@ -4,10 +4,11 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
 pub enum Severidad {
     Error,
     Advertencia,
+    #[default]
     Nota,
     Estilo,
 }
@@ -32,7 +33,7 @@ impl Severidad {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Diagnostico {
     pub archivo: Option<PathBuf>,
     /// 1-based, como los imprime el compilador.
@@ -44,12 +45,21 @@ pub struct Diagnostico {
     pub codigo: Option<String>,
     pub sugerencia: Option<String>,
     pub origen: Origen,
+    /// Herramienta del ecosistema que lo informó (gaff, kaneda…), para las integraciones.
+    pub herramienta: Option<String>,
+    /// Categoría común del ecosistema (yutani: memoria, punteros, estilo…).
+    pub categoria: Option<String>,
+    /// Página del apunte que explica el tema o la regla.
+    pub enlace: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Origen {
+    #[default]
     Compilador,
     Ripley,
+    /// Una herramienta del ecosistema integrada como plugin (gaff, kaneda…).
+    Herramienta,
     /// Extensiones (nativas o del worker Python).
     Plugin,
 }
@@ -137,6 +147,7 @@ fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
         codigo: None,
         sugerencia: explicacion.map(str::to_string),
         origen: Origen::Compilador,
+        ..Default::default()
     })
 }
 
@@ -181,6 +192,7 @@ fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
         codigo: None,
         sugerencia: None,
         origen: Origen::Compilador,
+        ..Default::default()
     })
 }
 
@@ -251,6 +263,7 @@ pub fn parsear_ripley(json: &str, dir: &Path) -> Result<Vec<Diagnostico>, String
             codigo: h.rule_code.or(h.codigo),
             sugerencia: h.suggestion.or(h.sugerencia).filter(|s| !s.is_empty()),
             origen: Origen::Ripley,
+            ..Default::default()
         })
         .collect())
 }

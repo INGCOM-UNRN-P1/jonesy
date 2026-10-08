@@ -134,6 +134,7 @@ impl DiagnosticProvider for SangriaMezclada {
                     codigo: None,
                     sugerencia: Some("indentar con 4 espacios".into()),
                     origen: Origen::Plugin,
+                    ..Default::default()
                 })
             })
             .collect()
@@ -479,6 +480,7 @@ fn diagnostico_de_json(archivo: &Path, d: &Value) -> Option<Diagnostico> {
         codigo: d["codigo"].as_str().map(str::to_string),
         sugerencia: d["sugerencia"].as_str().map(str::to_string),
         origen: Origen::Plugin,
+        ..Default::default()
     })
 }
 

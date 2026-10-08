@@ -1368,10 +1368,12 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
             } else {
                 Color::Reset
             };
-            let origen = match d.origen {
-                jonesy_core::Origen::Compilador => "gcc",
-                jonesy_core::Origen::Ripley => "ripley",
-                jonesy_core::Origen::Plugin => "plugin",
+            let origen = match (&d.herramienta, d.origen) {
+                (Some(h), _) => h.as_str(),
+                (None, jonesy_core::Origen::Compilador) => "gcc",
+                (None, jonesy_core::Origen::Ripley) => "ripley",
+                (None, jonesy_core::Origen::Herramienta) => "herramienta",
+                (None, jonesy_core::Origen::Plugin) => "plugin",
             };
             Line::from(vec![
                 Span::styled(
