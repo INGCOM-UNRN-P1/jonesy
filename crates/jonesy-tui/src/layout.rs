@@ -402,11 +402,11 @@ mod tests {
         p.izquierdo = true;
         let a = calcular(&p);
         let izq = a.izquierdo.unwrap();
-        assert_eq!(izq.width, 28);
-        assert_eq!(a.consigna.unwrap().x, 28);
+        assert_eq!(izq.width, 32);
+        assert_eq!(a.consigna.unwrap().x, 32);
         let inf = a.inferior.unwrap();
         assert_eq!(inf.height, 10);
-        assert_eq!(a.lateral.unwrap().width, 39); // 30 % de 132
+        assert_eq!(a.lateral.unwrap().width, 38); // 30 % de 128
         assert_eq!(a.editor.unwrap().y + a.editor.unwrap().height, inf.y);
         assert_eq!(a.separadores.len(), 5);
     }

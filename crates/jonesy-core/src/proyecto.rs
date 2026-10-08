@@ -120,7 +120,7 @@ pub struct TamPaneles {
 impl Default for TamPaneles {
     fn default() -> Self {
         TamPaneles {
-            izquierdo: 28,
+            izquierdo: 32,
             consigna: 0,
             quickdoc: 25,
             dock: 4,

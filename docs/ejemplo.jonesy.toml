@@ -47,7 +47,7 @@ entorno = ""
 [interfaz.paneles]
 # Tamaños iniciales; se cambian arrastrando los bordes con el mouse o desde
 # Ver → Tamaños de paneles, y lo ajustado se recuerda en .jonesy/session.json.
-izquierdo = 28   # barra de archivos/proyecto, en columnas
+izquierdo = 32   # barra de archivos/proyecto, en columnas
 consigna = 0     # % del ancho (0 = 25 % en modo espacioso, 35 % en estándar)
 quickdoc = 25    # % del ancho con el quick-doc a la derecha
 dock = 4         # filas del quick-doc en el dock inferior
