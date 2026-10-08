@@ -62,14 +62,11 @@ pub fn instalar_gancho_panico() {
 pub fn hilo_entrada(tx: Sender<Aviso>) {
     std::thread::Builder::new()
         .name("entrada".into())
-        .spawn(move || loop {
-            match event::read() {
-                Ok(ev) => {
-                    if tx.send(Aviso::Terminal(ev)).is_err() {
-                        break;
-                    }
+        .spawn(move || {
+            while let Ok(ev) = event::read() {
+                if tx.send(Aviso::Terminal(ev)).is_err() {
+                    break;
                 }
-                Err(_) => break,
             }
         })
         .expect("no se pudo crear el hilo de entrada");

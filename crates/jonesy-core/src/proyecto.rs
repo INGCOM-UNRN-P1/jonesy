@@ -38,6 +38,7 @@ pub struct Depurar {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
+#[derive(Default)]
 pub struct Examen {
     /// Enunciado de solo lectura (Markdown).
     pub consigna: String,
@@ -49,18 +50,6 @@ pub struct Examen {
     pub plugins_permitidos: Vec<String>,
     /// Archivos que forman la entrega (globs simples `*.c`); vacío = *.c, *.h, *.md, Makefile.
     pub archivos: Vec<String>,
-}
-
-impl Default for Examen {
-    fn default() -> Self {
-        Examen {
-            consigna: String::new(),
-            duracion_min: 0,
-            verificar: String::new(),
-            plugins_permitidos: Vec::new(),
-            archivos: Vec::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

@@ -315,10 +315,7 @@ pub fn funciones_del_codigo(codigo: &str) -> Vec<Funcion> {
                 .split(',')
                 .map(|p| {
                     let p = p.trim();
-                    let corte = p
-                        .rfind(|c: char| c == ' ' || c == '*')
-                        .map(|i| i + 1)
-                        .unwrap_or(0);
+                    let corte = p.rfind([' ', '*']).map(|i| i + 1).unwrap_or(0);
                     Parametro {
                         tipo: p[..corte].trim().to_string(),
                         nombre: p[corte..].trim().to_string(),

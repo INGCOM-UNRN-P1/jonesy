@@ -211,7 +211,7 @@ impl Reproductor {
             .get(self.rep.posicion.saturating_sub(1))
             .map(|r| r.ts_micros)
             .unwrap_or(t0);
-        let seg = (t.saturating_sub(t0) / 1_000_000) as u64;
+        let seg = t.saturating_sub(t0) / 1_000_000;
         f.render_widget(
             Paragraph::new(vec![
                 Line::from(vec![

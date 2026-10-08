@@ -1641,9 +1641,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         Modal::Menu { indice, sel } => {
             let (indice, sel) = (*indice, *sel);
             let menus = accion::menus(app.examen.is_some());
-            let Some((_, items)) = menus.get(indice) else {
-                return None;
-            };
+            let (_, items) = menus.get(indice)?;
             let x = app
                 .zonas
                 .menu

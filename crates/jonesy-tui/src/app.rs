@@ -2791,7 +2791,7 @@ impl App {
             KeyCode::Backspace => self.editar(|b| b.borrar_atras()),
             KeyCode::Delete => self.editar(|b| b.borrar_adelante()),
             KeyCode::Tab => self.editar(|b| b.insertar("    ")),
-            KeyCode::BackTab => self.editar(|b| desindentar(b)),
+            KeyCode::BackTab => self.editar(desindentar),
             KeyCode::Char(c) if !ctrl => {
                 let mut s = [0u8; 4];
                 let t = c.encode_utf8(&mut s).to_string();
