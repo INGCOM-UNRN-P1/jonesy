@@ -511,3 +511,62 @@ fn abrir_otro_proyecto_desde_el_dialogo() {
     e.accion(jonesy_tui::accion::Accion::AbrirProyecto);
     assert!(e.modal.is_none());
 }
+
+#[test]
+fn clonar_un_repositorio_y_abrirlo() {
+    let git = |dir: &Path, args: &[&str]| {
+        assert!(std::process::Command::new("git")
+            .args([
+                "-c",
+                "user.name=prueba",
+                "-c",
+                "user.email=p@x",
+                "-c",
+                "init.defaultBranch=main"
+            ])
+            .args(args)
+            .current_dir(dir)
+            .output()
+            .unwrap()
+            .status
+            .success());
+    };
+    let base = tempfile::tempdir().unwrap();
+    std::env::set_var("JONESY_ESTADO", base.path().join("estado"));
+    let origen = base.path().join("origen");
+    std::fs::create_dir_all(&origen).unwrap();
+    std::fs::write(origen.join("main.c"), MAIN).unwrap();
+    git(&origen, &["init", "-q"]);
+    git(&origen, &["add", "-A"]);
+    git(&origen, &["commit", "-qm", "inicial"]);
+    let actual = base.path().join("actual");
+    std::fs::create_dir_all(&actual).unwrap();
+    std::fs::write(actual.join("notas.md"), "# x\n").unwrap();
+    let destino = base.path().join("clones");
+    std::fs::create_dir_all(&destino).unwrap();
+
+    let (mut a, rx) = app(&actual, false);
+    pantalla(&mut a, 140, 40);
+    a.accion(jonesy_tui::accion::Accion::GitClonar);
+    escribir(&mut a, &origen.to_string_lossy());
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    escribir(&mut a, &destino.to_string_lossy());
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("clones/origen"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let fin = Instant::now() + Duration::from_secs(20);
+    while !matches!(a.modal, Some(Modal::Confirmar { .. })) {
+        assert!(Instant::now() < fin, "el clon no terminó");
+        if let Ok(av) = rx.recv_timeout(Duration::from_millis(50)) {
+            a.procesar(av);
+        }
+        a.tic();
+    }
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    assert_eq!(
+        a.proyecto.raiz,
+        destino.join("origen").canonicalize().unwrap()
+    );
+    assert_eq!(a.buf().buf.nombre(), "main.c");
+}

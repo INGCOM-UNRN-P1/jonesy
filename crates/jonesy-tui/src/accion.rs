@@ -60,6 +60,7 @@ pub enum Accion {
     EstructuraProyecto,
     NuevoArchivo,
     AbrirProyecto,
+    GitClonar,
 }
 
 pub struct Info {
@@ -122,6 +123,7 @@ impl Accion {
             EstructuraProyecto => ("Proyecto: bibliotecas, ejercicios y objetivos", "Alt+Y"),
             NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),
             AbrirProyecto => ("Abrir proyecto o directorio…", ""),
+            GitClonar => ("Git: clonar un repositorio…", ""),
         };
         Info { titulo, atajo }
     }
@@ -170,6 +172,7 @@ impl Accion {
             GitUnstageTodo,
             GitCommit,
             GitLog,
+            GitClonar,
             Entregar,
             ExplicarRegla,
             TamanosPaneles,
@@ -252,7 +255,14 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
         ),
         (
             "Git",
-            vec![PanelGit, GitStageTodo, GitUnstageTodo, GitCommit, GitLog],
+            vec![
+                GitClonar,
+                PanelGit,
+                GitStageTodo,
+                GitUnstageTodo,
+                GitCommit,
+                GitLog,
+            ],
         ),
     ];
     if examen {

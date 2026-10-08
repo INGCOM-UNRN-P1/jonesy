@@ -1442,6 +1442,19 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 .wrap(Wrap { trim: true }),
             i,
         );
+        if i.height > 3 {
+            botones_fila(
+                f,
+                app,
+                i.x,
+                i.y + 2,
+                i.width,
+                &[
+                    ("[ Clonar repositorio ]", Accion::GitClonar),
+                    ("[ Abrir en Terminal ]", Accion::Terminal),
+                ],
+            );
+        }
         return;
     };
     let mut cabecera = vec![Line::from(vec![
@@ -1486,9 +1499,25 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             ..i
         },
     );
+    // Botones (RF-11.5: las operaciones avanzadas se delegan a la terminal).
+    if i.height > alto_cab + 2 {
+        botones_fila(
+            f,
+            app,
+            i.x,
+            i.y + alto_cab,
+            i.width,
+            &[
+                ("[Commit]", Accion::GitCommit),
+                ("[Log]", Accion::GitLog),
+                ("[Clonar]", Accion::GitClonar),
+                ("[Abrir en Terminal]", Accion::Terminal),
+            ],
+        );
+    }
     let lista = Rect {
-        y: i.y + alto_cab + 1,
-        height: i.height.saturating_sub(alto_cab + 1),
+        y: i.y + alto_cab + 2,
+        height: i.height.saturating_sub(alto_cab + 2),
         ..i
     };
     let alto = lista.height as usize;
@@ -1563,6 +1592,31 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         })
         .collect();
     f.render_widget(Paragraph::new(lineas), lista);
+}
+
+/// Fila de botones clicables; los que no entran se omiten.
+fn botones_fila(
+    f: &mut Frame,
+    app: &mut App,
+    x0: u16,
+    y: u16,
+    ancho: u16,
+    botones: &[(&str, Accion)],
+) {
+    let mut x = x0;
+    for (t, a) in botones {
+        let w = UnicodeWidthStr::width(*t) as u16;
+        if x + w > x0 + ancho {
+            break;
+        }
+        let zona = Rect::new(x, y, w, 1);
+        f.render_widget(
+            Paragraph::new(*t).style(Style::default().fg(tema::ACENTO)),
+            zona,
+        );
+        app.zonas.botones.push((zona, *a));
+        x += w + 1;
+    }
 }
 
 fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
@@ -2070,6 +2124,67 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 );
             }
             None
+        }
+        Modal::Clonar {
+            url,
+            destino,
+            campo,
+        } => {
+            let r = centrado(area, 78, 8);
+            f.render_widget(Clear, r);
+            let b = bloque(
+                " Clonar repositorio · Tab cambia de campo · Enter clona · Esc cancela ",
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let carpeta = crate::app::expandir_ruta(destino, &app.proyecto.raiz)
+                .map(|d| {
+                    d.join(crate::app::nombre_de_repo(url))
+                        .display()
+                        .to_string()
+                })
+                .unwrap_or_default();
+            let campos = [("URL:    ", url.as_str()), ("Carpeta:", destino.as_str())];
+            let mut cursor = None;
+            for (n, (etiqueta, valor)) in campos.iter().enumerate() {
+                let y = i.y + n as u16 * 2;
+                let activo = n == *campo;
+                f.buffer_mut()
+                    .set_string(i.x, y, etiqueta, Style::default().fg(tema::ATENUADO));
+                let estilo = if activo {
+                    Style::default().fg(tema::ACENTO).bg(tema::FONDO_SELECCION)
+                } else {
+                    Style::default()
+                };
+                let x0 = i.x + 9;
+                let ancho = i.width.saturating_sub(9);
+                f.buffer_mut().set_string(
+                    x0,
+                    y,
+                    format!("{:<w$}", valor, w = ancho as usize),
+                    estilo,
+                );
+                if activo {
+                    cursor = Some((
+                        x0 + (UnicodeWidthStr::width(*valor) as u16).min(ancho.saturating_sub(1)),
+                        y,
+                    ));
+                }
+            }
+            f.buffer_mut().set_string(
+                i.x,
+                i.y + 4,
+                format!("Se crea: {carpeta}"),
+                Style::default().fg(tema::NOTA),
+            );
+            f.buffer_mut().set_string(
+                i.x,
+                i.y + 5,
+                "Corre en la terminal interna: ahí podés escribir usuario, token o la clave SSH.",
+                Style::default().fg(tema::ATENUADO),
+            );
+            cursor
         }
         Modal::AbrirProyecto {
             dir,

@@ -215,6 +215,8 @@ pub enum Confirmacion {
     Salir,
     CerrarBuffer,
     Entregar,
+    /// Abrir el repositorio recién clonado (`App::proyecto_pendiente`).
+    AbrirClonado,
 }
 
 pub enum Modal {
@@ -263,6 +265,12 @@ pub enum Modal {
     NuevoArchivo {
         texto: String,
         carpeta: bool,
+    },
+    /// Git → Clonar: URL y carpeta donde crear el clon; `campo` 0 = URL, 1 = destino.
+    Clonar {
+        url: String,
+        destino: String,
+        campo: usize,
     },
     /// Archivo → Abrir proyecto: navegador de directorios.
     AbrirProyecto {
@@ -422,6 +430,10 @@ pub struct App {
     refrescar_estructura: bool,
     /// Opciones de arranque (para reabrir otro proyecto con las mismas).
     pub opciones: Opciones,
+    /// Destino de un `git clone` en curso en el deck.
+    clonando: Option<PathBuf>,
+    /// Proyecto a abrir si se confirma (después de clonar).
+    proyecto_pendiente: Option<PathBuf>,
     pub lateral: Option<Lateral>,
     pub quickdoc_visible: bool,
     pub quickdoc_posicion: PosicionDoc,
@@ -565,6 +577,8 @@ impl App {
             vista_proyecto: VistaProyecto::default(),
             refrescar_estructura: false,
             opciones: op.clone(),
+            clonando: None,
+            proyecto_pendiente: None,
             lateral: None,
             quickdoc_visible: true,
             quickdoc_posicion: proyecto.config.interfaz.quickdoc,
@@ -2150,6 +2164,29 @@ impl App {
         self.avisar(aviso, Nivel::Ok);
     }
 
+    /// `git clone` en el deck (para que funcionen credenciales y SSH); al terminar se
+    /// ofrece abrir el repositorio.
+    fn clonar(&mut self, url: &str, destino: &str) {
+        let url = url.trim();
+        if url.is_empty() {
+            self.avisar("Falta la URL del repositorio.", Nivel::Aviso);
+            return;
+        }
+        let Some(base) = expandir_ruta(destino, &self.proyecto.raiz) else {
+            self.avisar("Falta la carpeta de destino.", Nivel::Aviso);
+            return;
+        };
+        let carpeta = base.join(nombre_de_repo(url));
+        if carpeta.exists() {
+            self.avisar(format!("Ya existe {}", carpeta.display()), Nivel::Aviso);
+            return;
+        }
+        let q = jonesy_core::proyecto::shell_quote;
+        let cmd = format!("git clone {} {}", q(url), q(&carpeta.to_string_lossy()));
+        self.clonando = Some(carpeta);
+        self.correr_en_deck(cmd);
+    }
+
     // ------------------------------------------------------------ barra izquierda
 
     /// Muestra la barra izquierda en la pestaña `p`, o la oculta si ya estaba en ella con foco.
@@ -2711,6 +2748,24 @@ impl App {
             Accion::Paleta => self.abrir_paleta(),
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
+            Accion::GitClonar => {
+                if self.examen.is_some() {
+                    self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
+                    return;
+                }
+                let destino = self
+                    .proyecto
+                    .raiz
+                    .parent()
+                    .unwrap_or(&self.proyecto.raiz)
+                    .display()
+                    .to_string();
+                self.modal = Some(Modal::Clonar {
+                    url: String::new(),
+                    destino,
+                    campo: 0,
+                });
+            }
             Accion::AbrirProyecto => {
                 if self.examen.is_some() {
                     self.avisar(
@@ -2879,7 +2934,26 @@ impl App {
     }
 
     /// Tareas periódicas tras cada lote de eventos.
-    fn tic(&mut self) {
+    pub fn tic(&mut self) {
+        if self.clonando.is_some() && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            let destino = self.clonando.take().unwrap();
+            if destino.join(".git").is_dir() {
+                self.modal = Some(Modal::Confirmar {
+                    titulo: "Repositorio clonado".into(),
+                    mensaje: format!(
+                        "Se clonó en {}. ¿Abrirlo como proyecto? (s/n)",
+                        destino.display()
+                    ),
+                    que: Confirmacion::AbrirClonado,
+                });
+                self.proyecto_pendiente = Some(destino);
+            } else {
+                self.avisar(
+                    "git clone no terminó bien: mirá la pestaña Ejecución.",
+                    Nivel::Error,
+                );
+            }
+        }
         // tp.sh add-lib/add-ex/sync cambian la estructura: se relee al terminar.
         if self.refrescar_estructura && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.refrescar_estructura = false;
@@ -2960,6 +3034,12 @@ impl App {
                 | Modal::IrALinea { texto }
                 | Modal::Argumentos { texto, .. }
                 | Modal::NuevoArchivo { texto, .. }
+                | Modal::Clonar {
+                    url: texto,
+                    campo: 0,
+                    ..
+                }
+                | Modal::Clonar { destino: texto, .. }
                 | Modal::Commit { mensaje: texto },
             ) => {
                 texto.push_str(&t);
@@ -3576,6 +3656,11 @@ impl App {
                     Confirmacion::Salir => self.salir = true,
                     Confirmacion::CerrarBuffer => self.cerrar_buffer(true),
                     Confirmacion::Entregar => self.entregar(),
+                    Confirmacion::AbrirClonado => {
+                        if let Some(p) = self.proyecto_pendiente.take() {
+                            self.cambiar_proyecto(p);
+                        }
+                    }
                 },
                 KeyCode::Char('n' | 'N') | KeyCode::Esc => {}
                 _ => {
@@ -3659,6 +3744,33 @@ impl App {
                 }
                 editar_campo(&mut texto, &k);
                 self.modal = Some(Modal::NuevoArchivo { texto, carpeta });
+            }
+            Modal::Clonar {
+                mut url,
+                mut destino,
+                mut campo,
+            } => {
+                if cerrar {
+                    return;
+                }
+                match k.code {
+                    KeyCode::Tab | KeyCode::BackTab | KeyCode::Up | KeyCode::Down => {
+                        campo = 1 - campo
+                    }
+                    KeyCode::Enter if campo == 0 => campo = 1,
+                    KeyCode::Enter => {
+                        self.clonar(&url, &destino);
+                        return;
+                    }
+                    _ => {
+                        editar_campo(if campo == 0 { &mut url } else { &mut destino }, &k);
+                    }
+                }
+                self.modal = Some(Modal::Clonar {
+                    url,
+                    destino,
+                    campo,
+                });
             }
             Modal::AbrirProyecto {
                 dir,
@@ -4377,6 +4489,18 @@ pub fn ajustar_panel(t: &mut TamPaneles, i: usize, delta: i32) {
     *t = t.acotar();
 }
 
+/// Nombre de la carpeta que crea `git clone` para una URL.
+pub fn nombre_de_repo(url: &str) -> String {
+    let u = url.trim().trim_end_matches('/');
+    let ultimo = u.rsplit(['/', ':']).next().unwrap_or(u);
+    let n = ultimo.strip_suffix(".git").unwrap_or(ultimo);
+    if n.is_empty() {
+        "repositorio".into()
+    } else {
+        n.to_string()
+    }
+}
+
 /// Ruta escrita en un campo: `~/x`, absoluta o relativa a `base`. None si está vacía.
 pub fn expandir_ruta(texto: &str, base: &Path) -> Option<PathBuf> {
     let t = texto.trim();
@@ -4496,6 +4620,16 @@ pub fn lineas_diff(texto: &str) -> Vec<Line<'static>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nombre_de_repo_como_git() {
+        assert_eq!(
+            nombre_de_repo("https://github.com/INGCOM-UNRN-P1/plantilla-TP.git"),
+            "plantilla-TP"
+        );
+        assert_eq!(nombre_de_repo("git@github.com:usuario/tp3.git"), "tp3");
+        assert_eq!(nombre_de_repo("https://host/x/lista/"), "lista");
+    }
 
     #[test]
     fn expande_tabs_a_multiplos_de_cuatro() {
