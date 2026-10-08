@@ -928,6 +928,10 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     }
     izq.push(Span::styled(format!(" {}{} ", b.nombre(), if b.modificado() { "*" } else { "" }), fondo.add_modifier(Modifier::BOLD)));
     izq.push(Span::styled(format!("Ln {}, Col {} ", l + 1, c + 1), fondo.fg(tema::ATENUADO)));
+    let tareas = app.tareas_en_curso();
+    if !tareas.is_empty() {
+        izq.push(Span::styled(format!(" {}… ", tareas.join(", ")), fondo.fg(tema::NOTA).add_modifier(Modifier::ITALIC)));
+    }
     if let Some((m, n, _)) = &app.mensaje {
         let color = match n {
             Nivel::Info => tema::NOTA,

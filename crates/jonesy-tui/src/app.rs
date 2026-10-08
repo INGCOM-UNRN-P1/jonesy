@@ -261,6 +261,8 @@ pub struct App {
     pub titulo_salida: String,
     pub salida_desplazamiento: usize,
     ripley_disponible: bool,
+    /// Archivos guardados mientras ripley ya los analizaba: se repite una vez al terminar.
+    ripley_pendiente: BTreeSet<PathBuf>,
 
     pub terminal: Option<Deck>,
     pub ejecucion: Option<Deck>,
@@ -376,6 +378,7 @@ impl App {
             titulo_salida: String::new(),
             salida_desplazamiento: 0,
             ripley_disponible: proyecto.config.ripley.activo,
+            ripley_pendiente: BTreeSet::new(),
             terminal: None,
             ejecucion: None,
             depuracion: None,
@@ -684,15 +687,40 @@ impl App {
         }
         let es_c = matches!(self.buffers[i].buf.lenguaje, Lenguaje::C);
         if es_c && self.ripley_disponible {
-            let rel = self.proyecto.relativa(ruta);
-            let cmd = format!(
-                "{} check {} --format json",
-                self.proyecto.config.ripley.comando,
-                jonesy_core::proyecto::shell_quote(&rel)
-            );
-            self.lanzar(&cmd, Tarea::Ripley { archivo: ruta.to_path_buf() });
+            self.lanzar_ripley(ruta);
         }
         self.refrescar_git();
+    }
+
+    /// ripley tarda varios segundos (compila y aplica todas las reglas): si ya está
+    /// analizando el archivo, se encola una sola repetición en lugar de otra instancia.
+    fn lanzar_ripley(&mut self, ruta: &Path) {
+        let en_curso = self.procesos.values().any(|t| matches!(t, Tarea::Ripley { archivo } if archivo == ruta));
+        if en_curso {
+            self.ripley_pendiente.insert(ruta.to_path_buf());
+            return;
+        }
+        let rel = self.proyecto.relativa(ruta);
+        let cmd = format!("{} check {} --format json", self.proyecto.config.ripley.comando, jonesy_core::proyecto::shell_quote(&rel));
+        self.lanzar(&cmd, Tarea::Ripley { archivo: ruta.to_path_buf() });
+    }
+
+    /// Nombres de las tareas en segundo plano, para la barra de estado.
+    pub fn tareas_en_curso(&self) -> Vec<&'static str> {
+        let mut v: Vec<&'static str> = self
+            .procesos
+            .values()
+            .map(|t| match t {
+                Tarea::Compilar { .. } => "compilando",
+                Tarea::Ripley { .. } => "ripley",
+                Tarea::Verificar => "verificando",
+                Tarea::Explicar { .. } => "ripley explain",
+                Tarea::MemTrace { .. } => "mem-trace",
+            })
+            .collect();
+        v.sort();
+        v.dedup();
+        v
     }
 
     fn cerrar_buffer(&mut self, forzar: bool) {
@@ -1369,6 +1397,11 @@ impl App {
             Tarea::Ripley { archivo } => {
                 if codigo == Some(127) {
                     self.ripley_disponible = false;
+                    return;
+                }
+                if self.ripley_pendiente.remove(&archivo) {
+                    // Se guardó de nuevo mientras analizaba: este resultado ya es viejo.
+                    self.lanzar_ripley(&archivo);
                     return;
                 }
                 match diagnostico::parsear_ripley(&salida, &self.proyecto.raiz) {

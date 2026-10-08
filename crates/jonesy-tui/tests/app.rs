@@ -214,3 +214,28 @@ fn breakpoint_por_clic_en_el_margen() {
     a.evento(clic(z.texto.x + 4, z.texto.y + 4));
     assert_eq!(a.buf().buf.linea_columna(), (4, 4));
 }
+
+#[test]
+fn ripley_al_guardar() {
+    if std::process::Command::new("ripley").arg("--version").output().is_err() {
+        return;
+    }
+    let dir = proyecto(&[("main.c", "#include <stdlib.h>\nint main(void)\n{\n    int *p = malloc(4);\n    free(p);\n    return 0;\n}\n")]);
+    let (mut a, rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    // Un segundo guardado mientras analiza no lanza otra instancia.
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    assert_eq!(a.tareas_en_curso(), vec!["ripley"]);
+    assert!(pantalla(&mut a, 120, 30).contains("ripley…"));
+    let fin = Instant::now() + Duration::from_secs(60);
+    while a.diag_ripley.is_empty() && Instant::now() < fin {
+        if let Ok(av) = rx.recv_timeout(Duration::from_millis(100)) {
+            a.procesar(av);
+        }
+    }
+    let d: Vec<_> = a.diag_ripley.values().flatten().collect();
+    assert!(d.iter().any(|d| d.codigo.as_deref() == Some("0x3001h")), "{d:?}");
+    assert!(a.tareas_en_curso().is_empty());
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("■ ") && p.contains("0x3001h"), "texto virtual de ripley: {p}");
+}
