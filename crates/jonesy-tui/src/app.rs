@@ -3635,7 +3635,7 @@ impl App {
                 fila(
                     "Tema",
                     tema::actual().nombre().into(),
-                    "oscuro · claro (fondo blanco) · contraste (16 colores)".into(),
+                    "oscuro · claro · contraste · turbo (Turbo C++) · solarizado · fósforo".into(),
                     QueConfig::Tema,
                 ),
                 fila(

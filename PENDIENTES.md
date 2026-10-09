@@ -76,7 +76,7 @@ Queda:
 | Gráfico de velocidad de tipeo | Could | en `jonesy replay` (tipeado y pegado por minuto) y en `--resumen`. |
 | Exportar la traza de memoria | Could | genera `memoria-<programa>.html` y lo abre (o copia la ruta por OSC 52). |
 | Editor de snippets para plugins | Could | Configuración del entorno → Plugins → Nuevo plugin parte de una plantilla; guardarlo lo recarga y sus errores (sintaxis, excepciones) aparecen en Problemas en su línea. |
-| Temas | Could | oscuro, claro y contraste (16 colores ANSI); `[interfaz] tema` o Archivo → Configuración del entorno → Apariencia, recordado en la sesión. |
+| Temas | Could | oscuro, claro, contraste (16 colores ANSI), turbo (Turbo C++ de Borland), solarizado y fósforo verde; `[interfaz] tema` o Archivo → Configuración del entorno → Apariencia, recordado en la sesión. |
 | Deshacer el último commit | Could | `z` en el panel de git (`reset --soft HEAD~1`); se niega si el commit ya se subió. |
 | Prueba del corte por SIGHUP | §12.6 | `crates/jonesy-bin/tests/corte.rs`: el binario real en una PTY, con y sin examen. |
 | Estrés de 100 sesiones | §12.5 | `bin/estres-sesiones`: 0,55 GiB y ~0 % de CPU con 100 sesiones en 16 núcleos; la CI lo corre con 20. |

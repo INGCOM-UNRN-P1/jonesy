@@ -92,7 +92,8 @@ pub struct Interfaz {
     pub osc52: bool,
     /// Forzar caracteres ASCII en lugar de los de caja.
     pub ascii: bool,
-    /// Tema de colores: "oscuro" (por defecto), "claro" o "contraste" (16 colores ANSI).
+    /// Tema de colores: "oscuro" (por defecto), "claro", "contraste" (16 colores ANSI),
+    /// "turbo" (como Turbo C++ de Borland), "solarizado" o "fosforo" (monitor verde).
     /// El elegido desde Archivo → Configuración del entorno → Apariencia queda en la sesión y tiene prioridad.
     pub tema: String,
     /// Shell de la terminal interna (vacío = $SHELL o bash).

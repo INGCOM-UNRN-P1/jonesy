@@ -110,23 +110,39 @@ pub enum Tema {
     Claro,
     /// Sólo los 16 colores ANSI: terminales sin color verdadero o más contraste.
     Contraste,
+    /// Como Turbo C++ de Borland: editor azul con texto amarillo, barra gris con letras
+    /// rojas y selección verde.
+    Turbo,
+    /// Solarized oscuro: fondo azul petróleo y colores de bajo contraste.
+    Solarizado,
+    /// Monitor de fósforo verde: todo en verdes sobre negro.
+    Fosforo,
 }
 
 impl Tema {
-    pub const TODOS: [Tema; 3] = [Tema::Oscuro, Tema::Claro, Tema::Contraste];
+    pub const TODOS: [Tema; 6] = [
+        Tema::Oscuro,
+        Tema::Claro,
+        Tema::Contraste,
+        Tema::Turbo,
+        Tema::Solarizado,
+        Tema::Fosforo,
+    ];
 
     pub fn nombre(self) -> &'static str {
         match self {
             Tema::Oscuro => "oscuro",
             Tema::Claro => "claro",
             Tema::Contraste => "contraste",
+            Tema::Turbo => "turbo",
+            Tema::Solarizado => "solarizado",
+            Tema::Fosforo => "fosforo",
         }
     }
 
     pub fn de_nombre(s: &str) -> Option<Tema> {
-        Tema::TODOS
-            .into_iter()
-            .find(|t| t.nombre() == s.trim().to_lowercase())
+        let s = s.trim().to_lowercase().replace('ó', "o");
+        Tema::TODOS.into_iter().find(|t| t.nombre() == s)
     }
 
     pub fn siguiente(self) -> Tema {
@@ -139,6 +155,9 @@ impl Tema {
             Tema::Oscuro => &OSCURO,
             Tema::Claro => &CLARO,
             Tema::Contraste => &CONTRASTE,
+            Tema::Turbo => &TURBO,
+            Tema::Solarizado => &SOLARIZADO,
+            Tema::Fosforo => &FOSFORO,
         }
     }
 }
@@ -146,6 +165,18 @@ impl Tema {
 /// Colores de un tema.
 #[derive(Debug)]
 pub struct Paleta {
+    /// Fondo de toda la pantalla (Reset: el de la terminal).
+    pub fondo: Color,
+    /// Texto común (Reset: el de la terminal).
+    pub texto: Color,
+    /// Texto sobre las barras (menú, estado, pestañas).
+    pub texto_barra: Color,
+    /// Texto secundario sobre las barras.
+    pub atenuado_barra: Color,
+    /// Letra mnemónica de cada menú (Reset: sólo subrayada).
+    pub tecla_menu: Color,
+    /// Fondo del menú abierto y de la entrada elegida.
+    pub fondo_menu_sel: Color,
     pub fondo_barra: Color,
     pub fondo_seleccion: Color,
     pub fondo_linea: Color,
@@ -173,6 +204,12 @@ pub struct Paleta {
 }
 
 const OSCURO: Paleta = Paleta {
+    fondo: Color::Reset,
+    texto: Color::Reset,
+    texto_barra: Color::Reset,
+    atenuado_barra: Color::Rgb(110, 118, 129),
+    tecla_menu: Color::Reset,
+    fondo_menu_sel: Color::Rgb(97, 175, 239),
     fondo_barra: Color::Rgb(40, 44, 52),
     fondo_seleccion: Color::Rgb(62, 68, 81),
     fondo_linea: Color::Rgb(33, 37, 43),
@@ -198,6 +235,12 @@ const OSCURO: Paleta = Paleta {
 };
 
 const CLARO: Paleta = Paleta {
+    fondo: Color::Reset,
+    texto: Color::Reset,
+    texto_barra: Color::Reset,
+    atenuado_barra: Color::Rgb(110, 119, 129),
+    tecla_menu: Color::Reset,
+    fondo_menu_sel: Color::Rgb(9, 105, 218),
     fondo_barra: Color::Rgb(232, 234, 239),
     fondo_seleccion: Color::Rgb(200, 216, 242),
     fondo_linea: Color::Rgb(243, 244, 247),
@@ -223,6 +266,12 @@ const CLARO: Paleta = Paleta {
 };
 
 const CONTRASTE: Paleta = Paleta {
+    fondo: Color::Reset,
+    texto: Color::Reset,
+    texto_barra: Color::White,
+    atenuado_barra: Color::Gray,
+    tecla_menu: Color::LightYellow,
+    fondo_menu_sel: Color::LightCyan,
     fondo_barra: Color::DarkGray,
     fondo_seleccion: Color::Blue,
     fondo_linea: Color::Reset,
@@ -245,6 +294,102 @@ const CONTRASTE: Paleta = Paleta {
     agregado_fuerte: Color::LightGreen,
     relleno: Color::DarkGray,
     pegado: Color::Red,
+};
+
+/// Turbo C++ 3.0: los 16 colores de la paleta CGA.
+const TURBO: Paleta = Paleta {
+    fondo: Color::Rgb(0, 0, 170),
+    texto: Color::Rgb(255, 255, 85),
+    texto_barra: Color::Rgb(0, 0, 0),
+    atenuado_barra: Color::Rgb(85, 85, 85),
+    tecla_menu: Color::Rgb(170, 0, 0),
+    fondo_menu_sel: Color::Rgb(0, 170, 0),
+    fondo_barra: Color::Rgb(170, 170, 170),
+    fondo_seleccion: Color::Rgb(0, 170, 170),
+    fondo_linea: Color::Rgb(0, 0, 170),
+    fondo_codigo: Color::Rgb(0, 0, 128),
+    acento: Color::Rgb(85, 255, 255),
+    atenuado: Color::Rgb(170, 170, 170),
+    error: Color::Rgb(255, 85, 85),
+    advertencia: Color::Rgb(255, 255, 85),
+    nota: Color::Rgb(85, 255, 85),
+    estilo: Color::Rgb(255, 255, 255),
+    ok: Color::Rgb(85, 255, 255),
+    peligro: Color::Rgb(255, 85, 85),
+    fuerte: Color::Rgb(255, 255, 255),
+    sobre_acento: Color::Rgb(0, 0, 0),
+    numero: Color::Rgb(85, 255, 255),
+    linea_depurador: Color::Rgb(0, 170, 170),
+    borrado: Color::Rgb(128, 0, 0),
+    borrado_fuerte: Color::Rgb(170, 0, 0),
+    agregado: Color::Rgb(0, 100, 0),
+    agregado_fuerte: Color::Rgb(0, 170, 0),
+    relleno: Color::Rgb(0, 0, 128),
+    pegado: Color::Rgb(170, 0, 170),
+};
+
+/// Solarized (Ethan Schoonover), variante oscura.
+const SOLARIZADO: Paleta = Paleta {
+    fondo: Color::Rgb(0, 43, 54),
+    texto: Color::Rgb(131, 148, 150),
+    texto_barra: Color::Rgb(147, 161, 161),
+    atenuado_barra: Color::Rgb(88, 110, 117),
+    tecla_menu: Color::Rgb(181, 137, 0),
+    fondo_menu_sel: Color::Rgb(38, 139, 210),
+    fondo_barra: Color::Rgb(7, 54, 66),
+    fondo_seleccion: Color::Rgb(7, 54, 66),
+    fondo_linea: Color::Rgb(7, 54, 66),
+    fondo_codigo: Color::Rgb(7, 54, 66),
+    acento: Color::Rgb(38, 139, 210),
+    atenuado: Color::Rgb(88, 110, 117),
+    error: Color::Rgb(220, 50, 47),
+    advertencia: Color::Rgb(181, 137, 0),
+    nota: Color::Rgb(42, 161, 152),
+    estilo: Color::Rgb(108, 113, 196),
+    ok: Color::Rgb(133, 153, 0),
+    peligro: Color::Rgb(220, 50, 47),
+    fuerte: Color::Rgb(238, 232, 213),
+    sobre_acento: Color::Rgb(0, 43, 54),
+    numero: Color::Rgb(203, 75, 22),
+    linea_depurador: Color::Rgb(88, 70, 0),
+    borrado: Color::Rgb(70, 30, 30),
+    borrado_fuerte: Color::Rgb(130, 40, 40),
+    agregado: Color::Rgb(30, 60, 30),
+    agregado_fuerte: Color::Rgb(60, 110, 40),
+    relleno: Color::Rgb(7, 54, 66),
+    pegado: Color::Rgb(110, 50, 20),
+};
+
+/// Monitor monocromo de fósforo verde.
+const FOSFORO: Paleta = Paleta {
+    fondo: Color::Rgb(0, 0, 0),
+    texto: Color::Rgb(51, 255, 51),
+    texto_barra: Color::Rgb(0, 0, 0),
+    atenuado_barra: Color::Rgb(0, 80, 0),
+    tecla_menu: Color::Rgb(0, 0, 0),
+    fondo_menu_sel: Color::Rgb(170, 255, 170),
+    fondo_barra: Color::Rgb(0, 190, 0),
+    fondo_seleccion: Color::Rgb(0, 90, 0),
+    fondo_linea: Color::Rgb(0, 25, 0),
+    fondo_codigo: Color::Rgb(0, 20, 0),
+    acento: Color::Rgb(150, 255, 150),
+    atenuado: Color::Rgb(0, 140, 0),
+    error: Color::Rgb(200, 255, 200),
+    advertencia: Color::Rgb(120, 255, 120),
+    nota: Color::Rgb(80, 220, 80),
+    estilo: Color::Rgb(170, 255, 170),
+    ok: Color::Rgb(100, 230, 100),
+    peligro: Color::Rgb(220, 255, 220),
+    fuerte: Color::Rgb(200, 255, 200),
+    sobre_acento: Color::Rgb(0, 0, 0),
+    numero: Color::Rgb(120, 255, 120),
+    linea_depurador: Color::Rgb(0, 70, 0),
+    borrado: Color::Rgb(0, 40, 0),
+    borrado_fuerte: Color::Rgb(0, 70, 0),
+    agregado: Color::Rgb(0, 60, 0),
+    agregado_fuerte: Color::Rgb(0, 110, 0),
+    relleno: Color::Rgb(0, 30, 0),
+    pegado: Color::Rgb(0, 120, 0),
 };
 
 thread_local! {
@@ -278,6 +423,12 @@ macro_rules! colores {
 }
 
 colores!(
+    fondo,
+    texto,
+    texto_barra,
+    atenuado_barra,
+    tecla_menu,
+    fondo_menu_sel,
     fondo_barra,
     fondo_seleccion,
     fondo_linea,

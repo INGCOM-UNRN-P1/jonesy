@@ -1772,3 +1772,37 @@ fn guia_estado_de_entrega_y_limpiar() {
         "{p}"
     );
 }
+
+#[test]
+fn tema_turbo_pinta_como_turbo_c() {
+    use jonesy_tui::tema::{self, Tema};
+    use ratatui::style::Color;
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (".jonesy.toml", "[interfaz]\ntema = \"turbo\"\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    assert_eq!(tema::actual(), Tema::Turbo);
+    let mut t = Terminal::new(TestBackend::new(120, 30)).unwrap();
+    t.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut a)).unwrap();
+    let buf = t.backend().buffer().clone();
+    // Barra de menú gris con texto negro y la letra mnemónica roja.
+    assert_eq!(buf[(5, 0)].bg, Color::Rgb(170, 170, 170));
+    assert_eq!(buf[(2, 0)].symbol(), "A");
+    assert_eq!(buf[(2, 0)].fg, Color::Rgb(170, 0, 0));
+    assert_eq!(buf[(4, 0)].fg, Color::Rgb(0, 0, 0));
+    // Editor azul.
+    let z = a.zonas.editor.unwrap();
+    assert_eq!(
+        buf[(z.texto.x + 40, z.texto.y + 10)].bg,
+        Color::Rgb(0, 0, 170)
+    );
+    // Menú abierto: la entrada elegida en verde.
+    tecla(&mut a, KeyCode::Char('a'), KeyModifiers::ALT);
+    t.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut a)).unwrap();
+    let buf = t.backend().buffer().clone();
+    assert_eq!(buf[(5, 2)].bg, Color::Rgb(0, 170, 0));
+    // Los nombres con o sin tilde.
+    assert_eq!(Tema::de_nombre("fósforo"), Some(Tema::Fosforo));
+    tema::usar(Tema::Oscuro);
+}

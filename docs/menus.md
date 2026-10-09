@@ -50,7 +50,7 @@ solapas (← → o 1-4):
 | **Integraciones y linters** | cada herramienta del ecosistema (ripley, gaff, kaneda…) con su estado y cuándo corre; Enter o Espacio la activa o apaga. Las acciones de las herramientas para el archivo activo (Alt+H) y releer los manifiestos. |
 | **Plugins** | los `.jonesy/plugins/*.py` con sus comandos o errores (Enter abre el script), crear uno nuevo y recargarlos. |
 | **Compilador y formato** | el comando con el que se compila y el formateador que se usa, y abrir `.jonesy.toml` o `.clang-format` para cambiarlos (se crean si no existen). |
-| **Apariencia** | tema (oscuro, claro, contraste), posición del quick-doc, tamaños de paneles y restablecerlos. |
+| **Apariencia** | tema (oscuro, claro, contraste, turbo, solarizado, fósforo), posición del quick-doc, tamaños de paneles y restablecerlos. |
 
 ## Contenido que depende del proyecto
 

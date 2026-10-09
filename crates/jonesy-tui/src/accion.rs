@@ -138,7 +138,7 @@ impl Accion {
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
             TamanosPaneles => ("Tamaños de paneles…", ""),
-            CambiarTema => ("Cambiar tema (oscuro, claro, contraste)", ""),
+            CambiarTema => ("Cambiar tema (oscuro, claro, contraste, turbo…)", ""),
             Explorador => ("Explorador de archivos", "Alt+E"),
             EstructuraProyecto => ("Ver ejercicios y objetivos del proyecto", "Alt+Y"),
             NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),

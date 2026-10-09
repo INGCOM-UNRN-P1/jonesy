@@ -23,6 +23,12 @@ use crate::tema::{self, estilo_clase};
 
 pub fn dibujar(f: &mut Frame, app: &mut App) {
     let area = f.area();
+    // Fondo y texto del tema en toda la pantalla (Reset en los temas que usan los de la
+    // terminal).
+    f.render_widget(
+        Block::default().style(Style::default().bg(tema::fondo()).fg(tema::texto())),
+        area,
+    );
     app.tam = (area.width, area.height);
     app.zonas = Default::default();
     let modo = app.modo();
@@ -66,7 +72,7 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
     }
     if let Some(r) = a.quickdoc {
         if a.quickdoc_flotante {
-            f.render_widget(Clear, r);
+            limpiar(f, r);
         }
         dibujar_quickdoc(f, app, r);
     }
@@ -112,7 +118,9 @@ fn bloque_app<'a>(app: &App, titulo: impl Into<Line<'a>>, foco: bool) -> Block<'
 // ------------------------------------------------------------------ barra de menú
 
 fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
-    let fondo = Style::default().bg(tema::fondo_barra());
+    let fondo = Style::default()
+        .bg(tema::fondo_barra())
+        .fg(tema::texto_barra());
     f.render_widget(Block::default().style(fondo), r);
     let menus = accion::menus(app.examen.is_some());
     let abierto = match app.modal {
@@ -127,7 +135,9 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             break;
         }
         let estilo = if abierto == Some(i) {
-            Style::default().bg(tema::acento()).fg(tema::sobre_acento())
+            Style::default()
+                .bg(tema::fondo_menu_sel())
+                .fg(tema::sobre_acento())
         } else {
             fondo
         };
@@ -138,7 +148,13 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
         for c in nombre.chars() {
             let st = if !marcada && c.to_lowercase().next() == Some(m.tecla) {
                 marcada = true;
-                estilo.add_modifier(Modifier::UNDERLINED)
+                // Subrayada; en los temas que la colorean (turbo: roja), también.
+                let st = estilo.add_modifier(Modifier::UNDERLINED);
+                if tema::tecla_menu() != Color::Reset && abierto != Some(i) {
+                    st.fg(tema::tecla_menu())
+                } else {
+                    st
+                }
             } else {
                 estilo
             };
@@ -300,7 +316,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                     let fondo = if sel && foco {
                         tema::fondo_seleccion()
                     } else {
-                        Color::Reset
+                        tema::fondo()
                     };
                     let icono = if fila.es_dir {
                         if e.expandidos.contains(&fila.ruta) {
@@ -424,7 +440,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                     let fondo = if n == v.sel && foco {
                         tema::fondo_seleccion()
                     } else {
-                        Color::Reset
+                        tema::fondo()
                     };
                     let st = Style::default().bg(fondo);
                     let spans: Vec<Span> = match fila {
@@ -831,7 +847,7 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         } else if es_actual && foco {
             tema::fondo_linea()
         } else {
-            Color::Reset
+            tema::fondo()
         };
         for x in r.x..r.x + r.width {
             buf[(x, y)]
@@ -1271,7 +1287,11 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
     // Pestañas en la fila superior (sobre el borde).
     let fila = Rect { height: 1, ..r };
     f.render_widget(
-        Block::default().style(Style::default().bg(tema::fondo_barra())),
+        Block::default().style(
+            Style::default()
+                .bg(tema::fondo_barra())
+                .fg(tema::texto_barra()),
+        ),
         fila,
     );
     let mut x = r.x + 1;
@@ -1308,7 +1328,7 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
         } else {
             Style::default()
                 .bg(tema::fondo_barra())
-                .fg(tema::atenuado())
+                .fg(tema::atenuado_barra())
         };
         let zona = Rect::new(x, r.y, w, 1);
         f.render_widget(Paragraph::new(format!(" {titulo} ")).style(estilo), zona);
@@ -1388,7 +1408,7 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
                         r.y,
                         aviso,
                         Style::default()
-                            .fg(tema::atenuado())
+                            .fg(tema::atenuado_barra())
                             .bg(tema::fondo_barra()),
                     );
                 }
@@ -1441,7 +1461,7 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
             let fondo = if i == app.sel_problema {
                 tema::fondo_seleccion()
             } else {
-                Color::Reset
+                tema::fondo()
             };
             let origen = match (&d.herramienta, d.origen) {
                 (Some(h), _) => h.as_str(),
@@ -1723,7 +1743,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 let fondo = if n == sel {
                     tema::fondo_seleccion()
                 } else {
-                    Color::Reset
+                    tema::fondo()
                 };
                 let marca = if app.git.marcado.as_deref() == Some(c.hash.as_str()) {
                     "● "
@@ -1767,7 +1787,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             let fondo = if n == sel {
                 tema::fondo_seleccion()
             } else {
-                Color::Reset
+                tema::fondo()
             };
             let (marca, color) = if en.en_stage() && !en.sin_stage() {
                 ("[S]", tema::ok())
@@ -1849,7 +1869,7 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             let fondo = if n == app.sel_regla {
                 tema::fondo_seleccion()
             } else {
-                Color::Reset
+                tema::fondo()
             };
             if n == app.sel_regla {
                 fila_sel = lineas.len();
@@ -2037,7 +2057,9 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
 // ------------------------------------------------------------------ barra de estado
 
 fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
-    let fondo = Style::default().bg(tema::fondo_barra());
+    let fondo = Style::default()
+        .bg(tema::fondo_barra())
+        .fg(tema::texto_barra());
     f.render_widget(Block::default().style(fondo), r);
     let b = &app.buf().buf;
     let (l, c) = b.linea_columna();
@@ -2210,7 +2232,7 @@ fn celda_diff(
         return;
     };
     let fondo = if c.tipo == Tipo::Igual {
-        Color::Reset
+        tema::fondo()
     } else {
         fondo
     };
@@ -2297,7 +2319,7 @@ fn dibujar_diff(
         area.width.saturating_sub(2),
         area.height.saturating_sub(2),
     );
-    f.render_widget(Clear, r);
+    limpiar(f, r);
     let (agregadas, borradas) = jonesy_core::diff::estadistica(filas);
     // En terminales angostas el lado a lado no entra: se muestra unificado.
     let lado_a_lado = lado_a_lado && r.width >= 70;
@@ -2430,6 +2452,15 @@ fn dibujar_diff(
     }
 }
 
+/// Borra un área (para un modal o un panel flotante) y la pinta con el fondo del tema.
+fn limpiar(f: &mut Frame, r: Rect) {
+    f.render_widget(Clear, r);
+    f.render_widget(
+        Block::default().style(Style::default().bg(tema::fondo()).fg(tema::texto())),
+        r,
+    );
+}
+
 fn centrado(area: Rect, w: u16, h: u16) -> Rect {
     let w = w.min(area.width);
     let h = h.min(area.height);
@@ -2491,7 +2522,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             comando,
         } => {
             let r = centrado(area, 76, 6);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(
                 format!(" {comando} · Enter corre en la terminal · Esc cancela "),
                 true,
@@ -2516,7 +2547,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         }
         Modal::Renombrar { texto, .. } => {
             let r = centrado(area, 64, 3);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(" Renombrar o mover (ruta relativa al proyecto) ", true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2534,7 +2565,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 " Nuevo archivo (ruta relativa al proyecto) "
             };
             let r = centrado(area, 64, 3);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(titulo, true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2558,7 +2589,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 46.min(base.width),
                 3,
             );
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(titulo, true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2573,7 +2604,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             titulo, mensaje, ..
         } => {
             let r = centrado(area, 64, 7);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(format!(" {titulo} "), true)
                 .border_style(Style::default().fg(tema::advertencia()));
             let i = b.inner(r);
@@ -2583,7 +2614,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         }
         Modal::Commit { mensaje } => {
             let r = centrado(area, 76, 12);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(
                 " Commit (Ctrl+Enter, Alt+Enter o Ctrl+S confirma · Esc cancela) ",
                 true,
@@ -2623,7 +2654,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let w = ancho_max.clamp(40, area.width.saturating_sub(4));
             let h = (lineas.len() as u16 + 2).clamp(6, area.height.saturating_sub(4));
             let r = centrado(area, w, h);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(format!(" {titulo} · Esc cierra "), true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2651,7 +2682,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             campo,
         } => {
             let r = centrado(area, 78, 8);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(
                 " Clonar repositorio · Tab cambia de campo · Enter clona · Esc cancela ",
                 true,
@@ -2761,7 +2792,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let filas = app.filas_configuracion(pestana);
             let alto = (filas.len() as u16 + 7).clamp(12, area.height.saturating_sub(2));
             let r = centrado(area, 110, alto);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(" Configuración del entorno · Esc cierra ", true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2797,7 +2828,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 let fondo = if k == sel {
                     tema::fondo_seleccion()
                 } else {
-                    Color::Reset
+                    tema::fondo()
                 };
                 let st = Style::default().bg(fondo);
                 let color_valor = match x.valor.as_str() {
@@ -2841,7 +2872,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         Modal::Paneles { sel } => {
             let sel = *sel;
             let r = centrado(area, 72, crate::app::CAMPOS_PANELES.len() as u16 + 5);
-            f.render_widget(Clear, r);
+            limpiar(f, r);
             let b = bloque(" Tamaños de paneles ", true);
             let i = b.inner(r);
             f.render_widget(b, r);
@@ -2896,8 +2927,13 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 ancho.min(area.width),
                 (items.len() as u16 + 2).min(area.height.saturating_sub(1)),
             );
-            f.render_widget(Clear, r);
-            let b = bloque("", true);
+            limpiar(f, r);
+            // El desplegable, con los colores de la barra (gris con texto negro en turbo).
+            let b = bloque("", true).style(
+                Style::default()
+                    .bg(tema::fondo_barra())
+                    .fg(tema::texto_barra()),
+            );
             let i = b.inner(r);
             f.render_widget(b, r);
             let raya = app.sim.h.to_string().repeat(i.width as usize);
@@ -2913,9 +2949,13 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 };
                 let info = a.info();
                 let estilo = if n == sel {
-                    Style::default().bg(tema::acento()).fg(tema::sobre_acento())
+                    Style::default()
+                        .bg(tema::fondo_menu_sel())
+                        .fg(tema::sobre_acento())
                 } else {
                     Style::default()
+                        .bg(tema::fondo_barra())
+                        .fg(tema::texto_barra())
                 };
                 let relleno = (i.width as usize)
                     .saturating_sub(info.titulo.chars().count() + info.atajo.chars().count() + 2);
@@ -2939,7 +2979,7 @@ fn lista_modal(
     sel: usize,
 ) -> Option<(u16, u16)> {
     let r = centrado(area, 70, 18);
-    f.render_widget(Clear, r);
+    limpiar(f, r);
     let b = bloque(titulo.to_string(), true);
     let i = b.inner(r);
     f.render_widget(b, r);
