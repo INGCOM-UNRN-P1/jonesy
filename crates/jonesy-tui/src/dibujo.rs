@@ -122,6 +122,7 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
         .bg(tema::fondo_barra())
         .fg(tema::texto_barra());
     f.render_widget(Block::default().style(fondo), r);
+    // Sólo los nombres: no hace falta armar las entradas del proyecto.
     let menus = accion::menus(app.examen.is_some());
     let abierto = match app.modal {
         Some(Modal::Menu { indice, .. }) => Some(indice),
@@ -2904,9 +2905,10 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             None
         }
         Modal::Menu { indice, sel } => {
-            let (indice, sel) = (*indice, *sel);
-            let menus = accion::menus(app.examen.is_some());
+            let indice = *indice;
+            let menus = app.menus();
             let items = &menus.get(indice)?.items;
+            let sel = accion::ajustar_sel(items, *sel);
             let x = app
                 .zonas
                 .menu
@@ -2916,10 +2918,10 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 .unwrap_or(1);
             let ancho = items
                 .iter()
-                .flatten()
-                .map(|a| a.info().titulo.chars().count() + a.info().atajo.chars().count() + 4)
+                .map(|e| e.titulo().chars().count() + e.atajo().chars().count() + 4)
                 .max()
-                .unwrap_or(20) as u16
+                .unwrap_or(20)
+                .clamp(20, 90) as u16
                 + 2;
             let r = Rect::new(
                 x.min(area.width.saturating_sub(ancho)),
@@ -2937,31 +2939,46 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let i = b.inner(r);
             f.render_widget(b, r);
             let raya = app.sim.h.to_string().repeat(i.width as usize);
-            for (n, a) in items.iter().enumerate().take(i.height as usize) {
-                let fila = Rect::new(i.x, i.y + n as u16, i.width, 1);
-                let Some(a) = a else {
-                    // Separador.
-                    f.render_widget(
-                        Paragraph::new(raya.clone()).style(Style::default().fg(tema::atenuado())),
-                        fila,
-                    );
-                    continue;
-                };
-                let info = a.info();
+            // Si no entra (el menú Plugins puede ser largo), se desplaza con la selección.
+            let alto = i.height as usize;
+            let base = sel.saturating_sub(alto.saturating_sub(1));
+            for (n, e) in items.iter().enumerate().skip(base).take(alto) {
+                let fila = Rect::new(i.x, i.y + (n - base) as u16, i.width, 1);
+                let barra = Style::default()
+                    .bg(tema::fondo_barra())
+                    .fg(tema::texto_barra());
+                match e {
+                    accion::Entrada::Separador => {
+                        f.render_widget(
+                            Paragraph::new(raya.clone()).style(barra.fg(tema::atenuado_barra())),
+                            fila,
+                        );
+                        continue;
+                    }
+                    accion::Entrada::Nota(t) => {
+                        f.render_widget(
+                            Paragraph::new(format!(" {t}")).style(barra.fg(tema::atenuado_barra())),
+                            fila,
+                        );
+                        continue;
+                    }
+                    _ => {}
+                }
                 let estilo = if n == sel {
                     Style::default()
                         .bg(tema::fondo_menu_sel())
                         .fg(tema::sobre_acento())
                 } else {
-                    Style::default()
-                        .bg(tema::fondo_barra())
-                        .fg(tema::texto_barra())
+                    barra
                 };
+                let (titulo, atajo) = (e.titulo(), e.atajo());
+                let disponible = (i.width as usize).saturating_sub(atajo.chars().count() + 3);
+                let titulo: String = titulo.chars().take(disponible).collect();
                 let relleno = (i.width as usize)
-                    .saturating_sub(info.titulo.chars().count() + info.atajo.chars().count() + 2);
-                let texto = format!(" {}{}{} ", info.titulo, " ".repeat(relleno), info.atajo);
+                    .saturating_sub(titulo.chars().count() + atajo.chars().count() + 2);
+                let texto = format!(" {titulo}{}{atajo} ", " ".repeat(relleno));
                 f.render_widget(Paragraph::new(texto).style(estilo), fila);
-                app.zonas.items_menu.push((fila, *a));
+                app.zonas.items_menu.push((fila, n));
             }
             let _ = ascii;
             None

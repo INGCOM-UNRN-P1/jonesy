@@ -1691,7 +1691,10 @@ fn menus_por_letra_y_separadores() {
     }
     let (i, sel) = indice(&a).unwrap();
     let menus = jonesy_tui::accion::menus(false);
-    assert_eq!(menus[i].items[sel], Some(Accion::Guardar));
+    assert_eq!(
+        menus[i].items[sel],
+        jonesy_tui::accion::Entrada::Accion(Accion::Guardar)
+    );
     let p = pantalla(&mut a, 140, 40);
     assert!(p.contains("Configuración del entorno…"), "{p}");
     assert!(p.contains("├") || p.contains("─────"), "separadores: {p}");
@@ -1805,4 +1808,59 @@ fn tema_turbo_pinta_como_turbo_c() {
     // Los nombres con o sin tilde.
     assert_eq!(Tema::de_nombre("fósforo"), Some(Tema::Fosforo));
     tema::usar(Tema::Oscuro);
+}
+
+#[test]
+fn menu_plugins_lista_y_ejecuta_los_comandos() {
+    if std::process::Command::new("python3")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (
+            ".jonesy/plugins/hola.py",
+            "def comando_saludar(ctx):\n    return \"# Hola\\n\\ndesde el plugin\"\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Alt+L abre Plugins: pide los comandos al worker y se completa cuando llegan. La
+    // selección va al primer comando (los títulos de sección no se eligen).
+    tecla(&mut a, KeyCode::Char('l'), KeyModifiers::ALT);
+    esperar(&mut a, &rx, |a| !a.comandos_plugins.is_empty());
+    let p = pantalla(&mut a, 140, 40);
+    let barra = p.lines().next().unwrap();
+    assert!(barra.contains("Git  Plugins  Ayuda"), "{barra}");
+    assert!(
+        p.contains("Plugins Python") && p.contains("hola: saludar"),
+        "{p}"
+    );
+    assert!(p.contains("Herramientas para este archivo"), "{p}");
+    assert!(
+        p.contains("Configurar plugins…") && p.contains("Recargar los plugins"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("desde el plugin"), "{p}");
+    // Configurar plugins abre la solapa Plugins de la configuración.
+    a.modal = None;
+    a.accion(jonesy_tui::accion::Accion::ConfigurarPlugins);
+    assert!(matches!(
+        a.modal,
+        Some(Modal::Configuracion { pestana: 1, .. })
+    ));
+    // Sin plugins, el menú lo dice.
+    let vacio = proyecto(&[("main.c", MAIN)]);
+    let (mut b, _rx) = app(vacio.path(), false);
+    tecla(&mut b, KeyCode::Char('l'), KeyModifiers::ALT);
+    let p = pantalla(&mut b, 140, 40);
+    assert!(p.contains("(ninguno en .jonesy/plugins)"), "{p}");
 }

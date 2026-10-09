@@ -78,6 +78,7 @@ pub enum Accion {
     RestablecerPaneles,
     GuiaRapida,
     EstadoEntrega,
+    ConfigurarPlugins,
 }
 
 pub struct Info {
@@ -152,12 +153,13 @@ impl Accion {
             ExportarMemoria => ("Exportar traza de memoria (reporte HTML)", ""),
             GitDeshacerCommit => ("Deshacer último commit (mantener en stage)", ""),
             Herramientas => ("Herramientas del ecosistema para este archivo…", "Alt+H"),
-            Integraciones => ("Integraciones: qué herramientas corren y cuándo…", ""),
+            Integraciones => ("Configurar integraciones (qué corre y cuándo)…", ""),
             Configuracion => ("Configuración del entorno…", "Ctrl+,"),
             LimpiarCompilacion => ("Limpiar compilación (make clean)", ""),
             RestablecerPaneles => ("Restablecer disposición de paneles", ""),
             GuiaRapida => ("Guía rápida para estudiantes de C", ""),
             EstadoEntrega => ("Verificar estado de entrega", ""),
+            ConfigurarPlugins => ("Configurar plugins…", ""),
         };
         Info { titulo, atajo }
     }
@@ -233,6 +235,7 @@ impl Accion {
             RestablecerPaneles,
             GuiaRapida,
             EstadoEntrega,
+            ConfigurarPlugins,
             Salir,
         ]
     }
@@ -244,14 +247,69 @@ pub struct Menu {
     /// Letra mnemónica (subrayada en la barra): Alt+letra si no la toma un atajo global, o
     /// la letra sola con un menú abierto (F10 y letra).
     pub tecla: char,
-    /// Entradas; `None` es un separador.
-    pub items: Vec<Option<Accion>>,
+    pub items: Vec<Entrada>,
+}
+
+/// Una entrada de un menú.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Entrada {
+    Accion(Accion),
+    Separador,
+    /// Lugar de los comandos de los plugins y de las acciones de las herramientas del
+    /// proyecto: la interfaz lo reemplaza por entradas `Externa` al abrir el menú.
+    ComandosPlugins,
+    /// Entrada armada en tiempo de ejecución; `id` indica cuál a quien la armó.
+    Externa {
+        titulo: String,
+        atajo: String,
+        id: usize,
+    },
+    /// Texto que no se elige (encabezado o «ninguno»).
+    Nota(String),
+}
+
+impl Entrada {
+    /// Se puede elegir con el teclado o el mouse.
+    pub fn elegible(&self) -> bool {
+        matches!(self, Entrada::Accion(_) | Entrada::Externa { .. })
+    }
+
+    pub fn titulo(&self) -> String {
+        match self {
+            Entrada::Accion(a) => a.info().titulo.into(),
+            Entrada::Externa { titulo, .. } | Entrada::Nota(titulo) => titulo.clone(),
+            Entrada::ComandosPlugins => "‹comandos de los plugins›".into(),
+            Entrada::Separador => String::new(),
+        }
+    }
+
+    pub fn atajo(&self) -> String {
+        match self {
+            Entrada::Accion(a) => a.info().atajo.into(),
+            Entrada::Externa { atajo, .. } => atajo.clone(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// La entrada elegible más cercana a `sel` (hacia abajo, o la primera).
+pub fn ajustar_sel(items: &[Entrada], sel: usize) -> usize {
+    if items.get(sel).is_some_and(Entrada::elegible) {
+        return sel;
+    }
+    (sel..items.len())
+        .chain(0..sel)
+        .find(|&i| items[i].elegible())
+        .unwrap_or(0)
 }
 
 impl Menu {
-    /// Las acciones, sin los separadores.
+    /// Las acciones fijas, sin separadores ni entradas armadas en tiempo de ejecución.
     pub fn acciones(&self) -> impl Iterator<Item = Accion> + '_ {
-        self.items.iter().flatten().copied()
+        self.items.iter().filter_map(|e| match e {
+            Entrada::Accion(a) => Some(*a),
+            _ => None,
+        })
     }
 }
 
@@ -260,140 +318,149 @@ pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 'r', 'p', 'o', 'm']
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
 /// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
-/// memoria) y git. La configuración del entorno (integraciones, plugins, compilador,
+/// memoria), git y los plugins del proyecto. La configuración del entorno (integraciones, plugins, compilador,
 /// apariencia) está en Archivo → Configuración del entorno.
 pub fn menus(examen: bool) -> Vec<Menu> {
     use Accion::*;
-    let menu = |nombre, tecla, items: Vec<Option<Accion>>| Menu {
+    let menu = |nombre, tecla, items: Vec<Entrada>| Menu {
         nombre,
         tecla,
         items,
     };
-    const SEP: Option<Accion> = None;
+    const SEP: Entrada = Entrada::Separador;
+    use Entrada::Accion as A;
     let mut m = vec![
         menu(
             "Archivo",
             'a',
             vec![
-                Some(NuevoArchivo),
-                Some(Abrir),
-                Some(AbrirProyecto),
+                A(NuevoArchivo),
+                A(Abrir),
+                A(AbrirProyecto),
                 SEP,
-                Some(Guardar),
-                Some(GuardarTodo),
+                A(Guardar),
+                A(GuardarTodo),
                 SEP,
-                Some(CerrarBuffer),
-                Some(SiguienteBuffer),
-                Some(AnteriorBuffer),
+                A(CerrarBuffer),
+                A(SiguienteBuffer),
+                A(AnteriorBuffer),
                 SEP,
-                Some(Configuracion),
+                A(Configuracion),
                 SEP,
-                Some(Salir),
+                A(Salir),
             ],
         ),
         menu(
             "Editar",
             'e',
             vec![
-                Some(Deshacer),
-                Some(Rehacer),
+                A(Deshacer),
+                A(Rehacer),
                 SEP,
-                Some(Cortar),
-                Some(Copiar),
-                Some(Pegar),
-                Some(SeleccionarTodo),
+                A(Cortar),
+                A(Copiar),
+                A(Pegar),
+                A(SeleccionarTodo),
                 SEP,
-                Some(Buscar),
-                Some(BuscarSiguiente),
-                Some(IrALinea),
+                A(Buscar),
+                A(BuscarSiguiente),
+                A(IrALinea),
                 SEP,
-                Some(Formatear),
+                A(Formatear),
             ],
         ),
         menu(
             "Ver",
             'v',
             vec![
-                Some(VistaCodigo),
-                Some(VistaConsigna),
-                Some(VistaTerminal),
+                A(VistaCodigo),
+                A(VistaConsigna),
+                A(VistaTerminal),
                 SEP,
-                Some(Explorador),
-                Some(Problemas),
-                Some(SalidaCompilacion),
-                Some(Terminal),
-                Some(PanelGit),
-                Some(PanelReglas),
+                A(Explorador),
+                A(Problemas),
+                A(SalidaCompilacion),
+                A(Terminal),
+                A(PanelGit),
+                A(PanelReglas),
                 SEP,
-                Some(QuickDoc),
-                Some(PreviewMarkdown),
+                A(QuickDoc),
+                A(PreviewMarkdown),
                 SEP,
-                Some(RestablecerPaneles),
+                A(RestablecerPaneles),
             ],
         ),
         menu(
             "Construir",
             'c',
             vec![
-                Some(Compilar),
-                Some(Ejecutar),
-                Some(Probar),
+                A(Compilar),
+                A(Ejecutar),
+                A(Probar),
                 SEP,
-                Some(LimpiarCompilacion),
-                Some(GenerarDoc),
+                A(LimpiarCompilacion),
+                A(GenerarDoc),
                 SEP,
-                Some(EstructuraProyecto),
+                A(EstructuraProyecto),
             ],
         ),
         menu(
             "Depurar",
             'd',
             vec![
-                Some(Depurar),
-                Some(Detener),
-                Some(AlternarBreakpoint),
+                A(Depurar),
+                A(Detener),
+                A(AlternarBreakpoint),
                 SEP,
-                Some(Paso),
-                Some(Entrar),
-                Some(SalirFuncion),
+                A(Paso),
+                A(Entrar),
+                A(SalirFuncion),
                 SEP,
-                Some(RevisarMemoria),
-                Some(CatScan),
-                Some(ExportarMemoria),
+                A(RevisarMemoria),
+                A(CatScan),
+                A(ExportarMemoria),
             ],
         ),
         menu(
             "Git",
             'g',
             vec![
-                Some(PanelGit),
+                A(PanelGit),
                 SEP,
-                Some(DiffArchivo),
-                Some(GitLog),
+                A(DiffArchivo),
+                A(GitLog),
                 SEP,
-                Some(GitCommit),
-                Some(GitDeshacerCommit),
-                Some(GitClonar),
+                A(GitCommit),
+                A(GitDeshacerCommit),
+                A(GitClonar),
+            ],
+        ),
+        menu(
+            "Plugins",
+            'l',
+            vec![
+                Entrada::ComandosPlugins,
+                SEP,
+                A(ConfigurarPlugins),
+                A(Integraciones),
+                A(NuevoPlugin),
+                A(RecargarPlugins),
             ],
         ),
     ];
     if examen {
-        m.push(menu(
-            "Examen",
-            'x',
-            vec![Some(Entregar), Some(EstadoEntrega)],
-        ));
+        m.push(menu("Examen", 'x', vec![A(Entregar), A(EstadoEntrega)]));
     }
     m.push(menu(
         "Ayuda",
         'y',
         vec![
-            Some(Paleta),
-            Some(ExplicarRegla),
+            A(Paleta),
+            A(ExplicarRegla),
             SEP,
-            Some(Atajos),
-            Some(GuiaRapida),
-            Some(AcercaDe),
+            A(Atajos),
+            A(GuiaRapida),
+            A(AcercaDe),
         ],
     ));
     m
@@ -545,11 +612,25 @@ pub fn documento_menus() -> String {
         if m.nombre == "Examen" {
             s.push_str("Sólo en modo examen (`--exam`).\n\n");
         }
-        // El menú desplegado, como caja.
-        let filas: Vec<Option<(&str, &str)>> = m
+        // El menú desplegado, como caja. Las entradas del proyecto se muestran con un
+        // ejemplo de cómo se ven.
+        let filas: Vec<Option<(String, String)>> = m
             .items
             .iter()
-            .map(|a| a.map(|a| (a.info().titulo, a.info().atajo)))
+            .flat_map(|e| match e {
+                Entrada::Separador => vec![None],
+                Entrada::ComandosPlugins => vec![
+                    Some(("Plugins Python".to_string(), String::new())),
+                    Some(("  ‹plugin›: ‹comando›".to_string(), String::new())),
+                    None,
+                    Some((
+                        "Herramientas para este archivo".to_string(),
+                        "Alt+H".to_string(),
+                    )),
+                    Some(("  ‹herramienta›: ‹acción›".to_string(), String::new())),
+                ],
+                e => vec![Some((e.titulo(), e.atajo()))],
+            })
             .collect();
         let ancho_t = filas
             .iter()
@@ -638,8 +719,9 @@ mod tests {
                 x.nombre
             );
             // Sin separadores al principio, al final ni seguidos.
-            assert!(x.items.first().unwrap().is_some() && x.items.last().unwrap().is_some());
-            assert!(!x.items.windows(2).any(|w| w[0].is_none() && w[1].is_none()));
+            let sep = |e: &Entrada| *e == Entrada::Separador;
+            assert!(!sep(x.items.first().unwrap()) && !sep(x.items.last().unwrap()));
+            assert!(!x.items.windows(2).any(|w| sep(&w[0]) && sep(&w[1])));
         }
         // Cada acción en un solo lugar (salvo el panel de git, que encabeza su menú y
         // también está entre los paneles de Ver).

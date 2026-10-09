@@ -509,7 +509,8 @@ pub struct Zonas {
     pub lista_inferior: Option<(Rect, usize)>,
     pub lista_lateral: Option<(Rect, usize)>,
     pub deck: Option<Rect>,
-    pub items_menu: Vec<(Rect, Accion)>,
+    /// Entradas elegibles del menú abierto: (zona, índice en `items`).
+    pub items_menu: Vec<(Rect, usize)>,
     pub modal_items: Option<(Rect, usize)>,
     pub botones_depurador: Vec<(Rect, Accion)>,
 }
@@ -2322,7 +2323,7 @@ impl App {
     fn depurador_paso(&mut self, a: Accion) {
         let Some(d) = &mut self.depuracion else {
             if a == Accion::Paso {
-                self.modal = Some(Modal::Menu { indice: 0, sel: 0 });
+                self.abrir_menu(0);
             }
             return;
         };
@@ -3470,6 +3471,93 @@ impl App {
         );
     }
 
+    /// Abre el menú `indice`. Los comandos de los plugins se piden al worker recién la
+    /// primera vez que hacen falta (como en la paleta): llegan enseguida y el menú se
+    /// redibuja.
+    pub fn abrir_menu(&mut self, indice: usize) {
+        self.modal = Some(Modal::Menu { indice, sel: 0 });
+        let es_plugins = accion::menus(self.examen.is_some())
+            .get(indice)
+            .is_some_and(|m| m.items.contains(&accion::Entrada::ComandosPlugins));
+        if es_plugins && self.comandos_plugins.is_empty() {
+            if let Some(p) = &self.plugins {
+                p.pedir(PedidoPlugin::Comandos);
+            }
+        }
+    }
+
+    /// Los menús de la barra, con las entradas del proyecto en el lugar de
+    /// `Entrada::ComandosPlugins` (menú Plugins).
+    pub fn menus(&self) -> Vec<accion::Menu> {
+        let mut menus = accion::menus(self.examen.is_some());
+        let (entradas, _) = self.entradas_plugins();
+        for m in &mut menus {
+            if let Some(i) = m
+                .items
+                .iter()
+                .position(|e| *e == accion::Entrada::ComandosPlugins)
+            {
+                m.items.splice(i..=i, entradas.clone());
+            }
+        }
+        menus
+    }
+
+    /// Entradas del menú Plugins y a qué lleva cada `Externa` (por su `id`): los comandos
+    /// de los plugins Python y las acciones de las herramientas para el archivo activo.
+    pub fn entradas_plugins(&self) -> (Vec<accion::Entrada>, Vec<QuePaleta>) {
+        use accion::Entrada;
+        let mut e = vec![Entrada::Nota("Plugins Python".into())];
+        let mut destinos = vec![];
+        for c in &self.comandos_plugins {
+            e.push(Entrada::Externa {
+                titulo: format!("  {}", c.titulo()),
+                atajo: String::new(),
+                id: destinos.len(),
+            });
+            destinos.push(QuePaleta::Plugin(c.clone()));
+        }
+        if self.comandos_plugins.is_empty() {
+            e.push(Entrada::Nota(if self.plugins.is_some() {
+                "  (sus comandos todavía no llegaron)".into()
+            } else {
+                "  (ninguno en .jonesy/plugins)".into()
+            }));
+        }
+        e.push(Entrada::Separador);
+        e.push(Entrada::Nota("Herramientas para este archivo".into()));
+        let acciones = self.acciones_disponibles();
+        if acciones.is_empty() {
+            e.push(Entrada::Nota(if self.activo_ruta().is_some() {
+                "  (ninguna para este archivo)".into()
+            } else {
+                "  (abrí un archivo)".into()
+            }));
+        }
+        for (nombre, n, titulo) in acciones {
+            e.push(Entrada::Externa {
+                titulo: format!("  {nombre}: {titulo}"),
+                atajo: String::new(),
+                id: destinos.len(),
+            });
+            destinos.push(QuePaleta::Herramienta(nombre, n));
+        }
+        (e, destinos)
+    }
+
+    /// Ejecuta una entrada de menú.
+    fn elegir_entrada(&mut self, e: accion::Entrada) {
+        match e {
+            accion::Entrada::Accion(a) => self.accion(a),
+            accion::Entrada::Externa { id, .. } => {
+                if let Some(q) = self.entradas_plugins().1.get(id).cloned() {
+                    self.ejecutar_opcion(q);
+                }
+            }
+            _ => {}
+        }
+    }
+
     /// Filas de una solapa de Archivo → Configuración del entorno.
     pub fn filas_configuracion(&self, pestana: usize) -> Vec<FilaConfig> {
         let fila = |titulo: &str, valor: String, detalle: String, que| FilaConfig {
@@ -4582,6 +4670,9 @@ impl App {
             }
             Accion::Integraciones => self.modal = Some(Modal::Configuracion { pestana: 0, sel: 0 }),
             Accion::Configuracion => self.modal = Some(Modal::Configuracion { pestana: 0, sel: 0 }),
+            Accion::ConfigurarPlugins => {
+                self.modal = Some(Modal::Configuracion { pestana: 1, sel: 0 })
+            }
             Accion::LimpiarCompilacion => self.limpiar_compilacion(),
             Accion::RestablecerPaneles => {
                 self.paneles = self.proyecto.config.interfaz.paneles.acotar();
@@ -5127,14 +5218,14 @@ impl App {
         {
             let menus = accion::menus(self.examen.is_some());
             if let Some(i) = menus.iter().position(|m| m.tecla == c) {
-                self.modal = Some(Modal::Menu { indice: i, sel: 0 });
+                self.abrir_menu(i);
                 return;
             }
         }
         if let Some(a) = global {
             // F10 sin depuración abre el menú.
             if a == Accion::Paso && self.depuracion.is_none() {
-                self.modal = Some(Modal::Menu { indice: 0, sel: 0 });
+                self.abrir_menu(0);
                 return;
             }
             self.accion(a);
@@ -6017,8 +6108,9 @@ impl App {
                 mut indice,
                 mut sel,
             } => {
-                let menus = accion::menus(self.examen.is_some());
+                let menus = self.menus();
                 let items = &menus[indice].items;
+                sel = accion::ajustar_sel(items, sel);
                 match k.code {
                     KeyCode::Esc | KeyCode::F(10) => return,
                     KeyCode::Left => {
@@ -6031,18 +6123,18 @@ impl App {
                     }
                     // Los separadores no se eligen.
                     KeyCode::Up => {
-                        if let Some(i) = (0..sel).rev().find(|&i| items[i].is_some()) {
+                        if let Some(i) = (0..sel).rev().find(|&i| items[i].elegible()) {
                             sel = i;
                         }
                     }
                     KeyCode::Down => {
-                        if let Some(i) = (sel + 1..items.len()).find(|&i| items[i].is_some()) {
+                        if let Some(i) = (sel + 1..items.len()).find(|&i| items[i].elegible()) {
                             sel = i;
                         }
                     }
                     KeyCode::Enter => {
-                        if let Some(Some(a)) = items.get(sel) {
-                            self.accion(*a);
+                        if let Some(e) = items.get(sel).filter(|e| e.elegible()).cloned() {
+                            self.elegir_entrada(e);
                             return;
                         }
                     }
@@ -6056,7 +6148,10 @@ impl App {
                     }
                     _ => {}
                 }
-                self.modal = Some(Modal::Menu { indice, sel });
+                self.abrir_menu(indice);
+                if let Some(Modal::Menu { sel: s, .. }) = &mut self.modal {
+                    *s = sel;
+                }
             }
         }
     }
@@ -6231,19 +6326,27 @@ impl App {
 
         // Menú desplegado y modales.
         if let Some(Modal::Menu { .. }) = self.modal {
-            if let Some((_, a)) = self
-                .zonas
-                .items_menu
-                .iter()
-                .find(|(r, _)| dentro(*r))
-                .copied()
-            {
+            if let (Some((_, n)), Some(Modal::Menu { indice, .. })) = (
+                self.zonas
+                    .items_menu
+                    .iter()
+                    .find(|(r, _)| dentro(*r))
+                    .copied(),
+                &self.modal,
+            ) {
+                let indice = *indice;
                 self.modal = None;
-                self.accion(a);
+                if let Some(e) = self
+                    .menus()
+                    .get(indice)
+                    .and_then(|m| m.items.get(n).cloned())
+                {
+                    self.elegir_entrada(e);
+                }
                 return;
             }
             if let Some((_, i)) = self.zonas.menu.iter().find(|(r, _)| dentro(*r)).copied() {
-                self.modal = Some(Modal::Menu { indice: i, sel: 0 });
+                self.abrir_menu(i);
                 return;
             }
             self.modal = None;
@@ -6272,7 +6375,7 @@ impl App {
             return;
         }
         if let Some((_, i)) = self.zonas.menu.iter().find(|(r, _)| dentro(*r)).copied() {
-            self.modal = Some(Modal::Menu { indice: i, sel: 0 });
+            self.abrir_menu(i);
             return;
         }
         if let Some((_, a)) = self

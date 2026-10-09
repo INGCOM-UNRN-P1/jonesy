@@ -1,7 +1,8 @@
 # Menús de jonesy
 
 La barra sigue el ciclo de trabajo de un ejercicio: **archivos → edición → vistas →
-construir (compilar, correr, probar) → depurar (paso a paso y memoria) → git**. Todo lo
+construir (compilar, correr, probar) → depurar (paso a paso y memoria) → git**, más los
+**plugins** del proyecto. Todo lo
 que está en un menú también se encuentra en la **paleta de comandos** (Ctrl+K), que busca
 por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propuesta_de_reorganizacion.md).
 
@@ -56,9 +57,16 @@ solapas (← → o 1-4):
 
 - **Construir → Ver ejercicios y objetivos del proyecto** (Alt+Y) muestra las
   bibliotecas, ejercicios y objetivos de make y `tp.sh`, listos para correr.
-- Las acciones de las herramientas del ecosistema (gaff fix, tetsuo, motoko, hal…) se
-  abren con **Alt+H** o desde la configuración. Ver [integraciones.md](integraciones.md).
-- Los **plugins Python** suman sus comandos a la paleta (Ctrl+K), no a los menús.
+- El menú **Plugins** (Alt+L) se arma con lo configurado en el proyecto y cada entrada
+  se ejecuta con Enter o clic:
+  - los comandos de los **plugins Python** de `.jonesy/plugins` (las funciones
+    `comando_*`; ver `docs/plugin-ejemplo.py`), con el resultado en una ventana;
+  - las **acciones de las herramientas** del ecosistema que aplican al archivo activo
+    (gaff fix, tetsuo, motoko, hal…; también con Alt+H). Ver
+    [integraciones.md](integraciones.md);
+  - y al final, configurar, crear y recargar los plugins.
+
+  Las dos listas también están en la paleta (Ctrl+K).
 
 ## Modo examen
 
@@ -75,7 +83,7 @@ comprueba que esté al día.
 <!-- menus: inicio (generado por accion::documento_menus) -->
 
 ```text
-  Archivo  Editar  Ver  Construir  Depurar  Git  Examen  Ayuda 
+  Archivo  Editar  Ver  Construir  Depurar  Git  Plugins  Examen  Ayuda 
 ```
 
 | Menú | Letra | Se abre con | Entradas |
@@ -86,6 +94,7 @@ comprueba que esté al día.
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
 | Git | [G]it | F10 y G | 6 |
+| Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
 | Ayuda | A[y]uda | F10 y Y | 5 |
 
@@ -198,6 +207,23 @@ comprueba que esté al día.
 │ Deshacer último commit (mantener en stage)              │
 │ Clonar repositorio…                                     │
 └─────────────────────────────────────────────────────────┘
+```
+
+## Plugins
+
+```text
+┌───────────────────────────────────────────────────────┐
+│ Plugins Python                                        │
+│   ‹plugin›: ‹comando›                                 │
+├───────────────────────────────────────────────────────┤
+│ Herramientas para este archivo                  Alt+H │
+│   ‹herramienta›: ‹acción›                             │
+├───────────────────────────────────────────────────────┤
+│ Configurar plugins…                                   │
+│ Configurar integraciones (qué corre y cuándo)…        │
+│ Nuevo plugin Python (.jonesy/plugins)…                │
+│ Recargar los plugins Python                           │
+└───────────────────────────────────────────────────────┘
 ```
 
 ## Examen
