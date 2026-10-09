@@ -7,7 +7,26 @@ Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
 **en curso**, **hecho** (se deja unos días para referencia y después se borra),
 **externo** (depende de otro repositorio o de una máquina que no está acá).
 
-## Lo que queda
+## Perfil estudiante (prioridad)
+
+jonesy es un IDE para alumnos de Programación I: los esfuerzos van primero a lo que el
+alumno usa todos los días (entender errores, compilar, correr, probar, depurar,
+memoria). Lo de docentes e infraestructura queda en segundo plano.
+
+| Ítem | Estado | Notas |
+|---|---|---|
+| Errores de gcc explicados en español | hecho | ~60 errores y advertencias (sintaxis, declaraciones, printf/scanf, punteros, `-Wall -Wextra`, enlazador) con resumen en Problemas y al final de la línea, y F1 con ejemplo «así no / así sí». Catálogo ampliable en `data/errores_gcc.toml`. |
+| El programa revienta | hecho | la terminal y la barra explican la señal (violación de segmento, abort, división por cero…); «[F5 Ver dónde falló]» corre el depurador hasta la línea, saltando fuera de libc al código del alumno. |
+| Correr las pruebas | hecho | Ctrl+F6: `make test` del módulo; cada fallo de `p1_test` en su línea con esperado/obtenido, los cortes en la definición `TEST(…)`. |
+| Revisar la memoria | hecho | valgrind (`make memcheck` o el programa): accesos inválidos, uso tras `free`, `free` doble, sin inicializar y fugas, explicados y en la línea del alumno. |
+| Markdown pegaba palabras en el borde | hecho | afectaba consignas y ayudas. |
+| Memoria en Windows | falta | no hay valgrind; evaluar AddressSanitizer donde exista o apoyarse en cat-scan. |
+| Programas con entrada bajo valgrind | falta | Revisar la memoria corre sin teclado (en el panel): un programa que lee de stdin recibe EOF. Correrlo en el deck y leer la salida al terminar. |
+| Primera vez | falta | una pantalla de bienvenida corta (F6, Ctrl+F5, Ctrl+F6, F5, F1) para quien nunca usó el IDE. |
+| Explicaciones de errores de ripley/gaff | flojo | F1 depende de que cada herramienta tenga `explain`; unificar el formato con el de los errores de gcc. |
+| Pruebas: salida de otros frameworks | falta | sólo se interpreta `p1_test`; con otro formato se ve la salida cruda. |
+
+## Lo que queda (fuera del perfil estudiante)
 
 Todo lo que se puede resolver dentro de este repositorio y en esta máquina está hecho.
 Queda:
