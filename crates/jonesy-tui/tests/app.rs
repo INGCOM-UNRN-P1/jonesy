@@ -1343,6 +1343,29 @@ fn nuevo_plugin_python_desde_el_ide() {
         .comandos_plugins
         .iter()
         .any(|c| c.plugin == "contador" && c.comando == "contar_lineas"));
+    // Un error de sintaxis aparece en Problemas, sobre el plugin y en su línea.
+    escribir(&mut a, "\ndef roto(:\n");
+    let linea_rota = a.buf().buf.contenido().lines().count();
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| {
+        a.diagnosticos()
+            .iter()
+            .any(|d| d.mensaje.contains("no se pudo cargar"))
+    });
+    let d = a.diagnosticos();
+    let d = d
+        .iter()
+        .find(|d| d.mensaje.contains("[contador]"))
+        .expect("diagnóstico del plugin");
+    assert_eq!(d.archivo.as_deref(), Some(ruta.as_path()));
+    assert_eq!(d.linea, linea_rota);
+    // Corregido, el error desaparece.
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    for _ in 0.."def roto(:".len() {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| a.diagnosticos().is_empty());
     // En examen no se crean plugins.
     let (mut e, _rx) = app(dir.path(), true);
     e.accion(jonesy_tui::accion::Accion::NuevoPlugin);

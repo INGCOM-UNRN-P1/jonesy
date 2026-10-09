@@ -226,14 +226,41 @@ pub struct InfoPlugin {
     pub al_guardar: bool,
 }
 
+/// Error de un plugin: al cargarlo (sintaxis, import) o en su `al_guardar`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ErrorDePlugin {
+    pub plugin: String,
+    pub ruta: PathBuf,
+    /// Línea del script donde ocurrió (1 si no se sabe).
+    pub linea: usize,
+    pub mensaje: String,
+}
+
+fn errores_de_json(v: &Value) -> Vec<ErrorDePlugin> {
+    v.as_array()
+        .map(|v| {
+            v.iter()
+                .map(|e| ErrorDePlugin {
+                    plugin: e["plugin"].as_str().unwrap_or("").to_string(),
+                    ruta: PathBuf::from(e["ruta"].as_str().unwrap_or("")),
+                    linea: e["linea"].as_u64().unwrap_or(1).max(1) as usize,
+                    mensaje: e["error"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Supervisor del worker Python.
 pub struct Supervisor {
     scripts: Vec<PathBuf>,
     /// Scripts descartados por no estar en la lista permitida (modo examen).
     pub rechazados: Vec<PathBuf>,
     pub plugins: Vec<InfoPlugin>,
-    /// Errores de carga reportados por el worker (plugin, mensaje).
-    pub errores_carga: Vec<(String, String)>,
+    /// Errores de carga reportados por el worker.
+    pub errores_carga: Vec<ErrorDePlugin>,
+    /// Errores del último `al_guardar` de cada plugin.
+    pub errores_ejecucion: Vec<ErrorDePlugin>,
     worker: Option<Worker>,
     siguiente_id: u64,
     pub tiempo_limite: Duration,
@@ -286,6 +313,7 @@ impl Supervisor {
             rechazados,
             plugins: vec![],
             errores_carga: vec![],
+            errores_ejecucion: vec![],
             worker: None,
             siguiente_id: 1,
             tiempo_limite: TIEMPO_LIMITE,
@@ -346,19 +374,7 @@ impl Supervisor {
             .collect();
         let r = self.enviar("cargar", json!({ "rutas": rutas }))?;
         self.plugins = serde_json::from_value(r["plugins"].clone()).unwrap_or_default();
-        self.errores_carga = r["errores"]
-            .as_array()
-            .map(|v| {
-                v.iter()
-                    .map(|e| {
-                        (
-                            e["plugin"].as_str().unwrap_or("").to_string(),
-                            e["error"].as_str().unwrap_or("").to_string(),
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
+        self.errores_carga = errores_de_json(&r["errores"]);
         Ok(())
     }
 
@@ -426,6 +442,7 @@ impl Supervisor {
             "al_guardar",
             json!({"archivo": archivo.to_string_lossy(), "texto": texto}),
         )?;
+        self.errores_ejecucion = errores_de_json(&r["errores"]);
         Ok(r["diagnosticos"]
             .as_array()
             .map(|v| {
@@ -434,6 +451,30 @@ impl Supervisor {
                     .collect()
             })
             .unwrap_or_default())
+    }
+
+    /// Los errores de los plugins como diagnósticos sobre sus propios scripts, para
+    /// verlos en Problemas mientras se edita el plugin.
+    pub fn diagnosticos_propios(&self) -> Vec<Diagnostico> {
+        self.errores_carga
+            .iter()
+            .map(|e| (e, "no se pudo cargar"))
+            .chain(
+                self.errores_ejecucion
+                    .iter()
+                    .map(|e| (e, "falló al_guardar")),
+            )
+            .filter(|(e, _)| !e.ruta.as_os_str().is_empty())
+            .map(|(e, cuando)| Diagnostico {
+                archivo: Some(e.ruta.clone()),
+                linea: e.linea,
+                columna: 1,
+                severidad: Severidad::Error,
+                mensaje: format!("[{}] {cuando}: {}", e.plugin, e.mensaje),
+                origen: Origen::Plugin,
+                ..Default::default()
+            })
+            .collect()
     }
 
     pub fn comandos(&mut self) -> Result<Vec<ComandoPlugin>, ErrorPlugin> {
@@ -508,6 +549,8 @@ pub enum Respuesta {
         comando: ComandoPlugin,
         resultado: Result<String, ErrorPlugin>,
     },
+    /// Cambiaron los errores de los propios plugins (ver `diagnosticos_propios`).
+    ErroresPropios(Vec<Diagnostico>),
 }
 
 pub struct Servicio {
@@ -523,6 +566,7 @@ impl Servicio {
         std::thread::Builder::new()
             .name("plugins".into())
             .spawn(move || {
+                let mut errores = vec![];
                 for pedido in rx {
                     let r = match pedido {
                         Pedido::AlGuardar { archivo, texto } => {
@@ -536,6 +580,11 @@ impl Servicio {
                         }
                     };
                     responder(r);
+                    let ahora = sup.diagnosticos_propios();
+                    if ahora != errores {
+                        errores = ahora;
+                        responder(Respuesta::ErroresPropios(errores.clone()));
+                    }
                 }
             })
             .expect("no se pudo crear el hilo de plugins");
@@ -647,7 +696,33 @@ def comando_contar_lineas(ctx):
         let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
         assert!(s.al_guardar(Path::new("a.c"), "TODO").unwrap().len() == 1);
         assert_eq!(s.errores_carga.len(), 1);
-        assert_eq!(s.errores_carga[0].0, "a_roto");
+        assert_eq!(s.errores_carga[0].plugin, "a_roto");
+        assert_eq!(s.errores_carga[0].linea, 1);
+        assert!(s.errores_carga[0].mensaje.contains("modulo_inexistente"));
+    }
+
+    #[test]
+    fn errores_de_un_plugin_con_su_linea() {
+        if !hay_python() {
+            return;
+        }
+        let dir = proyecto(&[
+            ("sintaxis.py", "x = 1\n\ndef f(:\n    pass\n"),
+            (
+                "revienta.py",
+                "def al_guardar(archivo, texto):\n    return 1 / 0\n",
+            ),
+        ]);
+        let mut s = Supervisor::nuevo(&dir.path().join("plugins"), None);
+        s.al_guardar(Path::new("a.c"), "").unwrap();
+        let d = s.diagnosticos_propios();
+        assert_eq!(d.len(), 2, "{d:#?}");
+        let sintaxis = d.iter().find(|d| d.mensaje.contains("[sintaxis]")).unwrap();
+        assert_eq!(sintaxis.linea, 3);
+        assert!(sintaxis.archivo.as_ref().unwrap().ends_with("sintaxis.py"));
+        let revienta = d.iter().find(|d| d.mensaje.contains("[revienta]")).unwrap();
+        assert_eq!(revienta.linea, 2);
+        assert!(revienta.mensaje.contains("ZeroDivisionError"));
     }
 
     #[test]

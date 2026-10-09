@@ -1129,6 +1129,8 @@ impl App {
             self.examen.is_some().then_some(permitidos.as_slice()),
         );
         self.comandos_plugins.clear();
+        let dir = self.proyecto.dir_estado().join("plugins");
+        self.diag_plugins.retain(|r, _| !r.starts_with(&dir));
         // Soltar el servicio anterior cierra su canal: su hilo termina y mata al worker.
         self.plugins = sup.hay_plugins().then(|| {
             let tx = self.tx.clone();
@@ -2780,6 +2782,18 @@ impl App {
                 Err(jonesy_plugins::ErrorPlugin::SinPlugins) => {}
                 Err(e) => self.avisar(format!("Plugins: {e}"), Nivel::Aviso),
             },
+            Respuesta::ErroresPropios(d) => {
+                let dir = self.proyecto.dir_estado().join("plugins");
+                self.diag_plugins.retain(|r, _| !r.starts_with(&dir));
+                if let Some(primero) = d.first() {
+                    self.avisar(format!("{} (ver Problemas)", primero.mensaje), Nivel::Error);
+                }
+                for x in d {
+                    if let Some(r) = x.archivo.clone() {
+                        self.diag_plugins.entry(r).or_default().push(x);
+                    }
+                }
+            }
             Respuesta::Comandos(Ok(c)) => self.comandos_plugins = c,
             Respuesta::Comandos(Err(_)) => {}
             Respuesta::Ejecutado { comando, resultado } => match resultado {

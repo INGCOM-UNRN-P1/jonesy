@@ -29,6 +29,19 @@ PLUGINS = {}  # nombre -> módulo
 PREFIJO_COMANDO = "comando_"
 
 
+def _error(nombre, ruta, e):
+    """Error de un plugin con la línea de su archivo donde ocurrió (si se sabe)."""
+    linea = None
+    if isinstance(e, SyntaxError) and e.filename == ruta:
+        linea = e.lineno
+    else:
+        for marco in traceback.extract_tb(e.__traceback__):
+            if marco.filename == ruta:
+                linea = marco.lineno
+    return {"plugin": nombre, "ruta": ruta, "linea": linea,
+            "error": f"{type(e).__name__}: {e}"}
+
+
 def cargar(rutas):
     PLUGINS.clear()
     cargados, errores = [], []
@@ -39,7 +52,7 @@ def cargar(rutas):
             modulo = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(modulo)
         except Exception as e:  # noqa: BLE001 - un plugin roto no tumba al resto
-            errores.append({"plugin": nombre, "error": f"{type(e).__name__}: {e}"})
+            errores.append(_error(nombre, ruta, e))
             continue
         PLUGINS[nombre] = modulo
         cargados.append({"nombre": nombre, "comandos": _comandos_de(modulo),
@@ -64,7 +77,7 @@ def al_guardar(archivo, texto):
                 d.setdefault("plugin", nombre)
                 diagnosticos.append(d)
         except Exception as e:  # noqa: BLE001
-            errores.append({"plugin": nombre, "error": f"{type(e).__name__}: {e}"})
+            errores.append(_error(nombre, getattr(modulo, "__file__", ""), e))
     return {"diagnosticos": diagnosticos, "errores": errores}
 
 

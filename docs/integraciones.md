@@ -124,6 +124,7 @@ jonesy tiene dos formas de extenderse; conviven y sirven para cosas distintas:
 | Para qué | usar una herramienta que ya existe (de la cátedra o no) | lógica propia chica: un chequeo puntual, un comando de la paleta |
 | Recibe | la ruta del archivo (lo lee del disco) | el texto del buffer (aunque no esté guardado) |
 | Devuelve | hallazgos en JSON (yutani), salida de gcc, o lo que muestre en un visor | diagnósticos y texto para la paleta |
+| Si falla | la salida no se entiende: aviso en la barra | el error (sintaxis, excepción en `al_guardar`) aparece en Problemas sobre el script, en su línea; guardar el plugin lo recarga |
 | En examen | todas salvo `examen = false` y las acciones que corrigen | sólo los plugins con SHA-256 en `[examen] plugins_permitidos` |
 
 Si la herramienta existe como CLI, conviene una integración. Si es un chequeo de pocas
