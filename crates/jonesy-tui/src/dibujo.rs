@@ -49,6 +49,19 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         tam: app.paneles,
     };
     app.areas = layout::calcular(&pedido);
+    // Panel maximizado (Alt+Z): el que tiene el foco, en todo el cuerpo.
+    if app.maximizado {
+        let cual = match app.foco {
+            Foco::Consigna => layout::Maximo::Consigna,
+            Foco::Inferior => layout::Maximo::Inferior,
+            Foco::Lateral => layout::Maximo::Lateral,
+            Foco::Navegador => layout::Maximo::Izquierdo,
+            _ => layout::Maximo::Editor,
+        };
+        if let Some(m) = layout::maximizar(&app.areas, cual) {
+            app.areas = m;
+        }
+    }
     let a = app.areas.clone();
     let mut cursor: Option<(u16, u16)> = None;
 
@@ -193,6 +206,16 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
                     fondo.fg(color).add_modifier(Modifier::BOLD),
                 ));
             }
+            // Cuándo se guardó por última vez (el examen se guarda solo).
+            let hace = e.ultimo_autoguardado.elapsed().as_secs();
+            derecha.push(Span::styled(
+                if hace < 60 {
+                    format!("guardado hace {hace} s ")
+                } else {
+                    format!("guardado hace {} min ", hace / 60)
+                },
+                fondo.fg(tema::atenuado_barra()),
+            ));
             boton = Some((
                 if e.entregando {
                     "[ Entregando… ]".into()
@@ -202,6 +225,21 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
                 Accion::Entregar,
             ));
         }
+    } else if let Some(s) = &app.simulacro {
+        let resta = s.duracion.saturating_sub(s.inicio.elapsed()).as_secs();
+        let (h, m, seg) = (resta / 3600, (resta % 3600) / 60, resta % 60);
+        let color = if resta <= 300 {
+            tema::error()
+        } else if resta <= 900 {
+            tema::advertencia()
+        } else {
+            tema::ok()
+        };
+        derecha.push(Span::styled(
+            format!(" SIMULACRO {} {h}:{m:02}:{seg:02} ", app.sim.reloj),
+            fondo.fg(color).add_modifier(Modifier::BOLD),
+        ));
+        boton = Some(("[ Terminar simulacro ]".into(), Accion::TerminarSimulacro));
     } else {
         let nombre = app
             .proyecto
@@ -2939,6 +2977,32 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     .min(i.width.saturating_sub(1)),
                 i.y,
             ))
+        }
+        Modal::Simulacro { texto } => {
+            let r = centrado(area, 64, 6);
+            limpiar(f, r);
+            let b = bloque(" Simulacro de examen · Enter empieza · Esc cancela ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(
+                Paragraph::new(vec![
+                    Line::from(vec![
+                        Span::raw("Minutos: "),
+                        Span::styled(texto.clone(), Style::default().add_modifier(Modifier::BOLD)),
+                    ]),
+                    Line::raw(""),
+                    Line::styled(
+                        "Cronómetro y avisos como en el examen, sin restricciones ni entrega.",
+                        Style::default().fg(tema::atenuado()),
+                    ),
+                    Line::styled(
+                        "F12 lo termina y muestra cómo te fue.",
+                        Style::default().fg(tema::atenuado()),
+                    ),
+                ]),
+                i,
+            );
+            Some((i.x + 9 + texto.chars().count() as u16, i.y))
         }
         Modal::ArgsPrograma { texto } => {
             let r = centrado(area, 64, 5);

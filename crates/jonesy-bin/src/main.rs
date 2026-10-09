@@ -21,6 +21,7 @@ Opciones:
   --exam             modo examen (también JONESY_EXAM_MODE=1)
   --ascii            caracteres ASCII en lugar de los de caja
   --telemetria       registra la bitácora también fuera del examen
+  --simulacro [min]  simulacro de examen: cronómetro y avisos, sin entregar (90 min)
   -h, --help         esta ayuda
   -V, --version      versión
 
@@ -237,7 +238,16 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
     let examen = tiene("--exam")
         || std::env::var("JONESY_EXAM_MODE")
             .is_ok_and(|v| v == "1" || v.eq_ignore_ascii_case("true"));
-    let posicionales: Vec<&String> = args.iter().filter(|a| !a.starts_with("--")).collect();
+    // El número que sigue a --simulacro son minutos, no un archivo.
+    let minutos_simulacro = args
+        .iter()
+        .position(|a| a == "--simulacro")
+        .and_then(|i| args.get(i + 1))
+        .filter(|v| v.parse::<u64>().is_ok());
+    let posicionales: Vec<&String> = args
+        .iter()
+        .filter(|a| !a.starts_with("--") && Some(*a) != minutos_simulacro)
+        .collect();
     let (raiz, archivos) = match posicionales.first() {
         None => (std::env::current_dir()?, vec![]),
         Some(p) if Path::new(p).is_dir() => (PathBuf::from(p), vec![]),
@@ -256,6 +266,12 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
         ascii: tiene("--ascii"),
         telemetria: tiene("--telemetria"),
         bienvenida: true,
+        // --simulacro [minutos]: práctica de examen con cronómetro, sin entregar.
+        simulacro: tiene("--simulacro").then(|| {
+            valor("--simulacro")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(90)
+        }),
     })?;
     Ok(ExitCode::SUCCESS)
 }

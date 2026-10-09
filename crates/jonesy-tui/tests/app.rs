@@ -39,6 +39,7 @@ fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
         ascii: false,
         telemetria: false,
         bienvenida: false,
+        simulacro: None,
     };
     (App::nueva(op, tx), rx)
 }
@@ -2009,6 +2010,7 @@ fn bienvenida_la_primera_vez_y_desde_ayuda() {
             ascii: false,
             telemetria: false,
             bienvenida: true,
+            simulacro: None,
         };
         (App::nueva(op, tx), rx)
     };
@@ -2559,8 +2561,11 @@ fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
         ),
     ]);
     let d = dir.path();
+    // Todo versionado o ignorado: así el recordatorio de commit (umbral mínimo en esta
+    // prueba) no pisa los mensajes que se esperan hasta que haya cambios a propósito.
+    std::fs::write(d.join(".gitignore"), ".jonesy/\n").unwrap();
     git(d, &["init", "-q", "-b", "main"]);
-    git(d, &["add", "a.c"]);
+    git(d, &["add", "-A"]);
     git(d, &["commit", "-qm", "Primera versión"]);
     git(d, &["remote", "add", "origin", &remoto.to_string_lossy()]);
     let (mut a, rx) = app(d, false);
@@ -2610,7 +2615,15 @@ fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
     let p = pantalla(&mut a, 120, 40);
     assert!(p.contains("genérico") && p.contains("punto final"), "{p}");
     a.modal = None;
-    git(d, &["commit", "-qm", "Resuelve el conflicto de x"]);
+    // Un commit «viejo», para que el recordatorio vea cambios sin commit hace rato.
+    let ok = std::process::Command::new("git")
+        .args(["commit", "-qm", "Resuelve el conflicto de x"])
+        .env("GIT_COMMITTER_DATE", "2020-01-01T10:00:00")
+        .current_dir(d)
+        .status()
+        .unwrap()
+        .success();
+    assert!(ok);
     std::fs::write(d.join("a.c"), "int x = 6;\n").unwrap();
     a.refrescar_git();
     // Recordatorio: hay cambios sin commit (el umbral de la prueba es mínimo).
@@ -2623,4 +2636,58 @@ fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
         "{:?}",
         a.mensaje
     );
+}
+
+#[test]
+fn maximizar_autoguardado_y_simulacro() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("consigna.md", "# Ejercicio\n\nSumar.\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    pantalla(&mut a, 160, 40);
+    assert!(a.areas.consigna.is_some());
+    // Alt+Z: el editor ocupa todo; Alt+Z otra vez vuelve.
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::ALT);
+    pantalla(&mut a, 160, 40);
+    assert!(a.areas.consigna.is_none() && a.areas.quickdoc.is_none());
+    assert_eq!(a.areas.editor.unwrap().width, 160);
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::ALT);
+    pantalla(&mut a, 160, 40);
+    assert!(a.areas.consigna.is_some());
+
+    // Simulacro: cronómetro en la barra y resumen al terminar con F12.
+    a.accion(jonesy_tui::accion::Accion::Simulacro);
+    for _ in 0..4 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "45");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.simulacro.is_some());
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("SIMULACRO") && p.contains("Terminar simulacro"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
+    assert!(a.simulacro.is_none());
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Fin del simulacro") && p.contains("de 45 min"),
+        "{p}"
+    );
+    a.modal = None;
+    // Cuando se acaba el tiempo, termina solo.
+    a.empezar_simulacro(1);
+    a.simulacro.as_mut().unwrap().duracion = Duration::from_millis(1);
+    std::thread::sleep(Duration::from_millis(20));
+    a.tic();
+    assert!(a.simulacro.is_none() && matches!(a.modal, Some(Modal::Visor { .. })));
+
+    // En el examen, la barra dice cuándo se guardó por última vez.
+    let (mut e, _rx) = app(dir.path(), true);
+    let p = pantalla(&mut e, 160, 40);
+    assert!(p.contains("guardado hace"), "{p}");
 }

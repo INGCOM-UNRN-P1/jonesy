@@ -58,6 +58,8 @@ pub struct Opciones {
     /// Mostrar la bienvenida si es la primera vez (el binario; no las pruebas ni el
     /// examen).
     pub bienvenida: bool,
+    /// Empezar un simulacro de examen de estos minutos (`jonesy --simulacro [min]`).
+    pub simulacro: Option<u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -326,6 +328,10 @@ pub enum Modal {
         siempre: bool,
         faltan: Vec<(String, String, String)>,
     },
+    /// Archivo → Simulacro de examen: minutos.
+    Simulacro {
+        texto: String,
+    },
     /// Construir → Comparar con las salidas esperadas: un caso por fila.
     Casos {
         resultados: Vec<jonesy_core::casos::ResultadoCaso>,
@@ -494,6 +500,19 @@ pub enum QueConfig {
     ReleerIntegraciones,
     /// Sólo informa.
     Nada,
+}
+
+/// Un simulacro de examen: cronómetro y avisos como en el examen, sin restricciones ni
+/// sellado, y un resumen al terminar.
+#[derive(Debug, Clone)]
+pub struct Simulacro {
+    pub inicio: Instant,
+    pub duracion: Duration,
+    avisos: BTreeSet<u64>,
+    compilaciones: u32,
+    con_errores: u32,
+    ejecuciones: u32,
+    pruebas: Option<(usize, usize)>,
 }
 
 /// Operación con el repositorio remoto (corre en la terminal, por la autenticación).
@@ -666,6 +685,10 @@ pub struct App {
     hasta_linea: Option<(PathBuf, usize)>,
     /// Push o pull corriendo en la terminal (al terminar se interpreta el resultado).
     git_remoto: Option<OpRemota>,
+    /// Ver → Maximizar el panel (Alt+Z): el del foco ocupa todo el cuerpo.
+    pub maximizado: bool,
+    /// Simulacro de examen en curso.
+    pub simulacro: Option<Simulacro>,
     /// Último recordatorio de hacer commit.
     ultimo_recordatorio_commit: Instant,
     pub depuracion: Option<Depuracion>,
@@ -843,6 +866,8 @@ impl App {
             inicio_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
+            maximizado: false,
+            simulacro: None,
             ultimo_recordatorio_commit: Instant::now(),
             depuracion: None,
             breakpoints: BTreeSet::new(),
@@ -882,6 +907,9 @@ impl App {
         app.cargar_integraciones();
         app.restaurar_sesion(&op.archivos);
         app.ofrecer_recuperacion();
+        if let Some(min) = op.simulacro.filter(|_| !op.examen) {
+            app.empezar_simulacro(min);
+        }
         // La primera vez (fuera del examen, y si no hay que recuperar nada antes).
         if op.bienvenida
             && !op.examen
@@ -2275,6 +2303,9 @@ impl App {
             }
         };
         self.correr_en_deck(cmd);
+        if let Some(s) = &mut self.simulacro {
+            s.ejecuciones += 1;
+        }
         self.vigilar_programa = self.ejecucion.is_some();
         self.vigia = None;
         self.ultimo_fallo = None;
@@ -3142,6 +3173,12 @@ impl App {
                     .filter(|d| d.severidad == Severidad::Error)
                     .count();
                 let advertencias = self.diag_compilador.len() - errores;
+                if let Some(s) = &mut self.simulacro {
+                    s.compilaciones += 1;
+                    if codigo != Some(0) {
+                        s.con_errores += 1;
+                    }
+                }
                 if codigo == Some(0) {
                     self.salida.push((
                         format!("[compilación correcta, {advertencias} advertencia(s)]"),
@@ -4598,6 +4635,89 @@ impl App {
         }
     }
 
+    /// Empieza un simulacro de `min` minutos.
+    pub fn empezar_simulacro(&mut self, min: u64) {
+        let min = min.clamp(1, 600);
+        self.simulacro = Some(Simulacro {
+            inicio: Instant::now(),
+            duracion: Duration::from_secs(min * 60),
+            avisos: BTreeSet::new(),
+            compilaciones: 0,
+            con_errores: 0,
+            ejecuciones: 0,
+            pruebas: None,
+        });
+        self.avisar(
+            format!(
+                "Simulacro de {min} min: como en el examen, pero sin entregar. F12 lo termina."
+            ),
+            Nivel::Info,
+        );
+    }
+
+    /// Termina el simulacro y muestra el resumen.
+    pub fn terminar_simulacro(&mut self) {
+        let Some(s) = self.simulacro.take() else {
+            self.avisar(
+                "No hay un simulacro en curso (Archivo → Simulacro de examen…).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let usado = s
+            .inicio
+            .elapsed()
+            .as_secs()
+            .div_ceil(60)
+            .min(s.duracion.as_secs() / 60);
+        let mut t = format!(
+            "# Fin del simulacro\n\n- **Tiempo:** usaste {usado} de {} min.\n- **Compilaciones:** {} ({} con errores).\n- **Ejecuciones:** {}.\n",
+            s.duracion.as_secs() / 60,
+            s.compilaciones,
+            s.con_errores,
+            s.ejecuciones
+        );
+        match s.pruebas {
+            Some((p, 0)) => {
+                t.push_str(&format!("- **Pruebas:** pasan las {p} (última corrida).\n"))
+            }
+            Some((p, f)) => t.push_str(&format!(
+                "- **Pruebas:** {p} pasan, {f} fallan (última corrida).\n"
+            )),
+            None => t.push_str("- **Pruebas:** no las corriste (Ctrl+F6).\n"),
+        }
+        t.push_str(
+            "\nEn el examen real (jonesy --exam) los archivos se guardan solos, cada edición queda en la \
+             bitácora y **F12 entrega**: el paquete se sella y ya no se puede modificar.\n",
+        );
+        let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+        self.modal = Some(Modal::Visor {
+            titulo: "Simulacro".into(),
+            lineas: markdown::renderizar(&t, ancho, &self.sim).lineas,
+            desplazamiento: 0,
+        });
+    }
+
+    /// Avisos del simulacro (15, 5 y 1 minuto) y fin del tiempo.
+    fn tic_simulacro(&mut self) {
+        let Some(s) = &mut self.simulacro else { return };
+        let resta = s.duracion.saturating_sub(s.inicio.elapsed()).as_secs();
+        let mut aviso = None;
+        for m in [15u64, 5, 1] {
+            if resta <= m * 60 && resta > 0 && s.avisos.insert(m) {
+                aviso = Some(format!("Simulacro: quedan {m} minuto(s)."));
+            }
+        }
+        if resta == 0 {
+            self.avisar("Se terminó el tiempo del simulacro.", Nivel::Aviso);
+            self.terminar_simulacro();
+            return;
+        }
+        if let Some(a) = aviso {
+            self.avisar(a, Nivel::Aviso);
+        }
+    }
+
     /// Construir → Correr la prueba del cursor (Shift+F6): compila el ejecutable de
     /// pruebas del ejercicio y lo corre con `-k nombre` (filtro de p1_test).
     pub fn probar_aqui(&mut self) {
@@ -4706,6 +4826,9 @@ impl App {
     }
 
     fn fin_pruebas(&mut self, r: jonesy_core::pruebas::Resultado, codigo: Option<i32>) {
+        if let Some(s) = &mut self.simulacro {
+            s.pruebas = Some((r.pasan, r.fallan));
+        }
         self.diag_compilador = r.diagnosticos;
         let compila = !self.diag_compilador.iter().any(|d| {
             d.origen == jonesy_core::Origen::Compilador && d.severidad == Severidad::Error
@@ -5338,6 +5461,22 @@ impl App {
             Accion::Probar => self.probar(),
             Accion::ProbarAqui => self.probar_aqui(),
             Accion::GitSubir => self.git_remoto(OpRemota::Subir),
+            Accion::MaximizarPanel => {
+                self.maximizado = !self.maximizado;
+                if self.maximizado {
+                    self.avisar("Panel maximizado: Alt+Z vuelve.", Nivel::Info);
+                }
+            }
+            Accion::Simulacro => {
+                if self.examen.is_some() {
+                    self.avisar("Ya estás en un examen.", Nivel::Aviso);
+                } else {
+                    self.modal = Some(Modal::Simulacro {
+                        texto: self.proyecto.config.examen.duracion_min.max(1).to_string(),
+                    });
+                }
+            }
+            Accion::TerminarSimulacro => self.terminar_simulacro(),
             Accion::GitTraer => self.git_remoto(OpRemota::Traer),
             Accion::CorrerHastaCursor => self.correr_hasta_cursor(),
             Accion::RevisarMemoria => self.revisar_memoria(),
@@ -5918,6 +6057,7 @@ impl App {
             self.fin_git_remoto(op);
         }
         self.recordar_commit();
+        self.tic_simulacro();
         if self.vigilar_programa && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_programa = false;
             self.vigia = None;
@@ -6169,12 +6309,15 @@ impl App {
             (KeyCode::F(7), _, _, _) => Some(Accion::VistaConsigna),
             (KeyCode::F(8), _, _, _) => Some(Accion::VistaCodigo),
             (KeyCode::F(9), _, _, _) => Some(Accion::VistaTerminal),
-            // F12: entregar en el examen; fuera, ir a la definición.
+            // F12: entregar en el examen, terminar el simulacro; fuera, ir a la definición.
             (KeyCode::F(12), _, _, _) => Some(if self.examen.is_some() {
                 Accion::Entregar
+            } else if self.simulacro.is_some() {
+                Accion::TerminarSimulacro
             } else {
                 Accion::IrADefinicion
             }),
+            (KeyCode::Char('z'), false, true, _) => Some(Accion::MaximizarPanel),
             (KeyCode::Char('g'), false, true, _) => Some(Accion::PanelGit),
             (KeyCode::Char('e'), false, true, _) => Some(Accion::Explorador),
             (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
@@ -7234,6 +7377,26 @@ impl App {
                     desplazamiento_h,
                     lenguaje,
                 });
+            }
+            Modal::Simulacro { mut texto } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    match texto.trim().parse::<u64>() {
+                        Ok(m) if m > 0 => self.empezar_simulacro(m),
+                        _ => self.avisar("Poné los minutos (por ejemplo 90).", Nivel::Aviso),
+                    }
+                    return;
+                }
+                if let KeyCode::Char(c) = k.code {
+                    if c.is_ascii_digit() {
+                        texto.push(c);
+                    }
+                } else {
+                    editar_campo(&mut texto, &k);
+                }
+                self.modal = Some(Modal::Simulacro { texto });
             }
             Modal::ArgsPrograma { mut texto } => {
                 if cerrar {

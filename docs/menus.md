@@ -22,6 +22,7 @@ por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propues
   momento, usá Alt+letra o el clic.
 - Alt+S abre el esquema del archivo en la barra izquierda (no es un menú).
 - Alt+N y Alt+Shift+N van al problema siguiente y anterior (no son menús).
+- Alt+Z maximiza el panel que tiene el foco y lo vuelve a su tamaño (no es un menú).
 - Con el foco en la terminal, Alt+letra va a la shell (Alt+D, Alt+C… son atajos de bash).
 - A la derecha de cada entrada está su **atajo global**. Las teclas de una sola letra del
   panel de git (`a`, `u`, `c`, `l`, `z`, `m`) no aparecen en los menús: se muestran al pie
@@ -72,6 +73,10 @@ solapas (← → o 1-4):
 
 ## Modo examen
 
+**Archivo → Simulacro de examen…** (o `jonesy --simulacro [min]`) practica con el
+cronómetro y los avisos del examen pero sin restricciones ni entrega; F12 lo termina y
+muestra cómo fue.
+
 Con `--exam` aparece el menú **Examen**: entregar (F12) y ver el estado de la entrega
 (tiempo, autoguardado, bitácora y paquete). Algunas entradas se niegan con un aviso: abrir
 otro proyecto, clonar, renombrar o borrar archivos, crear plugins, editar `.jonesy.toml` y
@@ -90,9 +95,9 @@ comprueba que esté al día.
 
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
-| Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
+| Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
 | Editar | [E]ditar | F10 y E | 22 |
-| Ver | [V]er | Alt+V (o F10 y V) | 15 |
+| Ver | [V]er | Alt+V (o F10 y V) | 16 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 10 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
 | Git | [G]it | F10 y G | 8 |
@@ -115,6 +120,7 @@ comprueba que esté al día.
 │ Pestaña siguiente                   Ctrl+Tab │
 │ Pestaña anterior              Ctrl+Shift+Tab │
 ├──────────────────────────────────────────────┤
+│ Simulacro de examen…                         │
 │ Configuración del entorno…            Ctrl+, │
 ├──────────────────────────────────────────────┤
 │ Salir                                 Ctrl+Q │
@@ -176,6 +182,7 @@ comprueba que esté al día.
 │ Documentación contextual (quick-doc)              F4 │
 │ Vista previa de Markdown                      Ctrl+P │
 ├──────────────────────────────────────────────────────┤
+│ Maximizar el panel actual (y volver)           Alt+Z │
 │ Restablecer disposición de paneles                   │
 └──────────────────────────────────────────────────────┘
 ```

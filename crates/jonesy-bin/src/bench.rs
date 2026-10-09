@@ -54,6 +54,7 @@ fn app_sin_terminal(dir: &Path) -> (App, std::sync::mpsc::Receiver<jonesy_tui::s
         ascii: false,
         telemetria: false,
         bienvenida: false,
+        simulacro: None,
     };
     (App::nueva(op, tx), rx)
 }

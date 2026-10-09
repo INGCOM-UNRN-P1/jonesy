@@ -103,6 +103,9 @@ pub enum Accion {
     CorrerHastaCursor,
     GitSubir,
     GitTraer,
+    MaximizarPanel,
+    Simulacro,
+    TerminarSimulacro,
 }
 
 pub struct Info {
@@ -211,6 +214,9 @@ impl Accion {
             CorrerHastaCursor => ("Correr hasta el cursor", "Ctrl+F10"),
             GitSubir => ("Subir cambios (push)", ""),
             GitTraer => ("Traer cambios (pull)", ""),
+            MaximizarPanel => ("Maximizar el panel actual (y volver)", "Alt+Z"),
+            Simulacro => ("Simulacro de examen…", ""),
+            TerminarSimulacro => ("Terminar el simulacro", "F12"),
         };
         Info { titulo, atajo }
     }
@@ -311,6 +317,9 @@ impl Accion {
             CorrerHastaCursor,
             GitSubir,
             GitTraer,
+            MaximizarPanel,
+            Simulacro,
+            TerminarSimulacro,
             Salir,
         ]
     }
@@ -389,7 +398,7 @@ impl Menu {
 }
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
-pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'n', 'r', 'p', 'o', 'm'];
+pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm'];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
 /// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
@@ -420,6 +429,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(SiguienteBuffer),
                 A(AnteriorBuffer),
                 SEP,
+                A(Simulacro),
                 A(Configuracion),
                 SEP,
                 A(Salir),
@@ -479,6 +489,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(QuickDoc),
                 A(PreviewMarkdown),
                 SEP,
+                A(MaximizarPanel),
                 A(RestablecerPaneles),
             ],
         ),
@@ -640,6 +651,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Marcador: poner o quitar · siguiente | Ctrl+F2 · Shift+F2 |
 | Problema siguiente · anterior | Alt+N · Alt+Shift+N |
 | Correr la prueba del cursor · correr hasta el cursor | Shift+F6 · Ctrl+F10 |
+| Maximizar el panel actual (y volver) | Alt+Z |
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |

@@ -183,6 +183,47 @@ fn partir_v(r: Rect, arriba: u16) -> (Rect, Rect) {
     )
 }
 
+/// Qué panel ocupa todo el cuerpo con Ver → Maximizar el panel (Alt+Z).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Maximo {
+    Editor,
+    Consigna,
+    Inferior,
+    Lateral,
+    Izquierdo,
+}
+
+/// Las áreas con un solo panel en todo el cuerpo (si ese panel está visible).
+pub fn maximizar(a: &Areas, cual: Maximo) -> Option<Areas> {
+    let visible = match cual {
+        Maximo::Editor => a.editor,
+        Maximo::Consigna => a.consigna,
+        Maximo::Inferior => a.inferior,
+        Maximo::Lateral => a.lateral,
+        Maximo::Izquierdo => a.izquierdo,
+    };
+    visible?;
+    let cuerpo = Rect {
+        x: a.menu.x,
+        y: a.menu.y + a.menu.height,
+        width: a.menu.width,
+        height: a.estado.y.saturating_sub(a.menu.y + a.menu.height),
+    };
+    let mut r = Areas {
+        menu: a.menu,
+        estado: a.estado,
+        ..Default::default()
+    };
+    match cual {
+        Maximo::Editor => r.editor = Some(cuerpo),
+        Maximo::Consigna => r.consigna = Some(cuerpo),
+        Maximo::Inferior => r.inferior = Some(cuerpo),
+        Maximo::Lateral => r.lateral = Some(cuerpo),
+        Maximo::Izquierdo => r.izquierdo = Some(cuerpo),
+    }
+    Some(r)
+}
+
 pub fn calcular(p: &Pedido) -> Areas {
     let a = p.area;
     let t = p.tam.acotar();
