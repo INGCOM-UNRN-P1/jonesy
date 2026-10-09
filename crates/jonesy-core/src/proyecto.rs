@@ -106,6 +106,8 @@ pub struct Interfaz {
     pub osc52: bool,
     /// Forzar caracteres ASCII en lugar de los de caja.
     pub ascii: bool,
+    /// Recordar hacer commit tras estos minutos con cambios sin confirmar (0: nunca).
+    pub recordar_commit_min: f64,
     /// Tema de colores: "oscuro" (por defecto), "claro", "contraste" (16 colores ANSI),
     /// "turbo" (como Turbo C++ de Borland), "solarizado" o "fosforo" (monitor verde).
     /// El elegido desde Archivo → Configuración del entorno → Apariencia queda en la sesión y tiene prioridad.
@@ -176,6 +178,7 @@ impl Default for Interfaz {
             osc52: true,
             ascii: false,
             tema: String::new(),
+            recordar_commit_min: 30.0,
             shell: String::new(),
             entorno: String::new(),
             paneles: TamPaneles::default(),

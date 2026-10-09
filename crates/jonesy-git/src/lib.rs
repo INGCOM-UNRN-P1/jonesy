@@ -349,6 +349,20 @@ impl Repo {
     }
 
     /// Deshace el último commit dejando sus cambios en el stage (`reset --soft HEAD~1`).
+    /// Segundos desde el último commit (None si todavía no hay ninguno).
+    pub fn segundos_desde_ultimo_commit(&self) -> Option<u64> {
+        let (c, salida, _) = self.git(&["log", "-1", "--format=%ct"]).ok()?;
+        if c != 0 {
+            return None;
+        }
+        let ct: u64 = salida.trim().parse().ok()?;
+        let ahora = SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?
+            .as_secs();
+        Some(ahora.saturating_sub(ct))
+    }
+
     pub fn deshacer_ultimo_commit(&self) -> Result<String, ErrorGit> {
         self.ejecutar(&["reset", "--soft", "HEAD~1"])
     }
@@ -404,12 +418,78 @@ impl Repo {
 }
 
 /// Aviso para el diálogo de commit (RF-11.3).
+/// Revisión de un mensaje de commit para quien empieza: (impide el commit, observación).
+/// Sólo el mensaje vacío lo impide; lo demás son consejos.
+pub fn revisar_mensaje(mensaje: &str) -> Vec<(bool, String)> {
+    let mut v = vec![];
+    let primera = mensaje.lines().next().unwrap_or("").trim();
+    if mensaje.trim().is_empty() {
+        v.push((true, "El mensaje está vacío: contá qué cambió.".into()));
+        return v;
+    }
+    if let Some(a) = aviso_mensaje(mensaje) {
+        v.push((false, a));
+    }
+    let generico = matches!(
+        primera.to_lowercase().trim_end_matches('.'),
+        "cambios"
+            | "cambio"
+            | "update"
+            | "updates"
+            | "fix"
+            | "arreglos"
+            | "wip"
+            | "commit"
+            | "asdf"
+            | "prueba"
+            | "test"
+            | "listo"
+            | "varios"
+    );
+    if generico {
+        v.push((
+            false,
+            "Un resumen genérico no dice nada al leer el historial: contá qué cambió (p. ej. «Valida el NULL de malloc en lista_crear»).".into(),
+        ));
+    } else if primera.chars().count() < 10 {
+        v.push((false, "El resumen es muy corto: contá qué cambió.".into()));
+    }
+    if primera.ends_with('.') {
+        v.push((false, "El resumen no lleva punto final.".into()));
+    }
+    if mensaje.lines().nth(1).is_some_and(|l| !l.trim().is_empty()) {
+        v.push((
+            false,
+            "Dejá una línea en blanco entre el resumen y el detalle.".into(),
+        ));
+    }
+    v
+}
+
 pub fn aviso_mensaje(mensaje: &str) -> Option<String> {
     let primera = mensaje.lines().next().unwrap_or("");
     let n = primera.chars().count();
     (n > LARGO_RESUMEN).then(|| {
         format!("La primera línea tiene {n} caracteres; conviene que no pase de {LARGO_RESUMEN}.")
     })
+}
+
+#[cfg(test)]
+mod tests_mensaje {
+    use super::*;
+
+    #[test]
+    fn revisa_el_mensaje() {
+        assert!(revisar_mensaje("  \n").iter().any(|(b, _)| *b));
+        let r = revisar_mensaje("cambios.\nmás cosas");
+        assert!(r.iter().all(|(b, _)| !b));
+        assert!(r.iter().any(|(_, m)| m.contains("genérico")));
+        assert!(r.iter().any(|(_, m)| m.contains("punto final")));
+        assert!(r.iter().any(|(_, m)| m.contains("línea en blanco")));
+        assert!(
+            revisar_mensaje("Valida el NULL de malloc en lista_crear\n\nAntes se caía.").is_empty()
+        );
+    }
 }
 
 #[cfg(test)]

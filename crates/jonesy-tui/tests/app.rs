@@ -2518,3 +2518,109 @@ fn prueba_del_cursor_y_correr_hasta_el_cursor() {
     });
     a.accion(jonesy_tui::accion::Accion::Detener);
 }
+
+fn git(dir: &Path, args: &[&str]) {
+    let ok = std::process::Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .unwrap()
+        .status
+        .success();
+    assert!(ok, "git {args:?}");
+}
+
+#[test]
+#[cfg(unix)] // git y sh
+fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
+    if std::process::Command::new("git")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    for (k, v) in [
+        ("GIT_AUTHOR_NAME", "Prueba"),
+        ("GIT_AUTHOR_EMAIL", "prueba@localhost"),
+        ("GIT_COMMITTER_NAME", "Prueba"),
+        ("GIT_COMMITTER_EMAIL", "prueba@localhost"),
+    ] {
+        std::env::set_var(k, v);
+    }
+    let base = tempfile::tempdir().unwrap();
+    let remoto = base.path().join("remoto.git");
+    git(base.path(), &["init", "-q", "--bare", "remoto.git"]);
+    let dir = proyecto(&[
+        ("a.c", "int x = 1;\n"),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n[interfaz]\nrecordar_commit_min = 0.001\n",
+        ),
+    ]);
+    let d = dir.path();
+    git(d, &["init", "-q", "-b", "main"]);
+    git(d, &["add", "a.c"]);
+    git(d, &["commit", "-qm", "Primera versión"]);
+    git(d, &["remote", "add", "origin", &remoto.to_string_lossy()]);
+    let (mut a, rx) = app(d, false);
+    a.refrescar_git();
+    // Subir: sin rama remota todavía, la crea.
+    a.accion(jonesy_tui::accion::Accion::GitSubir);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m == "Cambios subidos.")
+    });
+    // Otro clon sube un cambio en la misma línea.
+    git(
+        base.path(),
+        &["clone", "-q", &remoto.to_string_lossy(), "otro"],
+    );
+    std::fs::write(base.path().join("otro/a.c"), "int x = 2;\n").unwrap();
+    git(
+        &base.path().join("otro"),
+        &["commit", "-qam", "Cambio del otro"],
+    );
+    git(&base.path().join("otro"), &["push", "-q"]);
+    std::fs::write(d.join("a.c"), "int x = 3;\n").unwrap();
+    git(d, &["commit", "-qam", "Cambio mío"]);
+    a.refrescar_git();
+    // Subir se rechaza: hay que traer primero.
+    a.accion(jonesy_tui::accion::Accion::GitSubir);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("primero traé"))
+    });
+    // Traer deja un conflicto, con la explicación de cómo resolverlo.
+    a.accion(jonesy_tui::accion::Accion::GitTraer);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Conflicto al traer") && p.contains("a.c"), "{p}");
+    a.modal = None;
+    // Resuelto el conflicto, el mensaje de commit se revisa.
+    std::fs::write(d.join("a.c"), "int x = 5;\n").unwrap();
+    git(d, &["add", "a.c"]);
+    a.refrescar_git();
+    a.accion(jonesy_tui::accion::Accion::GitCommit);
+    escribir(&mut a, "cambios.");
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("genérico") && p.contains("punto final"), "{p}");
+    a.modal = None;
+    git(d, &["commit", "-qm", "Resuelve el conflicto de x"]);
+    std::fs::write(d.join("a.c"), "int x = 6;\n").unwrap();
+    a.refrescar_git();
+    // Recordatorio: hay cambios sin commit (el umbral de la prueba es mínimo).
+    std::thread::sleep(Duration::from_millis(100));
+    a.tic();
+    assert!(
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("sin commit")),
+        "{:?}",
+        a.mensaje
+    );
+}

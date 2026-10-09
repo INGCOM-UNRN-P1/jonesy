@@ -101,6 +101,8 @@ pub enum Accion {
     ArgumentosPrograma,
     ProbarAqui,
     CorrerHastaCursor,
+    GitSubir,
+    GitTraer,
 }
 
 pub struct Info {
@@ -207,6 +209,8 @@ impl Accion {
             ArgumentosPrograma => ("Argumentos del programa…", ""),
             ProbarAqui => ("Correr la prueba del cursor", "Shift+F6"),
             CorrerHastaCursor => ("Correr hasta el cursor", "Ctrl+F10"),
+            GitSubir => ("Subir cambios (push)", ""),
+            GitTraer => ("Traer cambios (pull)", ""),
         };
         Info { titulo, atajo }
     }
@@ -305,6 +309,8 @@ impl Accion {
             ArgumentosPrograma,
             ProbarAqui,
             CorrerHastaCursor,
+            GitSubir,
+            GitTraer,
             Salir,
         ]
     }
@@ -523,6 +529,10 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(GitCommit),
                 A(GitDeshacerCommit),
+                SEP,
+                A(GitTraer),
+                A(GitSubir),
+                SEP,
                 A(GitClonar),
             ],
         ),

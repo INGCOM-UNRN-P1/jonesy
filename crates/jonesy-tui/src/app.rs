@@ -496,6 +496,13 @@ pub enum QueConfig {
     Nada,
 }
 
+/// Operación con el repositorio remoto (corre en la terminal, por la autenticación).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OpRemota {
+    Subir,
+    Traer,
+}
+
 /// Estado de la vigilancia de cuelgues (ver `App::vigilar_cuelgue`).
 struct Vigia {
     texto: u64,
@@ -657,6 +664,10 @@ pub struct App {
     inicio_pruebas: Option<std::time::SystemTime>,
     /// Correr hasta el cursor sin depuración en curso: dónde detenerse al arrancar.
     hasta_linea: Option<(PathBuf, usize)>,
+    /// Push o pull corriendo en la terminal (al terminar se interpreta el resultado).
+    git_remoto: Option<OpRemota>,
+    /// Último recordatorio de hacer commit.
+    ultimo_recordatorio_commit: Instant,
     pub depuracion: Option<Depuracion>,
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
     /// Marcadores de línea (1-based), como los breakpoints.
@@ -831,6 +842,8 @@ impl App {
             esquema_cache: None,
             inicio_pruebas: None,
             hasta_linea: None,
+            git_remoto: None,
+            ultimo_recordatorio_commit: Instant::now(),
             depuracion: None,
             breakpoints: BTreeSet::new(),
             marcadores: BTreeSet::new(),
@@ -2081,8 +2094,11 @@ impl App {
         let Some(repo) = self.repo.clone() else {
             return;
         };
-        if mensaje.trim().is_empty() {
-            self.avisar("El mensaje de commit está vacío.", Nivel::Aviso);
+        if let Some((_, m)) = jonesy_git::revisar_mensaje(mensaje)
+            .into_iter()
+            .find(|(bloquea, _)| *bloquea)
+        {
+            self.avisar(m, Nivel::Aviso);
             return;
         }
         match repo.commit(mensaje) {
@@ -4464,6 +4480,124 @@ impl App {
         self.correr_en_panel_con(comando, Lectura::Pruebas);
     }
 
+    /// Git → Subir (push) o Traer (pull): en la terminal, por si pide usuario o clave.
+    pub fn git_remoto(&mut self, op: OpRemota) {
+        let Some(e) = self.git_estado.clone() else {
+            self.avisar("El proyecto no está en un repositorio git.", Nivel::Aviso);
+            return;
+        };
+        let cmd = match op {
+            OpRemota::Subir if e.upstream.is_none() => "git push -u origin HEAD".to_string(),
+            OpRemota::Subir => "git push".to_string(),
+            OpRemota::Traer => {
+                if e.cantidad_modificados() > 0 {
+                    self.avisar(
+                        "Hay cambios sin commit: si chocan con lo que traés, git no va a poder. Mejor hacé commit antes.",
+                        Nivel::Aviso,
+                    );
+                }
+                "git pull --no-rebase --no-edit".to_string()
+            }
+        };
+        self.git_remoto = Some(op);
+        self.correr_en_deck(cmd);
+    }
+
+    /// Al terminar un push o pull: qué pasó y qué hacer.
+    fn fin_git_remoto(&mut self, op: OpRemota) {
+        let texto = self
+            .ejecucion
+            .as_ref()
+            .map(|d| d.texto().to_lowercase())
+            .unwrap_or_default();
+        let codigo = self.ejecucion.as_mut().and_then(|d| d.codigo_salida());
+        self.refrescar_git();
+        let conflictos: Vec<String> = self
+            .git_estado
+            .as_ref()
+            .map(|e| {
+                e.entradas
+                    .iter()
+                    .filter(|x| x.tipo == jonesy_git::TipoEntrada::Conflicto)
+                    .map(|x| x.ruta.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !conflictos.is_empty() {
+            let lista: String = conflictos.iter().map(|c| format!("- `{c}`\n")).collect();
+            let texto = format!(
+                "# Conflicto al traer los cambios\n\n\
+                 Vos y el repositorio cambiaron las mismas líneas de:\n\n{lista}\n\
+                 Para resolverlo:\n\n\
+                 1. Abrí cada archivo y buscá las marcas `<<<<<<<`, `=======` y `>>>>>>>`.\n\
+                 2. Entre `<<<<<<<` y `=======` está tu versión; entre `=======` y `>>>>>>>`, la que llegó.\n\
+                 3. Dejá el código como tiene que quedar y borrá las tres marcas.\n\
+                 4. Guardá, agregalo al stage (Espacio en el panel de git) y hacé commit (c).\n\n\
+                 Si preferís deshacer el intento: `git merge --abort` en la terminal.\n"
+            );
+            let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+            self.modal = Some(Modal::Visor {
+                titulo: "Conflicto".into(),
+                lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
+                desplazamiento: 0,
+            });
+            return;
+        }
+        let rechazado = ["rejected", "rechazad", "fetch first", "non-fast-forward"]
+            .iter()
+            .any(|p| texto.contains(p));
+        match (op, codigo == Some(0), rechazado) {
+            (OpRemota::Subir, _, true) => self.avisar(
+                "El repositorio tiene cambios que vos no tenés: primero traé los cambios (b en el panel de git) y después subí.",
+                Nivel::Error,
+            ),
+            (OpRemota::Subir, true, _) => self.avisar("Cambios subidos.", Nivel::Ok),
+            (OpRemota::Traer, true, _) => self.avisar("Cambios traídos.", Nivel::Ok),
+            (_, false, _) => self.avisar(
+                "git no pudo terminar: mirá la pestaña Ejecución (¿conexión, usuario o permisos?).",
+                Nivel::Error,
+            ),
+        }
+    }
+
+    /// Recordatorio de commit: hay cambios sin confirmar desde hace un rato.
+    fn recordar_commit(&mut self) {
+        let min = self.proyecto.config.interfaz.recordar_commit_min;
+        if self.examen.is_some() || min <= 0.0 {
+            return;
+        }
+        let cada = Duration::from_secs_f64(min * 60.0);
+        if self.ultimo_recordatorio_commit.elapsed() < cada {
+            return;
+        }
+        let cambios = self
+            .git_estado
+            .as_ref()
+            .map(|e| e.cantidad_modificados())
+            .unwrap_or(0);
+        let Some(repo) = self.repo.clone() else {
+            return;
+        };
+        if cambios == 0 {
+            return;
+        }
+        self.ultimo_recordatorio_commit = Instant::now();
+        let desde = repo.segundos_desde_ultimo_commit();
+        if desde.is_none_or(|s| s as f64 >= min * 60.0) {
+            self.avisar(
+                format!(
+                    "Hay {cambios} archivo(s) cambiados sin commit {}: Alt+G y c para guardar una versión.",
+                    match desde {
+                        Some(s) if s >= 3600 => format!("desde hace {} h", s / 3600),
+                        Some(s) => format!("desde hace {} min", s / 60),
+                        None => "(todavía no hay ningún commit)".into(),
+                    }
+                ),
+                Nivel::Aviso,
+            );
+        }
+    }
+
     /// Construir → Correr la prueba del cursor (Shift+F6): compila el ejecutable de
     /// pruebas del ejercicio y lo corre con `-k nombre` (filtro de p1_test).
     pub fn probar_aqui(&mut self) {
@@ -5203,6 +5337,8 @@ impl App {
             Accion::Ejecutar => self.compilar(Luego::Ejecutar),
             Accion::Probar => self.probar(),
             Accion::ProbarAqui => self.probar_aqui(),
+            Accion::GitSubir => self.git_remoto(OpRemota::Subir),
+            Accion::GitTraer => self.git_remoto(OpRemota::Traer),
             Accion::CorrerHastaCursor => self.correr_hasta_cursor(),
             Accion::RevisarMemoria => self.revisar_memoria(),
             Accion::Depurar => self.depurar(),
@@ -5777,6 +5913,11 @@ impl App {
         if self.vigilar_programa && self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_cuelgue();
         }
+        if self.git_remoto.is_some() && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            let op = self.git_remoto.take().unwrap();
+            self.fin_git_remoto(op);
+        }
+        self.recordar_commit();
         if self.vigilar_programa && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_programa = false;
             self.vigia = None;
@@ -6240,6 +6381,8 @@ impl App {
                     KeyCode::Char('c') if !ctrl => self.git_accion(Accion::GitCommit),
                     KeyCode::Char('l') => self.git_accion(Accion::GitLog),
                     KeyCode::Char('z') => self.pedir_deshacer_commit(),
+                    KeyCode::Char('s') if !ctrl => self.git_remoto(OpRemota::Subir),
+                    KeyCode::Char('b') if !ctrl => self.git_remoto(OpRemota::Traer),
                     KeyCode::Char('m') if en_log => {
                         let h = self
                             .git

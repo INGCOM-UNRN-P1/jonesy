@@ -2027,7 +2027,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let ayuda = if app.git.log.is_some() {
         "Enter ver commit · m marca otro para comparar · z deshace el último · l volver"
     } else {
-        "Espacio stage · a/u todo · c commit · l log · Enter diff"
+        "Espacio stage · a/u todo · c commit · l log · s subir · b traer · Enter diff"
     };
     cabecera.push(Line::styled(ayuda, Style::default().fg(tema::atenuado())));
     let alto_cab = cabecera.len() as u16;
@@ -3135,14 +3135,39 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 .split('\n')
                 .map(|l| Line::raw(l.to_string()))
                 .collect();
-            let aviso = jonesy_git::aviso_mensaje(mensaje);
-            let alto = i.height.saturating_sub(if aviso.is_some() { 1 } else { 0 });
-            if let Some(a) = aviso {
+            // Plantilla mientras está vacío; revisión del mensaje al pie.
+            if mensaje.is_empty() {
+                let guia = Style::default().fg(tema::atenuado());
+                let y0 = i.y;
                 f.buffer_mut().set_string(
                     i.x,
-                    i.y + i.height - 1,
-                    a,
-                    Style::default().fg(tema::advertencia()),
+                    y0,
+                    "Qué cambió, en una línea (sin punto final, hasta 72 caracteres)",
+                    guia,
+                );
+                f.buffer_mut().set_string(
+                    i.x,
+                    y0 + 2,
+                    "Por qué, si hace falta (después de una línea en blanco)",
+                    guia,
+                );
+            }
+            let revision: Vec<(bool, String)> = if mensaje.is_empty() {
+                vec![]
+            } else {
+                jonesy_git::revisar_mensaje(mensaje)
+            };
+            let alto = i.height.saturating_sub(revision.len() as u16);
+            for (k, (bloquea, m)) in revision.iter().enumerate() {
+                f.buffer_mut().set_string(
+                    i.x,
+                    i.y + alto + k as u16,
+                    format!("{} {m}", if *bloquea { "✗" } else { "!" }),
+                    Style::default().fg(if *bloquea {
+                        tema::error()
+                    } else {
+                        tema::advertencia()
+                    }),
                 );
             }
             let n = lineas.len();

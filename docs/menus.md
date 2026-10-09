@@ -95,7 +95,7 @@ comprueba que esté al día.
 | Ver | [V]er | Alt+V (o F10 y V) | 15 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 10 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
-| Git | [G]it | F10 y G | 6 |
+| Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
 | Ayuda | A[y]uda | F10 y Y | 7 |
@@ -229,6 +229,10 @@ comprueba que esté al día.
 ├─────────────────────────────────────────────────────────┤
 │ Confirmar cambios (commit)…                             │
 │ Deshacer último commit (mantener en stage)              │
+├─────────────────────────────────────────────────────────┤
+│ Traer cambios (pull)                                    │
+│ Subir cambios (push)                                    │
+├─────────────────────────────────────────────────────────┤
 │ Clonar repositorio…                                     │
 └─────────────────────────────────────────────────────────┘
 ```
