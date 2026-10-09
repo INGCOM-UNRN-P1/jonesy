@@ -61,7 +61,7 @@ fn es_ident(c: char) -> bool {
 
 /// El texto con comentarios, cadenas y directivas (salvo #define) reemplazados por
 /// espacios: mismas posiciones, nada que confunda al reconocer símbolos.
-fn limpio(fuente: &[char]) -> Vec<char> {
+pub fn limpio(fuente: &[char]) -> Vec<char> {
     let mut t = fuente.to_vec();
     let mut i = 0;
     let mut inicio_linea = true;

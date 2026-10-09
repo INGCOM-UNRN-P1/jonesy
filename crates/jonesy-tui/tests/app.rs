@@ -2825,3 +2825,42 @@ fn recorrido_guiado_por_las_zonas() {
     tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
     assert!(a.modal.is_none());
 }
+
+#[test]
+fn renombrar_en_su_ambito() {
+    let dir = proyecto(&[
+        (
+            "main.c",
+            "int contar(int n)\n{\n    int i = n;\n    return i;\n}\n\nint main(void)\n{\n    int i = 2;\n    return contar(i);\n}\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(2, 8);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Char('r'), KeyModifiers::CONTROL);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(
+        p.contains("Renombrar «i»") && p.contains("2 apariciones en la función contar"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    escribir(&mut a, "while");
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("palabra reservada"), "{p}");
+    for _ in 0..5 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "copia");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let texto = a.buf().buf.contenido();
+    assert!(
+        texto.contains("int copia = n;\n    return copia;")
+            && texto.contains("int i = 2;\n    return contar(i);"),
+        "{texto}"
+    );
+    // Un solo Ctrl+Z vuelve todo atrás.
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
+    assert!(!a.buf().buf.contenido().contains("copia"));
+}

@@ -2936,6 +2936,42 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.y,
             ))
         }
+        Modal::RenombrarSimbolo { plan, texto, error } => {
+            let r = centrado(area, 64, 5);
+            limpiar(f, r);
+            let n = plan.rangos.len();
+            let b = bloque(
+                format!(" Renombrar «{}» · Enter aplica · Esc cancela ", plan.nombre),
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let (nota, color) = match error {
+                Some(e) => (e.clone(), tema::error()),
+                None => (
+                    format!(
+                        "{n} {} en {}",
+                        if n == 1 { "aparición" } else { "apariciones" },
+                        plan.alcance
+                    ),
+                    tema::atenuado(),
+                ),
+            };
+            f.render_widget(
+                Paragraph::new(nota)
+                    .style(Style::default().fg(color))
+                    .wrap(Wrap { trim: true }),
+                Rect { height: 2, ..i },
+            );
+            let y = i.y + i.height.saturating_sub(1);
+            f.buffer_mut()
+                .set_string(i.x, y, texto, Style::default().fg(tema::acento()));
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                y,
+            ))
+        }
         Modal::NuevoArchivo { texto, carpeta } => {
             let titulo = if *carpeta {
                 " Nueva carpeta (ruta relativa al proyecto) "

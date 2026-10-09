@@ -111,6 +111,7 @@ pub enum Accion {
     CatalogoReglas,
     Precedencia,
     Recorrido,
+    RenombrarSimbolo,
 }
 
 pub struct Info {
@@ -230,6 +231,7 @@ impl Accion {
                 "",
             ),
             Recorrido => ("Recorrido guiado por la pantalla", ""),
+            RenombrarSimbolo => ("Renombrar en su ámbito…", "Ctrl+R"),
         };
         Info { titulo, atajo }
     }
@@ -338,6 +340,7 @@ impl Accion {
             CatalogoReglas,
             Precedencia,
             Recorrido,
+            RenombrarSimbolo,
             Salir,
         ]
     }
@@ -484,6 +487,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(Formatear),
                 A(LimpiarEspacios),
+                A(RenombrarSimbolo),
                 A(Precedencia),
             ],
         ),
@@ -679,6 +683,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
+| Renombrar la variable o función del cursor (sólo donde vale) | Ctrl+R |
 | Mover línea arriba / abajo | Alt+↑ / Alt+↓ |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |
 | Diff del archivo contra git (lado a lado; s alterna, n/p cambio) | Alt+Shift+D |

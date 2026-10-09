@@ -297,6 +297,12 @@ pub enum Modal {
         origen: PathBuf,
         texto: String,
     },
+    /// Editar → Renombrar en su ámbito: el nombre nuevo de la variable o función.
+    RenombrarSimbolo {
+        plan: jonesy_core::renombrar::Plan,
+        texto: String,
+        error: Option<String>,
+    },
     /// Nombre del archivo (o carpeta) nuevo, relativo a la raíz.
     NuevoArchivo {
         texto: String,
@@ -5106,6 +5112,62 @@ impl App {
         self.refrescar_git();
     }
 
+    /// Ctrl+R: renombra la variable o función del cursor sólo donde esa declaración vale
+    /// (no toca otra variable con el mismo nombre en otra función, ni campos, cadenas o
+    /// comentarios).
+    fn pedir_renombrar_simbolo(&mut self) {
+        let b = &self.buf().buf;
+        if b.lenguaje != Lenguaje::C {
+            self.avisar(
+                "Renombrar en su ámbito funciona en archivos de C.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let pos = b.seleccion().map(|(a, _)| a).unwrap_or(b.cursor);
+        match jonesy_core::renombrar::planear(&b.contenido(), pos) {
+            Ok(plan) => {
+                self.modal = Some(Modal::RenombrarSimbolo {
+                    texto: plan.nombre.clone(),
+                    plan,
+                    error: None,
+                })
+            }
+            Err(e) => self.avisar(e, Nivel::Aviso),
+        }
+    }
+
+    fn renombrar_simbolo(&mut self, plan: jonesy_core::renombrar::Plan, nuevo: String) {
+        let nuevo = nuevo.trim().to_string();
+        let fuente = self.buf().buf.contenido();
+        if let Err(e) = jonesy_core::renombrar::validar(&fuente, &plan, &nuevo) {
+            self.modal = Some(Modal::RenombrarSimbolo {
+                plan,
+                texto: nuevo,
+                error: Some(e),
+            });
+            return;
+        }
+        let texto = jonesy_core::renombrar::aplicar(&fuente, &plan, &nuevo);
+        // El cursor sigue al mismo lugar del código aunque cambien los largos.
+        let cursor = self.buf().buf.cursor;
+        let delta = nuevo.chars().count() as isize - plan.nombre.chars().count() as isize;
+        let antes = plan.rangos.iter().filter(|(_, f)| *f <= cursor).count() as isize;
+        let cursor = (cursor as isize + antes * delta).max(0) as usize;
+        self.editar(|b| b.reemplazar_todo(&texto));
+        self.buf_mut().buf.mover_a(cursor, false);
+        let n = plan.rangos.len();
+        self.avisar(
+            format!(
+                "«{}» → «{nuevo}»: {n} {} en {} (Ctrl+Z deshace).",
+                plan.nombre,
+                if n == 1 { "cambio" } else { "cambios" },
+                plan.alcance
+            ),
+            Nivel::Ok,
+        );
+    }
+
     /// Pide el nombre nuevo de un archivo o carpeta (F2 en el explorador).
     fn pedir_renombrar(&mut self, ruta: &Path) {
         if self.examen.is_some() {
@@ -5800,6 +5862,7 @@ impl App {
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
+            Accion::RenombrarSimbolo => self.pedir_renombrar_simbolo(),
             Accion::Precedencia => {
                 let b = &self.buf().buf;
                 let expr = b
@@ -6392,6 +6455,7 @@ impl App {
                 | Modal::Argumentos { texto, .. }
                 | Modal::NuevoArchivo { texto, .. }
                 | Modal::Renombrar { texto, .. }
+                | Modal::RenombrarSimbolo { texto, .. }
                 | Modal::Clonar {
                     url: texto,
                     campo: 0,
@@ -7131,6 +7195,7 @@ impl App {
             // Ctrl+/ llega como Ctrl+/ o como Ctrl+7 según la terminal.
             (KeyCode::Char('/' | '7' | '_'), true, _) => Some(Accion::Comentar),
             (KeyCode::Char('d'), true, _) => Some(Accion::DuplicarLinea),
+            (KeyCode::Char('r'), true, _) => Some(Accion::RenombrarSimbolo),
             (KeyCode::Char('p'), true, _) => Some(Accion::PreviewMarkdown),
             (KeyCode::PageDown, true, _) => Some(Accion::SiguienteBuffer),
             (KeyCode::PageUp, true, _) => Some(Accion::AnteriorBuffer),
@@ -7448,6 +7513,25 @@ impl App {
                 }
                 editar_campo(&mut texto, &k);
                 self.modal = Some(Modal::Renombrar { origen, texto });
+            }
+            Modal::RenombrarSimbolo {
+                plan, mut texto, ..
+            } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.renombrar_simbolo(plan, texto);
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                let error = (!texto.is_empty() && texto != plan.nombre)
+                    .then(|| {
+                        jonesy_core::renombrar::validar(&self.buf().buf.contenido(), &plan, &texto)
+                            .err()
+                    })
+                    .flatten();
+                self.modal = Some(Modal::RenombrarSimbolo { plan, texto, error });
             }
             Modal::NuevoArchivo { mut texto, carpeta } => {
                 if cerrar {

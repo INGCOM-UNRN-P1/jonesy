@@ -24,6 +24,7 @@ pub mod precedencia;
 pub mod proceso;
 pub mod proyecto;
 pub mod pruebas;
+pub mod renombrar;
 pub mod sarif;
 pub mod sesion;
 pub mod simbolos;
