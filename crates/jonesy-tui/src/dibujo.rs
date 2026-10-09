@@ -120,7 +120,8 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
         _ => None,
     };
     let mut x = r.x + 1;
-    for (i, (nombre, _)) in menus.iter().enumerate() {
+    for (i, m) in menus.iter().enumerate() {
+        let nombre = m.nombre;
         let w = nombre.chars().count() as u16 + 2;
         if x + w > r.x + r.width {
             break;
@@ -131,7 +132,20 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             fondo
         };
         let zona = Rect::new(x, r.y, w, 1);
-        f.render_widget(Paragraph::new(format!(" {nombre} ")).style(estilo), zona);
+        // La letra mnemónica subrayada (Alt+letra, o F10 y la letra).
+        let mut partes = vec![Span::styled(" ", estilo)];
+        let mut marcada = false;
+        for c in nombre.chars() {
+            let st = if !marcada && c.to_lowercase().next() == Some(m.tecla) {
+                marcada = true;
+                estilo.add_modifier(Modifier::UNDERLINED)
+            } else {
+                estilo
+            };
+            partes.push(Span::styled(c.to_string(), st));
+        }
+        partes.push(Span::styled(" ", estilo));
+        f.render_widget(Paragraph::new(Line::from(partes)), zona);
         app.zonas.menu.push((zona, i));
         x += w;
     }
@@ -1811,7 +1825,7 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         .collect();
     if grupos.is_empty() {
         f.render_widget(
-            Paragraph::new("Sin observaciones. Las herramientas del ecosistema (ripley, gaff, kaneda…) corren al guardar; F1 sobre un hallazgo lo explica y Herramientas → Integraciones muestra cuáles están activas.")
+            Paragraph::new("Sin observaciones. Las herramientas del ecosistema (ripley, gaff, kaneda…) corren al guardar; F1 sobre un hallazgo lo explica y Archivo → Configuración del entorno muestra cuáles están activas.")
                 .style(Style::default().fg(tema::atenuado()))
                 .wrap(Wrap { trim: true }),
             i,
@@ -2742,79 +2756,86 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             dibujar_diff(f, area, &titulo, &filas, desplazamiento, lado_a_lado, ctx);
             None
         }
-        Modal::Integraciones { sel } => {
-            let sel = *sel;
-            let examen = app.examen.is_some();
-            let n = app.integraciones.len();
-            let r = centrado(area, 100, (n as u16 + 6).min(area.height.saturating_sub(2)));
+        Modal::Configuracion { pestana, sel } => {
+            let (pestana, sel) = (*pestana, *sel);
+            let filas = app.filas_configuracion(pestana);
+            let alto = (filas.len() as u16 + 7).clamp(12, area.height.saturating_sub(2));
+            let r = centrado(area, 110, alto);
             f.render_widget(Clear, r);
-            let b = bloque(
-                " Integraciones con el ecosistema · Espacio activa/apaga · r relee · Enter cierra ",
-                true,
-            );
+            let b = bloque(" Configuración del entorno · Esc cierra ", true);
             let i = b.inner(r);
             f.render_widget(b, r);
-            let mut lineas: Vec<Line> = vec![];
-            for (k, x) in app.integraciones.iter().enumerate() {
-                let (estado, color) = if !x.disponible() {
-                    ("no instalada", tema::atenuado())
-                } else if examen && !x.examen {
-                    ("no en examen", tema::atenuado())
-                } else if x.activa {
-                    ("activa", tema::ok())
+            // Solapas.
+            let mut solapas: Vec<Span> = vec![Span::raw(" ")];
+            for (k, nombre) in crate::app::PESTANAS_CONFIG.iter().enumerate() {
+                let st = if k == pestana {
+                    Style::default()
+                        .bg(tema::acento())
+                        .fg(tema::sobre_acento())
+                        .add_modifier(Modifier::BOLD)
                 } else {
-                    ("apagada", tema::advertencia())
+                    Style::default().fg(tema::atenuado())
                 };
-                let cuando = match x.cuando {
-                    jonesy_core::integraciones::Cuando::Guardar => "al guardar",
-                    jonesy_core::integraciones::Cuando::Manual => "a mano",
-                };
+                solapas.push(Span::styled(format!(" {} {nombre} ", k + 1), st));
+                solapas.push(Span::raw(" "));
+            }
+            let mut lineas: Vec<Line> = vec![Line::from(solapas), Line::raw("")];
+            let ancho_t = filas
+                .iter()
+                .map(|x| x.titulo.chars().count())
+                .max()
+                .unwrap_or(10)
+                .min(48);
+            let ancho_v = filas
+                .iter()
+                .map(|x| x.valor.chars().count())
+                .max()
+                .unwrap_or(0)
+                .min(46);
+            let primera = i.y + lineas.len() as u16;
+            for (k, x) in filas.iter().enumerate() {
                 let fondo = if k == sel {
                     tema::fondo_seleccion()
                 } else {
                     Color::Reset
                 };
                 let st = Style::default().bg(fondo);
-                let acciones = if x.acciones.is_empty() {
-                    String::new()
-                } else {
-                    format!(" · {} acción(es)", x.acciones.len())
+                let color_valor = match x.valor.as_str() {
+                    "activa" | "activo" => tema::ok(),
+                    "apagada" | "con errores" => tema::advertencia(),
+                    "no instalada" | "no en examen" => tema::atenuado(),
+                    _ => tema::nota(),
                 };
+                let titulo: String = x.titulo.chars().take(ancho_t).collect();
+                let valor: String = x.valor.chars().take(ancho_v).collect();
                 lineas.push(Line::from(vec![
                     Span::styled(
-                        format!(" {:<12}", x.nombre),
+                        format!(" {titulo:<ancho_t$}  "),
                         st.add_modifier(Modifier::BOLD),
                     ),
-                    Span::styled(format!("{estado:<13}"), st.fg(color)),
-                    Span::styled(format!("{cuando:<11}"), st.fg(tema::nota())),
-                    Span::styled(format!("{}{acciones}", x.descripcion), st),
+                    Span::styled(format!("{valor:<ancho_v$}  "), st.fg(color_valor)),
+                    Span::styled(x.detalle.clone(), st.fg(tema::atenuado())),
                 ]));
             }
+            app.zonas.modal_items = Some((Rect::new(i.x, primera, i.width, filas.len() as u16), 0));
             lineas.push(Line::raw(""));
-            let ayuda = match app.integraciones.get(sel) {
-                Some(x) => format!(
-                    " {} · {}",
-                    x.origen,
-                    if x.comando.is_empty() {
-                        "sólo acciones"
-                    } else {
-                        x.comando.as_str()
-                    }
-                ),
-                None => String::new(),
-            };
-            lineas.push(Line::styled(ayuda, Style::default().fg(tema::atenuado())));
-            for e in &app.errores_integraciones {
-                lineas.push(Line::styled(
-                    format!(" ⚠ {e}"),
-                    Style::default().fg(tema::error()),
-                ));
-            }
             lineas.push(Line::styled(
-                " Agregá o reemplazá integraciones en .jonesy/integraciones/*.toml o ~/.config/jonesy/integraciones/ (ver docs/integraciones.md).",
+                " ←→ o 1-4 solapa · ↑↓ elegir · Enter o Espacio aplica · clic en una fila",
                 Style::default().fg(tema::atenuado()),
             ));
-            f.render_widget(Paragraph::new(lineas).wrap(Wrap { trim: false }), i);
+            if pestana == 0 {
+                for e in &app.errores_integraciones {
+                    lineas.push(Line::styled(
+                        format!(" ⚠ {e}"),
+                        Style::default().fg(tema::error()),
+                    ));
+                }
+                lineas.push(Line::styled(
+                    " Integraciones nuevas: .jonesy/integraciones/*.toml o ~/.config/jonesy/integraciones/ (docs/integraciones.md).",
+                    Style::default().fg(tema::atenuado()),
+                ));
+            }
+            f.render_widget(Paragraph::new(lineas), i);
             None
         }
         Modal::Paneles { sel } => {
@@ -2854,7 +2875,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         Modal::Menu { indice, sel } => {
             let (indice, sel) = (*indice, *sel);
             let menus = accion::menus(app.examen.is_some());
-            let (_, items) = menus.get(indice)?;
+            let items = &menus.get(indice)?.items;
             let x = app
                 .zonas
                 .menu
@@ -2864,6 +2885,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 .unwrap_or(1);
             let ancho = items
                 .iter()
+                .flatten()
                 .map(|a| a.info().titulo.chars().count() + a.info().atajo.chars().count() + 4)
                 .max()
                 .unwrap_or(20) as u16
@@ -2878,9 +2900,18 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let b = bloque("", true);
             let i = b.inner(r);
             f.render_widget(b, r);
+            let raya = app.sim.h.to_string().repeat(i.width as usize);
             for (n, a) in items.iter().enumerate().take(i.height as usize) {
-                let info = a.info();
                 let fila = Rect::new(i.x, i.y + n as u16, i.width, 1);
+                let Some(a) = a else {
+                    // Separador.
+                    f.render_widget(
+                        Paragraph::new(raya.clone()).style(Style::default().fg(tema::atenuado())),
+                        fila,
+                    );
+                    continue;
+                };
+                let info = a.info();
                 let estilo = if n == sel {
                     Style::default().bg(tema::acento()).fg(tema::sobre_acento())
                 } else {

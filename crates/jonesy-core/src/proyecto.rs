@@ -93,7 +93,7 @@ pub struct Interfaz {
     /// Forzar caracteres ASCII en lugar de los de caja.
     pub ascii: bool,
     /// Tema de colores: "oscuro" (por defecto), "claro" o "contraste" (16 colores ANSI).
-    /// El elegido desde Ver → Cambiar tema queda en la sesión y tiene prioridad.
+    /// El elegido desde Archivo → Configuración del entorno → Apariencia queda en la sesión y tiene prioridad.
     pub tema: String,
     /// Shell de la terminal interna (vacío = $SHELL o bash).
     pub shell: String,
@@ -101,7 +101,7 @@ pub struct Interfaz {
     /// ~/p1/entorno; "no" = no usarla).
     pub entorno: String,
     /// Tamaños iniciales de los paneles (`[interfaz.paneles]`); los cambios hechos con el
-    /// mouse o desde Ver → Tamaños de paneles se guardan en la sesión.
+    /// mouse o desde Configuración del entorno → Apariencia → Tamaños de paneles se guardan en la sesión.
     pub paneles: TamPaneles,
 }
 
@@ -325,6 +325,29 @@ impl Proyecto {
                     .find(|m| m.tipo == TipoModulo::Raiz && m.tiene("test"))
             })
             .map(|m| m.comando("test"))
+    }
+
+    /// Limpiar lo compilado: el objetivo `clean` del módulo (o de la raíz); en un archivo
+    /// suelto sin Makefile, borrar su ejecutable.
+    pub fn comando_limpiar(&self, activo: Option<&Path>) -> Option<String> {
+        use crate::estructura::TipoModulo;
+        if let Some(m) = activo
+            .and_then(|a| self.estructura.modulo_de(a))
+            .filter(|m| m.tiene("clean"))
+            .or_else(|| {
+                self.estructura
+                    .modulos
+                    .iter()
+                    .find(|m| m.tipo == TipoModulo::Raiz && m.tiene("clean"))
+            })
+        {
+            return Some(m.comando("clean"));
+        }
+        if self.makefile().is_some() || crate::proceso::interprete().0 != "sh" {
+            return None;
+        }
+        let stem = activo?.file_stem()?.to_string_lossy().into_owned();
+        Some(format!("rm -f {}", shell_quote(&stem)))
     }
 
     /// Revisar la memoria con valgrind: el objetivo `memcheck` del módulo (o de la raíz);

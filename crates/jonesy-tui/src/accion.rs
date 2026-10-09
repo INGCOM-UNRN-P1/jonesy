@@ -73,6 +73,11 @@ pub enum Accion {
     ExportarMemoria,
     NuevoPlugin,
     RecargarPlugins,
+    Configuracion,
+    LimpiarCompilacion,
+    RestablecerPaneles,
+    GuiaRapida,
+    EstadoEntrega,
 }
 
 pub struct Info {
@@ -100,66 +105,59 @@ impl Accion {
             Buscar => ("Buscar…", "F3 / Ctrl+F"),
             BuscarSiguiente => ("Buscar siguiente", "Shift+F3"),
             IrALinea => ("Ir a la línea…", "Ctrl+G"),
-            QuickDoc => ("Mostrar/ocultar quick-doc", "F4 / Alt+D"),
+            QuickDoc => ("Documentación contextual (quick-doc)", "F4"),
             OrientacionQuickDoc => ("Quick-doc: derecha ⟷ inferior", "Shift+F4"),
             Terminal => ("Terminal (deck)", "Alt+T"),
-            Problemas => ("Problemas", "Alt+P"),
+            Problemas => ("Problemas y diagnósticos", "Alt+P"),
             SalidaCompilacion => ("Salida de la compilación", "Alt+O"),
-            PanelGit => ("Panel de Git", "Alt+G"),
-            PanelReglas => ("Panel de reglas de ripley", "Alt+R"),
+            PanelGit => ("Abrir panel interactivo de Git", "Alt+G"),
+            PanelReglas => ("Panel de reglas pedagógicas (ripley)", "Alt+R"),
             PreviewMarkdown => ("Vista previa de Markdown", "Ctrl+P"),
-            VistaConsigna => ("Ver consigna", "F7"),
-            VistaCodigo => ("Ver código", "F8"),
-            VistaTerminal => ("Ver terminal", "F9"),
+            VistaConsigna => ("Modo consigna", "F7"),
+            VistaCodigo => ("Modo código", "F8"),
+            VistaTerminal => ("Modo terminal integrada", "F9"),
             VistaDoc => ("Ver documentación", "F4"),
-            Compilar => ("Compilar", "F6"),
+            Compilar => ("Compilar archivo o proyecto", "F6"),
             Ejecutar => ("Compilar y ejecutar", "Ctrl+F5"),
-            Probar => ("Correr las pruebas (make test)", "Ctrl+F6"),
-            RevisarMemoria => (
-                "Revisar la memoria: fugas y accesos inválidos (valgrind)",
-                "",
-            ),
-            Depurar => ("Depurar / continuar", "F5"),
-            Paso => ("Paso (siguiente línea)", "F10"),
-            Entrar => ("Entrar en la función", "F11"),
-            SalirFuncion => ("Salir de la función", "Shift+F11"),
-            Detener => ("Detener la depuración", "Shift+F5"),
-            AlternarBreakpoint => ("Poner/quitar breakpoint", "Ctrl+B"),
-            CatScan => ("Memoria (cat-scan)", "Alt+M"),
-            GitStageTodo => ("Git: agregar todo al stage", "a"),
-            GitUnstageTodo => ("Git: quitar todo del stage", "u"),
-            GitCommit => ("Git: commit…", "c"),
-            GitLog => ("Git: historial", "l"),
-            Entregar => ("Entregar examen", "F12"),
-            ExplicarRegla => ("Explicar la regla del diagnóstico", "F1"),
+            Probar => ("Correr pruebas (make test)", "Ctrl+F6"),
+            RevisarMemoria => ("Revisar memoria con valgrind (fugas y accesos)", ""),
+            Depurar => ("Iniciar depuración / continuar", "F5"),
+            Paso => ("Paso a paso (siguiente línea)", "F10"),
+            Entrar => ("Entrar en la función (step into)", "F11"),
+            SalirFuncion => ("Salir de la función (step out)", "Shift+F11"),
+            Detener => ("Detener depuración", "Shift+F5"),
+            AlternarBreakpoint => ("Poner / quitar breakpoint", "Ctrl+B"),
+            CatScan => ("Inspección visual de memoria (cat-scan)", "Alt+M"),
+            GitStageTodo => ("Git: agregar todo al stage", ""),
+            GitUnstageTodo => ("Git: quitar todo del stage", ""),
+            GitCommit => ("Confirmar cambios (commit)…", ""),
+            GitLog => ("Historial de cambios (log)", ""),
+            Entregar => ("Entregar examen…", "F12"),
+            ExplicarRegla => ("Explicar error o regla actual", "F1"),
             Atajos => ("Atajos de teclado", ""),
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
             TamanosPaneles => ("Tamaños de paneles…", ""),
             CambiarTema => ("Cambiar tema (oscuro, claro, contraste)", ""),
             Explorador => ("Explorador de archivos", "Alt+E"),
-            EstructuraProyecto => ("Proyecto: bibliotecas, ejercicios y objetivos", "Alt+Y"),
+            EstructuraProyecto => ("Ver ejercicios y objetivos del proyecto", "Alt+Y"),
             NuevoArchivo => ("Nuevo archivo…", "Ctrl+N"),
             AbrirProyecto => ("Abrir proyecto o directorio…", ""),
-            GitClonar => ("Git: clonar un repositorio…", ""),
-            Formatear => ("Autoformato del archivo", "Alt+Shift+F"),
-            GenerarDoc => ("Generar la documentación del proyecto (make doc)", ""),
-            DiffArchivo => (
-                "Comparar con la versión de git (diff lado a lado)",
-                "Alt+Shift+D",
-            ),
+            GitClonar => ("Clonar repositorio…", ""),
+            Formatear => ("Autoformatear código (gaff o clang-format)", "Alt+Shift+F"),
+            GenerarDoc => ("Generar documentación (make doc)", ""),
+            DiffArchivo => ("Comparar cambios (diff lado a lado)", "Alt+Shift+D"),
             NuevoPlugin => ("Nuevo plugin Python (.jonesy/plugins)…", ""),
             RecargarPlugins => ("Recargar los plugins Python", ""),
-            ExportarMemoria => (
-                "Exportar la traza de memoria (reporte HTML de mem-trace)",
-                "",
-            ),
-            GitDeshacerCommit => (
-                "Git: deshacer el último commit (sus cambios quedan en el stage)",
-                "z",
-            ),
+            ExportarMemoria => ("Exportar traza de memoria (reporte HTML)", ""),
+            GitDeshacerCommit => ("Deshacer último commit (mantener en stage)", ""),
             Herramientas => ("Herramientas del ecosistema para este archivo…", "Alt+H"),
             Integraciones => ("Integraciones: qué herramientas corren y cuándo…", ""),
+            Configuracion => ("Configuración del entorno…", "Ctrl+,"),
+            LimpiarCompilacion => ("Limpiar compilación (make clean)", ""),
+            RestablecerPaneles => ("Restablecer disposición de paneles", ""),
+            GuiaRapida => ("Guía rápida para estudiantes de C", ""),
+            EstadoEntrega => ("Verificar estado de entrega", ""),
         };
         Info { titulo, atajo }
     }
@@ -230,115 +228,233 @@ impl Accion {
             AbrirProyecto,
             Atajos,
             AcercaDe,
+            Configuracion,
+            LimpiarCompilacion,
+            RestablecerPaneles,
+            GuiaRapida,
+            EstadoEntrega,
             Salir,
         ]
     }
 }
 
-/// Menús de la barra superior.
-pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
+/// Un menú de la barra superior.
+pub struct Menu {
+    pub nombre: &'static str,
+    /// Letra mnemónica (subrayada en la barra): Alt+letra si no la toma un atajo global, o
+    /// la letra sola con un menú abierto (F10 y letra).
+    pub tecla: char,
+    /// Entradas; `None` es un separador.
+    pub items: Vec<Option<Accion>>,
+}
+
+impl Menu {
+    /// Las acciones, sin los separadores.
+    pub fn acciones(&self) -> impl Iterator<Item = Accion> + '_ {
+        self.items.iter().flatten().copied()
+    }
+}
+
+/// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
+pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 'r', 'p', 'o', 'm'];
+
+/// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
+/// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
+/// memoria) y git. La configuración del entorno (integraciones, plugins, compilador,
+/// apariencia) está en Archivo → Configuración del entorno.
+pub fn menus(examen: bool) -> Vec<Menu> {
     use Accion::*;
+    let menu = |nombre, tecla, items: Vec<Option<Accion>>| Menu {
+        nombre,
+        tecla,
+        items,
+    };
+    const SEP: Option<Accion> = None;
     let mut m = vec![
-        (
+        menu(
             "Archivo",
+            'a',
             vec![
-                NuevoArchivo,
-                Abrir,
-                AbrirProyecto,
-                Guardar,
-                GuardarTodo,
-                CerrarBuffer,
-                SiguienteBuffer,
-                AnteriorBuffer,
-                Salir,
+                Some(NuevoArchivo),
+                Some(Abrir),
+                Some(AbrirProyecto),
+                SEP,
+                Some(Guardar),
+                Some(GuardarTodo),
+                SEP,
+                Some(CerrarBuffer),
+                Some(SiguienteBuffer),
+                Some(AnteriorBuffer),
+                SEP,
+                Some(Configuracion),
+                SEP,
+                Some(Salir),
             ],
         ),
-        (
+        menu(
             "Editar",
+            'e',
             vec![
-                Deshacer,
-                Rehacer,
-                Cortar,
-                Copiar,
-                Pegar,
-                SeleccionarTodo,
-                Buscar,
-                BuscarSiguiente,
-                IrALinea,
-                Formatear,
+                Some(Deshacer),
+                Some(Rehacer),
+                SEP,
+                Some(Cortar),
+                Some(Copiar),
+                Some(Pegar),
+                Some(SeleccionarTodo),
+                SEP,
+                Some(Buscar),
+                Some(BuscarSiguiente),
+                Some(IrALinea),
+                SEP,
+                Some(Formatear),
             ],
         ),
-        (
+        menu(
             "Ver",
+            'v',
             vec![
-                Explorador,
-                EstructuraProyecto,
-                QuickDoc,
-                OrientacionQuickDoc,
-                Terminal,
-                Problemas,
-                SalidaCompilacion,
-                PanelGit,
-                PanelReglas,
-                PreviewMarkdown,
-                VistaConsigna,
-                VistaCodigo,
-                VistaTerminal,
-                TamanosPaneles,
-                CambiarTema,
+                Some(VistaCodigo),
+                Some(VistaConsigna),
+                Some(VistaTerminal),
+                SEP,
+                Some(Explorador),
+                Some(Problemas),
+                Some(SalidaCompilacion),
+                Some(Terminal),
+                Some(PanelGit),
+                Some(PanelReglas),
+                SEP,
+                Some(QuickDoc),
+                Some(PreviewMarkdown),
+                SEP,
+                Some(RestablecerPaneles),
             ],
         ),
-        (
+        menu(
             "Construir",
+            'c',
             vec![
-                EstructuraProyecto,
-                GenerarDoc,
-                Compilar,
-                Ejecutar,
-                Probar,
-                RevisarMemoria,
-                Depurar,
-                Paso,
-                Entrar,
-                SalirFuncion,
-                Detener,
-                AlternarBreakpoint,
-                CatScan,
-                ExportarMemoria,
+                Some(Compilar),
+                Some(Ejecutar),
+                Some(Probar),
+                SEP,
+                Some(LimpiarCompilacion),
+                Some(GenerarDoc),
+                SEP,
+                Some(EstructuraProyecto),
             ],
         ),
-        (
-            "Git",
+        menu(
+            "Depurar",
+            'd',
             vec![
-                DiffArchivo,
-                GitClonar,
-                PanelGit,
-                GitStageTodo,
-                GitUnstageTodo,
-                GitCommit,
-                GitLog,
-                GitDeshacerCommit,
+                Some(Depurar),
+                Some(Detener),
+                Some(AlternarBreakpoint),
+                SEP,
+                Some(Paso),
+                Some(Entrar),
+                Some(SalirFuncion),
+                SEP,
+                Some(RevisarMemoria),
+                Some(CatScan),
+                Some(ExportarMemoria),
+            ],
+        ),
+        menu(
+            "Git",
+            'g',
+            vec![
+                Some(PanelGit),
+                SEP,
+                Some(DiffArchivo),
+                Some(GitLog),
+                SEP,
+                Some(GitCommit),
+                Some(GitDeshacerCommit),
+                Some(GitClonar),
             ],
         ),
     ];
     if examen {
-        m.push(("Examen", vec![Entregar]));
+        m.push(menu(
+            "Examen",
+            'x',
+            vec![Some(Entregar), Some(EstadoEntrega)],
+        ));
     }
-    m.push((
-        "Herramientas",
+    m.push(menu(
+        "Ayuda",
+        'y',
         vec![
-            Herramientas,
-            Formatear,
-            GenerarDoc,
-            ExplicarRegla,
-            Integraciones,
-            NuevoPlugin,
-            RecargarPlugins,
+            Some(Paleta),
+            Some(ExplicarRegla),
+            SEP,
+            Some(Atajos),
+            Some(GuiaRapida),
+            Some(AcercaDe),
         ],
     ));
-    m.push(("Ayuda", vec![Paleta, ExplicarRegla, Atajos, AcercaDe]));
     m
 }
+
+/// Guía rápida para quien empieza (Ayuda → Guía rápida).
+pub const GUIA_RAPIDA: &str = "\
+# Guía rápida
+
+El ciclo de trabajo de un ejercicio, de punta a punta.
+
+## 1. Leer la consigna
+
+**F7** muestra la consigna; **F8** vuelve al código. En pantallas chicas se ve una cosa por
+vez: F7 consigna, F8 código, F9 terminal.
+
+## 2. Escribir el código
+
+Mientras escribís una llamada (`printf(`, `malloc(`), el panel **quick-doc** (F4) muestra
+qué recibe la función, qué devuelve y sus trampas comunes. **Ctrl+S** guarda; al guardar,
+las herramientas de la cátedra revisan el estilo y te marcan lo que encuentran al final de
+la línea.
+
+## 3. Compilar — F6
+
+Si hay errores, aparecen en **Problemas** explicados en español. Enter sobre uno lleva a la
+línea; **F1** abre la explicación completa con un ejemplo de cómo arreglarlo. Empezá
+siempre por el **primer** error: los siguientes suelen ser consecuencia.
+
+## 4. Ejecutar — Ctrl+F5
+
+El programa corre en la terminal de abajo, donde podés escribirle la entrada. Si se corta
+(una *violación de segmento*, por ejemplo), jonesy te dice por qué y **F5** te lleva a la
+línea donde falló.
+
+## 5. Probar — Ctrl+F6
+
+Corre las pruebas del ejercicio (`make test`). Cada prueba que falla aparece en Problemas
+con lo que se esperaba y lo que se obtuvo.
+
+## 6. Depurar — F5
+
+Poné un *breakpoint* con **Ctrl+B** (o clic en el margen) y **F5**. Después: **F10** avanza
+una línea, **F11** entra en la función, **Shift+F11** sale. A la derecha ves las
+variables; **Alt+M** dibuja la memoria (stack y heap) con flechas.
+
+## 7. Revisar la memoria
+
+**Depurar → Revisar memoria con valgrind** busca lo que no corta el programa pero está
+mal: leer o escribir fuera de un arreglo, usar memoria después de `free`, fugas.
+
+## 8. Guardar el trabajo en git
+
+**Alt+G** abre el panel de git: Espacio agrega un archivo, `c` confirma (commit) con un
+mensaje.
+
+## Si no sabés dónde está algo
+
+**Ctrl+K** abre la paleta: escribí lo que querés hacer («compilar», «memoria», «tema») y
+Enter.
+";
 
 pub const AYUDA_ATAJOS: &str = "\
 # Atajos de jonesy
@@ -358,7 +474,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
 | Paleta de comandos | Ctrl+K, F1 |
 | Explicar regla (sobre un diagnóstico) | F1 |
-| Quick-doc | F4, Alt+D (Shift+F4 cambia la orientación) |
+| Quick-doc | F4 (Shift+F4 cambia la orientación) |
 | Compilar | F6 |
 | Compilar y ejecutar en el deck | Ctrl+F5 |
 | Correr las pruebas (make test) | Ctrl+F6 |
@@ -371,7 +487,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Git | Alt+G (Espacio stage, a/u todo, c commit, l log, Enter diff) |
 | Reglas de ripley | Alt+R |
 | Vista previa de Markdown | Ctrl+P |
-| Menú | F10 (fuera de la depuración) o clic |
+| Menú | Alt+letra subrayada, F10 y la letra, o clic |
+| Configuración del entorno | Archivo → Configuración (Ctrl+, si la terminal lo transmite) |
 | Vistas en modo compacto | F7 consigna, F8 código, F9 terminal, F4 doc |
 | Entregar examen | F12 |
 | Salir | Ctrl+Q |
@@ -379,16 +496,29 @@ pub const AYUDA_ATAJOS: &str = "\
 En el panel de la terminal, `Alt+T` o `Esc Esc` devuelven el foco al editor.
 ";
 
-/// Tecla Alt+letra que abre el menú `i`, si no la toma antes un atajo global.
-fn alt_de_menu(menus: &[(&str, Vec<Accion>)], i: usize) -> Option<char> {
-    // Mismo criterio que la TUI: el primer menú cuyo nombre empieza con la letra, y las
-    // letras de los atajos globales con Alt ganan.
-    const GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 'f', 'd', 'r', 'p', 'o', 'm'];
-    let c = menus[i].0.chars().next()?.to_lowercase().next()?;
-    let primero = menus
-        .iter()
-        .position(|(n, _)| n.to_lowercase().starts_with(c));
-    (primero == Some(i) && !GLOBALES.contains(&c)).then_some(c)
+/// Cómo se abre un menú con el teclado.
+pub fn como_se_abre(m: &Menu) -> String {
+    let letra = m.tecla.to_ascii_uppercase();
+    if ALT_GLOBALES.contains(&m.tecla) {
+        format!("F10 y {letra}")
+    } else {
+        format!("Alt+{letra} (o F10 y {letra})")
+    }
+}
+
+/// El nombre con la letra mnemónica marcada entre corchetes: «Constr[u]ir».
+fn con_mnemonico(m: &Menu) -> String {
+    let mut s = String::new();
+    let mut marcada = false;
+    for c in m.nombre.chars() {
+        if !marcada && c.to_lowercase().next() == Some(m.tecla) {
+            s.push_str(&format!("[{c}]"));
+            marcada = true;
+        } else {
+            s.push(c);
+        }
+    }
+    s
 }
 
 /// La parte generada de `docs/menus.md`: la barra y cada menú con sus atajos.
@@ -396,52 +526,59 @@ pub fn documento_menus() -> String {
     let mut s = String::new();
     let menus = menus(true);
     // La barra, como se ve (en examen aparece además «Examen»).
-    let barra: String = menus.iter().map(|(n, _)| format!(" {n} ")).collect();
+    let barra: String = menus.iter().map(|m| format!(" {} ", m.nombre)).collect();
     s.push_str("```text\n");
     s.push_str(&format!(" {barra}\n"));
     s.push_str("```\n\n");
-    s.push_str("| Menú | Abre con | Entradas |\n|---|---|---|\n");
-    for (i, (nombre, acciones)) in menus.iter().enumerate() {
-        let tecla = match alt_de_menu(&menus, i) {
-            Some(c) => format!("Alt+{}", c.to_ascii_uppercase()),
-            None => "F10 y flechas, o clic".into(),
-        };
-        s.push_str(&format!("| {nombre} | {tecla} | {} |\n", acciones.len()));
+    s.push_str("| Menú | Letra | Se abre con | Entradas |\n|---|---|---|---|\n");
+    for m in &menus {
+        s.push_str(&format!(
+            "| {} | {} | {} | {} |\n",
+            m.nombre,
+            con_mnemonico(m),
+            como_se_abre(m),
+            m.acciones().count()
+        ));
     }
-    for (nombre, acciones) in &menus {
-        s.push_str(&format!("\n## {nombre}\n\n"));
-        if *nombre == "Examen" {
+    for m in &menus {
+        s.push_str(&format!("\n## {}\n\n", m.nombre));
+        if m.nombre == "Examen" {
             s.push_str("Sólo en modo examen (`--exam`).\n\n");
         }
         // El menú desplegado, como caja.
-        let filas: Vec<(String, &str)> = acciones
+        let filas: Vec<Option<(&str, &str)>> = m
+            .items
             .iter()
-            .map(|a| {
-                let i = a.info();
-                (i.titulo.to_string(), i.atajo)
-            })
+            .map(|a| a.map(|a| (a.info().titulo, a.info().atajo)))
             .collect();
         let ancho_t = filas
             .iter()
+            .flatten()
             .map(|(t, _)| t.chars().count())
             .max()
             .unwrap_or(0);
         let ancho_a = filas
             .iter()
+            .flatten()
             .map(|(_, a)| a.chars().count())
             .max()
             .unwrap_or(0);
         let interior = ancho_t + ancho_a + 4;
         s.push_str("```text\n");
         s.push_str(&format!("┌{}┐\n", "─".repeat(interior)));
-        for (t, a) in &filas {
-            let relleno_t = ancho_t - t.chars().count();
-            let relleno_a = ancho_a - a.chars().count();
-            s.push_str(&format!(
-                "│ {t}{}  {}{a} │\n",
-                " ".repeat(relleno_t),
-                " ".repeat(relleno_a)
-            ));
+        for f in &filas {
+            match f {
+                None => s.push_str(&format!("├{}┤\n", "─".repeat(interior))),
+                Some((t, a)) => {
+                    let relleno_t = ancho_t - t.chars().count();
+                    let relleno_a = ancho_a - a.chars().count();
+                    s.push_str(&format!(
+                        "│ {t}{}  {}{a} │\n",
+                        " ".repeat(relleno_t),
+                        " ".repeat(relleno_a)
+                    ));
+                }
+            }
         }
         s.push_str(&format!("└{}┘\n", "─".repeat(interior)));
         s.push_str("```\n");
@@ -477,13 +614,50 @@ mod tests {
 
     #[test]
     fn todas_las_acciones_de_los_menus_estan_en_la_paleta() {
-        for (_, acciones) in menus(true) {
-            for a in acciones {
+        for m in menus(true) {
+            for a in m.acciones() {
                 assert!(
                     a == Accion::Paleta || Accion::todas().contains(&a),
                     "{a:?} está en un menú pero no en la paleta"
                 );
             }
+        }
+    }
+
+    #[test]
+    fn menus_sin_letras_repetidas_ni_acciones_duplicadas() {
+        let m = menus(true);
+        let mut letras: Vec<char> = m.iter().map(|m| m.tecla).collect();
+        letras.sort();
+        letras.dedup();
+        assert_eq!(letras.len(), m.len(), "dos menús con la misma letra");
+        for x in &m {
+            assert!(
+                x.nombre.to_lowercase().contains(x.tecla),
+                "la letra de {} no está en su nombre",
+                x.nombre
+            );
+            // Sin separadores al principio, al final ni seguidos.
+            assert!(x.items.first().unwrap().is_some() && x.items.last().unwrap().is_some());
+            assert!(!x.items.windows(2).any(|w| w[0].is_none() && w[1].is_none()));
+        }
+        // Cada acción en un solo lugar (salvo el panel de git, que encabeza su menú y
+        // también está entre los paneles de Ver).
+        let mut todas: Vec<Accion> = m
+            .iter()
+            .flat_map(|x| x.acciones())
+            .filter(|a| *a != Accion::PanelGit)
+            .collect();
+        let n = todas.len();
+        todas.sort_by_key(|a| format!("{a:?}"));
+        todas.dedup();
+        assert_eq!(todas.len(), n, "una acción aparece en dos menús");
+        // Los atajos de una letra son del panel de git, no del menú.
+        for a in m.iter().flat_map(|x| x.acciones()) {
+            assert!(
+                a.info().atajo.chars().count() != 1,
+                "{a:?} muestra un atajo local"
+            );
         }
     }
 }

@@ -392,17 +392,21 @@ fn herramientas_del_ecosistema_al_guardar() {
         p.contains("Seguridad") || p.contains("Memoria") || p.contains("Estilo"),
         "{p}"
     );
-    // Herramientas → Integraciones muestra el estado de cada una.
-    a.accion(jonesy_tui::accion::Accion::Integraciones);
+    // Archivo → Configuración del entorno: la primera solapa muestra el estado de cada
+    // integración.
+    a.accion(jonesy_tui::accion::Accion::Configuracion);
     let p = pantalla(&mut a, 160, 40);
     assert!(
-        p.contains("gaff") && p.contains("callahan") && p.contains("activa"),
+        p.contains("Integraciones y linters")
+            && p.contains("gaff")
+            && p.contains("callahan")
+            && p.contains("activa"),
         "{p}"
     );
     // Apagar la primera saca sus hallazgos y queda en la sesión.
     let primera = a.integraciones[0].nombre.clone();
     tecla(&mut a, KeyCode::Char(' '), KeyModifiers::NONE);
-    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
     assert!(!a.diag_herramientas.keys().any(|(h, _)| *h == primera));
     let (b, _rx) = app(dir.path(), false);
     assert!(
@@ -517,7 +521,7 @@ fn paneles_se_redimensionan_con_mouse_y_opciones() {
     a.evento(raton(MouseEventKind::Up(MouseButton::Left), 60, s.pos - 4));
     pantalla(&mut a, 160, 40);
     assert_eq!(a.areas.inferior.unwrap().height, alto_antes + 4);
-    // Ver → Tamaños de paneles: el quick-doc (fila 3) crece de a 5 %.
+    // Configuración del entorno → Apariencia → Tamaños de paneles: el quick-doc (fila 3) crece de a 5 %.
     a.accion(jonesy_tui::accion::Accion::TamanosPaneles);
     let p = pantalla(&mut a, 160, 40);
     assert!(p.contains("Tamaños de paneles"), "{p}");
@@ -1643,4 +1647,128 @@ fn revisar_memoria_explica_errores_y_fugas_en_su_linea() {
     );
     let p = pantalla(&mut a, 140, 40);
     assert!(p.contains("(valgrind)"), "{p}");
+}
+
+#[test]
+fn menus_por_letra_y_separadores() {
+    use jonesy_tui::accion::Accion;
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut a, 140, 40);
+    let barra = p.lines().next().unwrap();
+    assert!(barra.contains("Construir  Depurar  Git"), "{barra}");
+    assert!(
+        !barra.contains("Herramientas"),
+        "Herramientas pasó a la configuración"
+    );
+    let indice = |a: &App| match a.modal {
+        Some(Modal::Menu { indice, sel }) => Some((indice, sel)),
+        _ => None,
+    };
+    // Alt+D abre Depurar (el quick-doc queda en F4).
+    tecla(&mut a, KeyCode::Char('d'), KeyModifiers::ALT);
+    assert_eq!(indice(&a), Some((4, 0)));
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("Iniciar depuración / continuar"), "{p}");
+    // Con un menú abierto, la letra de otro lo abre: g → Git.
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::NONE);
+    assert_eq!(indice(&a), Some((5, 0)));
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // F10 y la letra: Editar, cuyo Alt+E es del explorador.
+    tecla(&mut a, KeyCode::F(10), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::NONE);
+    assert_eq!(indice(&a), Some((1, 0)));
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    assert!(
+        a.modal.is_none() && a.navegador.is_some(),
+        "Alt+E sigue siendo el explorador"
+    );
+    // ↓ saltea los separadores: en Archivo, después de «Abrir proyecto» viene «Guardar».
+    tecla(&mut a, KeyCode::Char('a'), KeyModifiers::ALT);
+    for _ in 0..3 {
+        tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    }
+    let (i, sel) = indice(&a).unwrap();
+    let menus = jonesy_tui::accion::menus(false);
+    assert_eq!(menus[i].items[sel], Some(Accion::Guardar));
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("Configuración del entorno…"), "{p}");
+    assert!(p.contains("├") || p.contains("─────"), "separadores: {p}");
+}
+
+#[test]
+fn configuracion_del_entorno_por_solapas() {
+    use jonesy_tui::tema::{self, Tema};
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::Configuracion);
+    // Plugins.
+    tecla(&mut a, KeyCode::Right, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("Nuevo plugin…") && p.contains("Recargar los plugins"),
+        "{p}"
+    );
+    // Apariencia: Enter sobre Tema lo cambia y la pantalla sigue abierta.
+    tecla(&mut a, KeyCode::Char('4'), KeyModifiers::NONE);
+    let antes = tema::actual();
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_ne!(tema::actual(), antes);
+    assert!(matches!(
+        a.modal,
+        Some(Modal::Configuracion { pestana: 3, .. })
+    ));
+    tema::usar(Tema::Oscuro);
+    // Compilador y formato: muestra el comando de F6 y abre .jonesy.toml (lo crea).
+    tecla(&mut a, KeyCode::Char('3'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("Compilar (F6)") && p.contains("gcc"), "{p}");
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.modal.is_none());
+    assert!(dir.path().join(".jonesy.toml").is_file());
+    assert_eq!(a.buf().buf.nombre(), ".jonesy.toml");
+    // En examen no se edita la configuración del proyecto.
+    let (mut e, _rx) = app(dir.path(), true);
+    e.accion(jonesy_tui::accion::Accion::Configuracion);
+    tecla(&mut e, KeyCode::Char('3'), KeyModifiers::NONE);
+    tecla(&mut e, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut e, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut e, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(e.mensaje.as_ref().unwrap().0.contains("modo examen"));
+}
+
+#[test]
+fn guia_estado_de_entrega_y_limpiar() {
+    use jonesy_tui::accion::Accion;
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.accion(Accion::GuiaRapida);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(
+        p.contains("Guía rápida") && p.contains("Compilar — F6"),
+        "{p}"
+    );
+    a.modal = None;
+    // Un archivo suelto sin Makefile: limpiar borra su ejecutable.
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(Accion::LimpiarCompilacion);
+    assert!(
+        a.salida
+            .first()
+            .is_some_and(|(l, _)| l.contains("rm -f main")),
+        "{:?}",
+        a.salida.first()
+    );
+    // Estado de la entrega en examen.
+    let (mut e, _rx) = app(dir.path(), true);
+    e.accion(Accion::EstadoEntrega);
+    let p = pantalla(&mut e, 120, 40);
+    assert!(
+        p.contains("Estado de la entrega") && p.contains("todavía no"),
+        "{p}"
+    );
 }

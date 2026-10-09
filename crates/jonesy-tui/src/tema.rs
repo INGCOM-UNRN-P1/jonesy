@@ -101,7 +101,7 @@ pub fn locale_utf8() -> bool {
     true
 }
 
-/// Tema de colores (`[interfaz] tema` o Ver → Cambiar tema).
+/// Tema de colores (`[interfaz] tema` o Archivo → Configuración del entorno → Apariencia).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tema {
     /// El de siempre, para terminales de fondo oscuro con color verdadero.

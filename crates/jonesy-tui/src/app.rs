@@ -309,11 +309,12 @@ pub enum Modal {
         /// Lenguaje para el resaltado (en diffs de varios archivos, el de cada uno).
         lenguaje: Lenguaje,
     },
-    /// Herramientas → Integraciones: fila elegida.
-    Integraciones {
+    /// Archivo → Configuración del entorno: solapa (ver `PESTANAS_CONFIG`) y fila.
+    Configuracion {
+        pestana: usize,
         sel: usize,
     },
-    /// Ver → Tamaños de paneles: fila elegida.
+    /// Configuración del entorno → Apariencia → Tamaños de paneles: fila elegida.
     Paneles {
         sel: usize,
     },
@@ -341,7 +342,7 @@ enum Lectura {
     Make,
     /// Construir → Probar: la salida de p1_test.
     Pruebas,
-    /// Construir → Revisar la memoria: la salida de valgrind.
+    /// Depurar → Revisar memoria con valgrind: la salida de valgrind.
     Memoria,
 }
 
@@ -355,7 +356,7 @@ enum Tarea {
         nombre: String,
         archivo: PathBuf,
     },
-    /// Acción del menú Herramientas que termina en un visor, en diagnósticos o recargando
+    /// Acción de una herramienta (Alt+H) que termina en un visor, en diagnósticos o recargando
     /// el archivo.
     AccionHerramienta {
         integracion: String,
@@ -416,6 +417,40 @@ pub struct Consigna {
     pub desplazamiento: usize,
     /// Enlace elegido con Tab (RF-8.3).
     pub enlace: Option<usize>,
+}
+
+/// Solapas de Archivo → Configuración del entorno.
+pub const PESTANAS_CONFIG: [&str; 4] = [
+    "Integraciones y linters",
+    "Plugins",
+    "Compilador y formato",
+    "Apariencia",
+];
+
+/// Una fila de la configuración: qué dice y qué hace Enter (o Espacio) sobre ella.
+pub struct FilaConfig {
+    pub titulo: String,
+    pub valor: String,
+    pub detalle: String,
+    pub que: QueConfig,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum QueConfig {
+    /// Activar o apagar la integración (índice en `App::integraciones`).
+    Integracion(usize),
+    Accion(Accion),
+    /// Abrir un archivo en el editor.
+    Abrir(PathBuf),
+    /// Abrir `.jonesy.toml` (creándolo desde el ejemplo si no existe).
+    EditarConfig,
+    /// Abrir `.clang-format` (creándolo con el estilo de la cátedra si no existe).
+    EditarClangFormat,
+    Tema,
+    OrientacionDoc,
+    ReleerIntegraciones,
+    /// Sólo informa.
+    Nada,
 }
 
 pub struct Depuracion {
@@ -495,7 +530,7 @@ pub struct App {
     pub foco: Foco,
     pub pestana: Pestana,
     pub panel_inferior: bool,
-    /// Tamaños de los paneles (mouse, Ver → Tamaños de paneles, `.jonesy.toml`).
+    /// Tamaños de los paneles (mouse, Configuración del entorno → Apariencia → Tamaños de paneles, `.jonesy.toml`).
     pub paneles: TamPaneles,
     /// Barra izquierda visible y su pestaña.
     pub navegador: Option<PestanaNav>,
@@ -1344,7 +1379,7 @@ impl App {
             .collect()
     }
 
-    /// Corre una acción del menú Herramientas sobre el archivo activo.
+    /// Corre una acción de una herramienta (Alt+H) sobre el archivo activo.
     pub fn correr_accion_herramienta(&mut self, integracion: &str, n: usize) {
         use jonesy_core::integraciones::Modo;
         let Some(ruta) = self.activo_ruta() else {
@@ -3435,6 +3470,374 @@ impl App {
         );
     }
 
+    /// Filas de una solapa de Archivo → Configuración del entorno.
+    pub fn filas_configuracion(&self, pestana: usize) -> Vec<FilaConfig> {
+        let fila = |titulo: &str, valor: String, detalle: String, que| FilaConfig {
+            titulo: titulo.to_string(),
+            valor,
+            detalle,
+            que,
+        };
+        let examen = self.examen.is_some();
+        match pestana {
+            0 => {
+                let mut v: Vec<FilaConfig> = self
+                    .integraciones
+                    .iter()
+                    .enumerate()
+                    .map(|(k, x)| {
+                        let estado = if !x.disponible() {
+                            "no instalada"
+                        } else if examen && !x.examen {
+                            "no en examen"
+                        } else if x.activa {
+                            "activa"
+                        } else {
+                            "apagada"
+                        };
+                        let cuando = match x.cuando {
+                            jonesy_core::integraciones::Cuando::Guardar => "al guardar",
+                            jonesy_core::integraciones::Cuando::Manual => "a mano",
+                        };
+                        fila(
+                            &x.nombre,
+                            estado.into(),
+                            format!("{cuando} · {}", x.descripcion),
+                            QueConfig::Integracion(k),
+                        )
+                    })
+                    .collect();
+                v.push(fila(
+                    "Acciones de las herramientas para este archivo…",
+                    "Alt+H".into(),
+                    "gaff fix, tetsuo, motoko, hal…".into(),
+                    QueConfig::Accion(Accion::Herramientas),
+                ));
+                v.push(fila(
+                    "Releer los manifiestos",
+                    String::new(),
+                    "después de editar .jonesy/integraciones/*.toml".into(),
+                    QueConfig::ReleerIntegraciones,
+                ));
+                v
+            }
+            1 => {
+                let dir = self.proyecto.dir_estado().join("plugins");
+                let mut scripts: Vec<PathBuf> = std::fs::read_dir(&dir)
+                    .map(|it| {
+                        it.filter_map(|e| e.ok().map(|e| e.path()))
+                            .filter(|p| p.extension().is_some_and(|e| e == "py"))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                scripts.sort();
+                let mut v: Vec<FilaConfig> = scripts
+                    .into_iter()
+                    .map(|p| {
+                        let nombre = p
+                            .file_stem()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        let comandos = self
+                            .comandos_plugins
+                            .iter()
+                            .filter(|c| c.plugin == nombre)
+                            .count();
+                        let errores = self.diag_plugins.get(&p).is_some_and(|d| !d.is_empty());
+                        fila(
+                            &format!("{nombre}.py"),
+                            if errores {
+                                "con errores".into()
+                            } else {
+                                "activo".into()
+                            },
+                            format!("{comandos} comando(s) en la paleta · Enter lo abre"),
+                            QueConfig::Abrir(p),
+                        )
+                    })
+                    .collect();
+                if v.is_empty() {
+                    v.push(fila(
+                        "No hay plugins en .jonesy/plugins",
+                        String::new(),
+                        String::new(),
+                        QueConfig::Nada,
+                    ));
+                }
+                v.push(fila(
+                    "Nuevo plugin…",
+                    String::new(),
+                    "desde una plantilla; guardarlo lo recarga".into(),
+                    QueConfig::Accion(Accion::NuevoPlugin),
+                ));
+                v.push(fila(
+                    "Recargar los plugins",
+                    String::new(),
+                    if examen {
+                        "en examen sólo corren los firmados por la cátedra".into()
+                    } else {
+                        String::new()
+                    },
+                    QueConfig::Accion(Accion::RecargarPlugins),
+                ));
+                v
+            }
+            2 => {
+                let activo = self.activo_ruta();
+                let rel = activo
+                    .as_deref()
+                    .map(|a| self.proyecto.relativa(a))
+                    .unwrap_or_else(|| "archivo.c".into());
+                let compilar = self
+                    .proyecto
+                    .comando_compilar(activo.as_deref())
+                    .unwrap_or_else(|| "(abrí un .c)".into());
+                let formato = self
+                    .proyecto
+                    .comando_formato(&rel)
+                    .unwrap_or_else(|| "ni gaff ni clang-format instalados".into());
+                let origen = |configurado: bool| {
+                    if configurado {
+                        "de .jonesy.toml".to_string()
+                    } else {
+                        "predeterminado según el proyecto".to_string()
+                    }
+                };
+                vec![
+                    fila(
+                        "Compilar (F6)",
+                        compilar,
+                        origen(!self.proyecto.config.compilar.comando.trim().is_empty()),
+                        QueConfig::EditarConfig,
+                    ),
+                    fila(
+                        "Autoformato",
+                        formato,
+                        origen(!self.proyecto.config.formato.comando.trim().is_empty()),
+                        QueConfig::EditarConfig,
+                    ),
+                    fila(
+                        "Editar .jonesy.toml…",
+                        String::new(),
+                        "banderas de gcc ([compilar] comando), formateador ([formato] comando)…"
+                            .into(),
+                        QueConfig::EditarConfig,
+                    ),
+                    fila(
+                        "Editar .clang-format…",
+                        String::new(),
+                        "estilo de clang-format (si no usás gaff)".into(),
+                        QueConfig::EditarClangFormat,
+                    ),
+                ]
+            }
+            _ => vec![
+                fila(
+                    "Tema",
+                    tema::actual().nombre().into(),
+                    "oscuro · claro (fondo blanco) · contraste (16 colores)".into(),
+                    QueConfig::Tema,
+                ),
+                fila(
+                    "Quick-doc",
+                    match self.quickdoc_posicion {
+                        jonesy_core::PosicionDoc::Derecha => "a la derecha".into(),
+                        jonesy_core::PosicionDoc::Inferior => "abajo".into(),
+                    },
+                    "Shift+F4".into(),
+                    QueConfig::OrientacionDoc,
+                ),
+                fila(
+                    "Tamaños de paneles…",
+                    String::new(),
+                    "también se arrastran con el mouse".into(),
+                    QueConfig::Accion(Accion::TamanosPaneles),
+                ),
+                fila(
+                    "Restablecer disposición de paneles",
+                    String::new(),
+                    "los tamaños de .jonesy.toml o los predeterminados".into(),
+                    QueConfig::Accion(Accion::RestablecerPaneles),
+                ),
+            ],
+        }
+    }
+
+    /// Aplica una fila de la configuración. Devuelve si la pantalla sigue abierta.
+    fn aplicar_config(&mut self, que: QueConfig) -> bool {
+        match que {
+            QueConfig::Integracion(k) => {
+                if let Some(x) = self.integraciones.get_mut(k) {
+                    x.activa = !x.activa;
+                    if !x.activa {
+                        let nombre = x.nombre.clone();
+                        self.diag_herramientas.retain(|(h, _), _| *h != nombre);
+                    }
+                }
+                true
+            }
+            QueConfig::ReleerIntegraciones => {
+                let estado: Vec<(String, bool)> = self
+                    .integraciones
+                    .iter()
+                    .map(|x| (x.nombre.clone(), x.activa))
+                    .collect();
+                self.cargar_integraciones();
+                for (nombre, activa) in estado {
+                    if let Some(x) = self.integraciones.iter_mut().find(|x| x.nombre == nombre) {
+                        x.activa = activa;
+                    }
+                }
+                self.integraciones_ausentes.clear();
+                true
+            }
+            QueConfig::Tema => {
+                tema::usar(tema::actual().siguiente());
+                true
+            }
+            QueConfig::OrientacionDoc => {
+                self.modal = None;
+                self.accion(Accion::OrientacionQuickDoc);
+                true
+            }
+            // Acciones que no abren otra pantalla: la configuración sigue abierta.
+            QueConfig::Accion(a @ (Accion::RecargarPlugins | Accion::RestablecerPaneles)) => {
+                self.accion(a);
+                true
+            }
+            QueConfig::Accion(a) => {
+                self.modal = None;
+                self.accion(a);
+                false
+            }
+            QueConfig::Abrir(p) => {
+                self.modal = None;
+                self.abrir_archivo(&p, true);
+                false
+            }
+            QueConfig::EditarConfig => {
+                if self.examen.is_some() {
+                    self.avisar(
+                        "En modo examen no se cambia la configuración del proyecto.",
+                        Nivel::Aviso,
+                    );
+                    return true;
+                }
+                let ruta = self.proyecto.raiz.join(".jonesy.toml");
+                if !ruta.exists() {
+                    let _ =
+                        std::fs::write(&ruta, include_str!("../../../docs/ejemplo.jonesy.toml"));
+                }
+                self.modal = None;
+                self.abrir_archivo(&ruta, true);
+                self.avisar(
+                    "Los cambios en .jonesy.toml se aplican al volver a abrir el proyecto.",
+                    Nivel::Info,
+                );
+                false
+            }
+            QueConfig::EditarClangFormat => {
+                let ruta = self.proyecto.raiz.join(".clang-format");
+                if !ruta.exists() {
+                    let _ = std::fs::write(
+                        &ruta,
+                        "# Estilo de clang-format (Editar → Autoformatear si no está gaff).\n\
+                         BasedOnStyle: LLVM\n\
+                         IndentWidth: 4\n\
+                         BreakBeforeBraces: Linux\n\
+                         AllowShortIfStatementsOnASingleLine: false\n\
+                         ColumnLimit: 100\n",
+                    );
+                }
+                self.modal = None;
+                self.abrir_archivo(&ruta, true);
+                false
+            }
+            QueConfig::Nada => true,
+        }
+    }
+
+    /// Construir → Limpiar compilación: `make clean` del módulo (o borrar el ejecutable).
+    pub fn limpiar_compilacion(&mut self) {
+        let activo = self.activo_ruta();
+        match self.proyecto.comando_limpiar(activo.as_deref()) {
+            Some(c) => self.correr_en_panel(c),
+            None => self.avisar(
+                "No hay qué limpiar: el Makefile no tiene un objetivo «clean».",
+                Nivel::Aviso,
+            ),
+        }
+    }
+
+    /// Examen → Verificar estado de entrega.
+    pub fn estado_entrega(&mut self) {
+        let Some(e) = &self.examen else {
+            self.avisar("No estás en modo examen.", Nivel::Aviso);
+            return;
+        };
+        let ahora = jonesy_core::ahora_unix();
+        let mut t = String::from("# Estado del examen\n\n");
+        let empezo = ahora.saturating_sub(e.estado.inicio_unix) / 60;
+        t.push_str(&format!("- **Empezó** hace {empezo} min.\n"));
+        match e.estado.restante_s(ahora) {
+            Some(r) if r > 0 => t.push_str(&format!(
+                "- **Tiempo:** quedan {}:{:02} de {} min.\n",
+                r / 3600,
+                (r % 3600) / 60,
+                e.estado.duracion_min
+            )),
+            Some(_) => t.push_str("- **Tiempo:** terminado. Entregá con F12.\n"),
+            None => t.push_str("- **Tiempo:** sin límite.\n"),
+        }
+        let sin_guardar: Vec<String> = self
+            .buffers
+            .iter()
+            .filter(|b| b.buf.modificado())
+            .map(|b| b.buf.nombre())
+            .collect();
+        t.push_str(&format!(
+            "- **Autoguardado:** cada {} s; hace {} s el último. Sin guardar ahora: {}.\n",
+            AUTOGUARDADO.as_secs(),
+            e.ultimo_autoguardado.elapsed().as_secs(),
+            if sin_guardar.is_empty() {
+                "nada".to_string()
+            } else {
+                sin_guardar.join(", ")
+            }
+        ));
+        let log = self.proyecto.dir_estado().join("telemetry.log");
+        match jonesy_telemetry::verificar(&log) {
+            Ok(v) if v.integra() => t.push_str(&format!(
+                "- **Bitácora:** íntegra, {} registros.\n",
+                v.registros
+            )),
+            Ok(v) => t.push_str(&format!(
+                "- **Bitácora:** ⚠ rota ({}).\n",
+                v.error
+                    .map(|(l, m)| format!("línea {l}: {m}"))
+                    .unwrap_or_default()
+            )),
+            Err(_) => t.push_str("- **Bitácora:** todavía sin registros.\n"),
+        }
+        if e.estado.entregado {
+            t.push_str(&format!(
+                "- **Entrega:** hecha. Paquete `{}`, SHA-256 `{}`.\n\n\
+                 Quien corrige lo comprueba con `jonesy verificar {}`.\n",
+                e.estado.paquete.as_deref().unwrap_or("?"),
+                e.estado.sha256.as_deref().unwrap_or("?"),
+                e.estado.paquete.as_deref().unwrap_or("<paquete>")
+            ));
+        } else {
+            t.push_str("- **Entrega:** todavía no. Cuando termines, Examen → Entregar (F12).\n");
+        }
+        let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+        self.modal = Some(Modal::Visor {
+            titulo: "Estado de la entrega".into(),
+            lineas: markdown::renderizar(&t, ancho, &self.sim).lineas,
+            desplazamiento: 0,
+        });
+    }
+
     /// Construir → Probar (Ctrl+F6): `make test` del módulo activo, con los fallos de
     /// cada prueba en Problemas.
     pub fn probar(&mut self) {
@@ -3449,7 +3852,7 @@ impl App {
         self.correr_en_panel_con(comando, Lectura::Pruebas);
     }
 
-    /// Construir → Revisar la memoria: valgrind sobre las pruebas (`make memcheck`) o sobre
+    /// Depurar → Revisar memoria con valgrind: valgrind sobre las pruebas (`make memcheck`) o sobre
     /// el programa, con cada error y fuga explicados en su línea.
     pub fn revisar_memoria(&mut self) {
         if !jonesy_core::proyecto::en_path("valgrind") {
@@ -4168,7 +4571,7 @@ impl App {
                     })
                     .collect();
                 if opciones.is_empty() {
-                    self.avisar("No hay herramientas para este archivo (Herramientas → Integraciones muestra cuáles están instaladas).", Nivel::Aviso);
+                    self.avisar("No hay herramientas para este archivo (Archivo → Configuración del entorno muestra cuáles están instaladas).", Nivel::Aviso);
                     return;
                 }
                 self.modal = Some(Modal::Paleta {
@@ -4177,7 +4580,26 @@ impl App {
                     opciones,
                 });
             }
-            Accion::Integraciones => self.modal = Some(Modal::Integraciones { sel: 0 }),
+            Accion::Integraciones => self.modal = Some(Modal::Configuracion { pestana: 0, sel: 0 }),
+            Accion::Configuracion => self.modal = Some(Modal::Configuracion { pestana: 0, sel: 0 }),
+            Accion::LimpiarCompilacion => self.limpiar_compilacion(),
+            Accion::RestablecerPaneles => {
+                self.paneles = self.proyecto.config.interfaz.paneles.acotar();
+                self.guardar_sesion();
+                self.avisar(
+                    "Paneles con los tamaños de .jonesy.toml (o los predeterminados).",
+                    Nivel::Ok,
+                );
+            }
+            Accion::GuiaRapida => {
+                let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+                self.modal = Some(Modal::Visor {
+                    titulo: "Guía rápida".into(),
+                    lineas: markdown::renderizar(accion::GUIA_RAPIDA, ancho, &self.sim).lineas,
+                    desplazamiento: 0,
+                });
+            }
+            Accion::EstadoEntrega => self.estado_entrega(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -4687,13 +5109,28 @@ impl App {
             (KeyCode::Char('p'), false, true, _) => Some(Accion::Problemas),
             (KeyCode::Char('o'), false, true, _) => Some(Accion::SalidaCompilacion),
             (KeyCode::Char('m'), false, true, _) => Some(Accion::CatScan),
-            (KeyCode::Char('d'), false, true, _) => Some(Accion::QuickDoc),
             (KeyCode::F(4), _, _, true) => Some(Accion::OrientacionQuickDoc),
             (KeyCode::F(4), _, _, _) => Some(Accion::QuickDoc),
             (KeyCode::Char('q'), true, _, _) => Some(Accion::Salir),
             (KeyCode::Char('k'), true, _, _) => Some(Accion::Paleta),
+            // Llega sólo en terminales que lo distinguen de «,» (protocolo de teclado
+            // extendido); el menú Archivo siempre lo tiene.
+            (KeyCode::Char(','), true, _, _) => Some(Accion::Configuracion),
             _ => None,
         };
+        // Alt+letra abre el menú de esa letra (subrayada en la barra), salvo dentro de la
+        // terminal, donde la shell usa Alt+D, Alt+C…
+        let en_terminal = self.foco == Foco::Inferior
+            && matches!(self.pestana, Pestana::Terminal | Pestana::Ejecucion);
+        if let (None, KeyCode::Char(c), true, false, false) =
+            (global, k.code, alt, ctrl, en_terminal)
+        {
+            let menus = accion::menus(self.examen.is_some());
+            if let Some(i) = menus.iter().position(|m| m.tecla == c) {
+                self.modal = Some(Modal::Menu { indice: i, sel: 0 });
+                return;
+            }
+        }
         if let Some(a) = global {
             // F10 sin depuración abre el menú.
             if a == Accion::Paso && self.depuracion.is_none() {
@@ -5064,16 +5501,6 @@ impl App {
             return;
         }
         if alt {
-            if let KeyCode::Char(c) = k.code {
-                // Alt+letra abre el menú correspondiente.
-                let menus = accion::menus(self.examen.is_some());
-                if let Some(i) = menus
-                    .iter()
-                    .position(|(n, _)| n.to_lowercase().starts_with(c))
-                {
-                    self.modal = Some(Modal::Menu { indice: i, sel: 0 });
-                }
-            }
             return;
         }
         let b = &mut self.buffers[self.activo].buf;
@@ -5530,44 +5957,43 @@ impl App {
                     lenguaje,
                 });
             }
-            Modal::Integraciones { mut sel } => {
-                let n = self.integraciones.len().max(1);
+            Modal::Configuracion {
+                mut pestana,
+                mut sel,
+            } => {
+                let filas = self.filas_configuracion(pestana);
+                let n = filas.len().max(1);
                 match k.code {
-                    KeyCode::Esc | KeyCode::Enter => {
+                    KeyCode::Esc => {
                         self.guardar_sesion();
                         return;
                     }
+                    KeyCode::Left | KeyCode::BackTab => {
+                        pestana = (pestana + PESTANAS_CONFIG.len() - 1) % PESTANAS_CONFIG.len();
+                        sel = 0;
+                    }
+                    KeyCode::Right | KeyCode::Tab => {
+                        pestana = (pestana + 1) % PESTANAS_CONFIG.len();
+                        sel = 0;
+                    }
                     KeyCode::Up => sel = (sel + n - 1) % n,
                     KeyCode::Down => sel = (sel + 1) % n,
-                    KeyCode::Char(' ') => {
-                        if let Some(x) = self.integraciones.get_mut(sel) {
-                            x.activa = !x.activa;
-                            if !x.activa {
-                                let nombre = x.nombre.clone();
-                                self.diag_herramientas.retain(|(h, _), _| *h != nombre);
+                    KeyCode::Enter | KeyCode::Char(' ') => {
+                        if let Some(f) = filas.get(sel) {
+                            // Si la acción abre otra cosa, la configuración se cierra.
+                            if !self.aplicar_config(f.que.clone()) {
+                                self.guardar_sesion();
+                                return;
                             }
                         }
                     }
-                    KeyCode::Char('r') => {
-                        // Relee los manifiestos (después de editar .jonesy/integraciones).
-                        let estado: Vec<(String, bool)> = self
-                            .integraciones
-                            .iter()
-                            .map(|x| (x.nombre.clone(), x.activa))
-                            .collect();
-                        self.cargar_integraciones();
-                        for (nombre, activa) in estado {
-                            if let Some(x) =
-                                self.integraciones.iter_mut().find(|x| x.nombre == nombre)
-                            {
-                                x.activa = activa;
-                            }
-                        }
-                        self.integraciones_ausentes.clear();
+                    KeyCode::Char(c @ '1'..='4') => {
+                        pestana = c as usize - '1' as usize;
+                        sel = 0;
                     }
                     _ => {}
                 }
-                self.modal = Some(Modal::Integraciones { sel });
+                self.modal = Some(Modal::Configuracion { pestana, sel });
             }
             Modal::Paneles { mut sel } => {
                 let n = CAMPOS_PANELES.len();
@@ -5592,6 +6018,7 @@ impl App {
                 mut sel,
             } => {
                 let menus = accion::menus(self.examen.is_some());
+                let items = &menus[indice].items;
                 match k.code {
                     KeyCode::Esc | KeyCode::F(10) => return,
                     KeyCode::Left => {
@@ -5602,12 +6029,30 @@ impl App {
                         indice = (indice + 1) % menus.len();
                         sel = 0;
                     }
-                    KeyCode::Up => sel = sel.saturating_sub(1),
-                    KeyCode::Down => sel = (sel + 1).min(menus[indice].1.len() - 1),
+                    // Los separadores no se eligen.
+                    KeyCode::Up => {
+                        if let Some(i) = (0..sel).rev().find(|&i| items[i].is_some()) {
+                            sel = i;
+                        }
+                    }
+                    KeyCode::Down => {
+                        if let Some(i) = (sel + 1..items.len()).find(|&i| items[i].is_some()) {
+                            sel = i;
+                        }
+                    }
                     KeyCode::Enter => {
-                        let a = menus[indice].1[sel];
-                        self.accion(a);
-                        return;
+                        if let Some(Some(a)) = items.get(sel) {
+                            self.accion(*a);
+                            return;
+                        }
+                    }
+                    // La letra subrayada de otro menú lo abre (F10 y letra).
+                    KeyCode::Char(c) => {
+                        let c = c.to_ascii_lowercase();
+                        if let Some(i) = menus.iter().position(|m| m.tecla == c) {
+                            indice = i;
+                            sel = 0;
+                        }
                     }
                     _ => {}
                 }
@@ -5809,7 +6254,8 @@ impl App {
                 Some((r, base)),
                 Modal::Paleta { sel, .. }
                 | Modal::Abrir { sel, .. }
-                | Modal::AbrirProyecto { sel, .. },
+                | Modal::AbrirProyecto { sel, .. }
+                | Modal::Configuracion { sel, .. },
             ) = (self.zonas.modal_items, &mut *modal)
             {
                 if dentro(r) {
@@ -6191,7 +6637,7 @@ fn desindentar(b: &mut Buffer) -> Option<Delta> {
     d
 }
 
-/// Filas de Ver → Tamaños de paneles: (título, unidad).
+/// Filas de Configuración del entorno → Apariencia → Tamaños de paneles: (título, unidad).
 pub const CAMPOS_PANELES: [(&str, &str); 6] = [
     ("Barra izquierda (archivos y proyecto)", "columnas"),
     ("Consigna", "% (0 = según el modo)"),

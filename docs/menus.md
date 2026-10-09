@@ -1,26 +1,28 @@
 # Menús de jonesy
 
-La barra superior agrupa todas las acciones del IDE. Todo lo que está en un menú también
-se encuentra en la **paleta de comandos** (Ctrl+K), que busca por nombre.
+La barra sigue el ciclo de trabajo de un ejercicio: **archivos → edición → vistas →
+construir (compilar, correr, probar) → depurar (paso a paso y memoria) → git**. Todo lo
+que está en un menú también se encuentra en la **paleta de comandos** (Ctrl+K), que busca
+por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propuesta_de_reorganizacion.md).
 
 ## Cómo se usan
 
 | Qué | Cómo |
 |---|---|
-| Abrir un menú | clic en su nombre, **F10** (abre el primero) o **Alt+letra** (ver la tabla) |
-| Moverse | ← → cambia de menú, ↑ ↓ elige la entrada |
+| Abrir un menú | clic en su nombre, **Alt+letra subrayada**, o **F10** y la letra |
+| Moverse | ← → cambia de menú, ↑ ↓ elige la entrada (los separadores se saltean) |
 | Ejecutar | Enter o clic en la entrada |
 | Cerrar sin hacer nada | Esc, F10 o clic fuera del menú |
 
-- **F10 durante la depuración** es «Paso» (siguiente línea): para abrir el menú en ese
-  momento, usá el clic o Alt+letra.
-- **Alt+letra** abre el primer menú cuyo nombre empieza con esa letra, salvo que la letra
-  sea un atajo global con Alt (Alt+E explorador, Alt+G panel de git, Alt+H herramientas,
-  Alt+T terminal, Alt+P problemas, Alt+O salida, Alt+R reglas, Alt+M cat-scan, Alt+D
-  quick-doc, Alt+Y proyecto). Por eso Editar, Git, Examen, Herramientas y Ayuda se abren
-  con F10 y flechas o con el clic (Ayuda comparte la A con Archivo).
-- El **atajo** de cada entrada aparece a la derecha. Las letras sueltas (`a`, `u`, `c`,
-  `l`, `z`) se usan con el foco en el panel de git.
+- Cada menú tiene una **letra subrayada**. **F10 y la letra** abre cualquier menú; con
+  **Alt+letra** se abre directo, salvo Editar (Alt+E es el explorador), Git (Alt+G es el
+  panel de git) y Ayuda (Alt+Y es la vista del proyecto), que se abren con F10 y la letra.
+- **F10 durante la depuración** es «Paso» (siguiente línea): para abrir un menú en ese
+  momento, usá Alt+letra o el clic.
+- Con el foco en la terminal, Alt+letra va a la shell (Alt+D, Alt+C… son atajos de bash).
+- A la derecha de cada entrada está su **atajo global**. Las teclas de una sola letra del
+  panel de git (`a`, `u`, `c`, `l`, `z`, `m`) no aparecen en los menús: se muestran al pie
+  del panel cuando tiene el foco.
 
 ## La barra de estado
 
@@ -37,20 +39,33 @@ tecla):
 - Si el proyecto usa documentación generada y falta o quedó vieja, aparece primero un
   botón para regenerarla (`[sin doc: make doc]`).
 
+## Configuración del entorno
+
+**Archivo → Configuración del entorno…** (Ctrl+, en las terminales que transmiten esa
+combinación) reúne lo que configura el IDE, separado de lo que hace el programa. Cuatro
+solapas (← → o 1-4):
+
+| Solapa | Qué hay |
+|---|---|
+| **Integraciones y linters** | cada herramienta del ecosistema (ripley, gaff, kaneda…) con su estado y cuándo corre; Enter o Espacio la activa o apaga. Las acciones de las herramientas para el archivo activo (Alt+H) y releer los manifiestos. |
+| **Plugins** | los `.jonesy/plugins/*.py` con sus comandos o errores (Enter abre el script), crear uno nuevo y recargarlos. |
+| **Compilador y formato** | el comando con el que se compila y el formateador que se usa, y abrir `.jonesy.toml` o `.clang-format` para cambiarlos (se crean si no existen). |
+| **Apariencia** | tema (oscuro, claro, contraste), posición del quick-doc, tamaños de paneles y restablecerlos. |
+
 ## Contenido que depende del proyecto
 
-- **Herramientas → Herramientas del ecosistema para este archivo** abre una lista con
-  las acciones de las integraciones instaladas que aplican al archivo activo (gaff fix,
-  tetsuo, motoko, hal…). Ver [integraciones.md](integraciones.md).
-- **Construir → Proyecto** (y Ver → Proyecto) muestra las bibliotecas, ejercicios y
-  objetivos de make y `tp.sh`, listos para correr.
+- **Construir → Ver ejercicios y objetivos del proyecto** (Alt+Y) muestra las
+  bibliotecas, ejercicios y objetivos de make y `tp.sh`, listos para correr.
+- Las acciones de las herramientas del ecosistema (gaff fix, tetsuo, motoko, hal…) se
+  abren con **Alt+H** o desde la configuración. Ver [integraciones.md](integraciones.md).
 - Los **plugins Python** suman sus comandos a la paleta (Ctrl+K), no a los menús.
 
 ## Modo examen
 
-Con `--exam` aparece el menú **Examen** (Entregar, F12). Algunas entradas se niegan con un
-aviso: abrir otro proyecto, clonar, renombrar o borrar archivos, crear plugins, y las
-acciones de herramientas que corrigen el código (por ejemplo `gaff fix`).
+Con `--exam` aparece el menú **Examen**: entregar (F12) y ver el estado de la entrega
+(tiempo, autoguardado, bitácora y paquete). Algunas entradas se niegan con un aviso: abrir
+otro proyecto, clonar, renombrar o borrar archivos, crear plugins, editar `.jonesy.toml` y
+las acciones de herramientas que corrigen el código (por ejemplo `gaff fix`).
 
 ## Los menús
 
@@ -60,19 +75,19 @@ comprueba que esté al día.
 <!-- menus: inicio (generado por accion::documento_menus) -->
 
 ```text
-  Archivo  Editar  Ver  Construir  Git  Examen  Herramientas  Ayuda 
+  Archivo  Editar  Ver  Construir  Depurar  Git  Examen  Ayuda 
 ```
 
-| Menú | Abre con | Entradas |
-|---|---|---|
-| Archivo | Alt+A | 9 |
-| Editar | F10 y flechas, o clic | 10 |
-| Ver | Alt+V | 15 |
-| Construir | Alt+C | 14 |
-| Git | F10 y flechas, o clic | 8 |
-| Examen | F10 y flechas, o clic | 1 |
-| Herramientas | F10 y flechas, o clic | 7 |
-| Ayuda | F10 y flechas, o clic | 4 |
+| Menú | Letra | Se abre con | Entradas |
+|---|---|---|---|
+| Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
+| Editar | [E]ditar | F10 y E | 10 |
+| Ver | [V]er | Alt+V (o F10 y V) | 12 |
+| Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
+| Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
+| Git | [G]it | F10 y G | 6 |
+| Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
+| Ayuda | A[y]uda | F10 y Y | 5 |
 
 ## Archivo
 
@@ -81,11 +96,16 @@ comprueba que esté al día.
 │ Nuevo archivo…                        Ctrl+N │
 │ Abrir archivo…                        Ctrl+O │
 │ Abrir proyecto o directorio…                 │
+├──────────────────────────────────────────────┤
 │ Guardar                          Ctrl+S / F2 │
 │ Guardar todo                    Ctrl+Shift+S │
+├──────────────────────────────────────────────┤
 │ Cerrar pestaña                        Ctrl+W │
 │ Pestaña siguiente                   Ctrl+Tab │
 │ Pestaña anterior              Ctrl+Shift+Tab │
+├──────────────────────────────────────────────┤
+│ Configuración del entorno…            Ctrl+, │
+├──────────────────────────────────────────────┤
 │ Salir                                 Ctrl+Q │
 └──────────────────────────────────────────────┘
 ```
@@ -93,76 +113,91 @@ comprueba que esté al día.
 ## Editar
 
 ```text
-┌──────────────────────────────────────┐
-│ Deshacer                      Ctrl+Z │
-│ Rehacer                       Ctrl+Y │
-│ Cortar                        Ctrl+X │
-│ Copiar                        Ctrl+C │
-│ Pegar                         Ctrl+V │
-│ Seleccionar todo              Ctrl+A │
-│ Buscar…                  F3 / Ctrl+F │
-│ Buscar siguiente            Shift+F3 │
-│ Ir a la línea…                Ctrl+G │
-│ Autoformato del archivo  Alt+Shift+F │
-└──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Deshacer                                         Ctrl+Z │
+│ Rehacer                                          Ctrl+Y │
+├─────────────────────────────────────────────────────────┤
+│ Cortar                                           Ctrl+X │
+│ Copiar                                           Ctrl+C │
+│ Pegar                                            Ctrl+V │
+│ Seleccionar todo                                 Ctrl+A │
+├─────────────────────────────────────────────────────────┤
+│ Buscar…                                     F3 / Ctrl+F │
+│ Buscar siguiente                               Shift+F3 │
+│ Ir a la línea…                                   Ctrl+G │
+├─────────────────────────────────────────────────────────┤
+│ Autoformatear código (gaff o clang-format)  Alt+Shift+F │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Ver
 
 ```text
-┌───────────────────────────────────────────────────────────┐
-│ Explorador de archivos                              Alt+E │
-│ Proyecto: bibliotecas, ejercicios y objetivos       Alt+Y │
-│ Mostrar/ocultar quick-doc                      F4 / Alt+D │
-│ Quick-doc: derecha ⟷ inferior                    Shift+F4 │
-│ Terminal (deck)                                     Alt+T │
-│ Problemas                                           Alt+P │
-│ Salida de la compilación                            Alt+O │
-│ Panel de Git                                        Alt+G │
-│ Panel de reglas de ripley                           Alt+R │
-│ Vista previa de Markdown                           Ctrl+P │
-│ Ver consigna                                           F7 │
-│ Ver código                                             F8 │
-│ Ver terminal                                           F9 │
-│ Tamaños de paneles…                                       │
-│ Cambiar tema (oscuro, claro, contraste)                   │
-└───────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│ Modo código                               F8 │
+│ Modo consigna                             F7 │
+│ Modo terminal integrada                   F9 │
+├──────────────────────────────────────────────┤
+│ Explorador de archivos                 Alt+E │
+│ Problemas y diagnósticos               Alt+P │
+│ Salida de la compilación               Alt+O │
+│ Terminal (deck)                        Alt+T │
+│ Abrir panel interactivo de Git         Alt+G │
+│ Panel de reglas pedagógicas (ripley)   Alt+R │
+├──────────────────────────────────────────────┤
+│ Documentación contextual (quick-doc)      F4 │
+│ Vista previa de Markdown              Ctrl+P │
+├──────────────────────────────────────────────┤
+│ Restablecer disposición de paneles           │
+└──────────────────────────────────────────────┘
 ```
 
 ## Construir
 
 ```text
-┌─────────────────────────────────────────────────────────────────────┐
-│ Proyecto: bibliotecas, ejercicios y objetivos                 Alt+Y │
-│ Generar la documentación del proyecto (make doc)                    │
-│ Compilar                                                         F6 │
-│ Compilar y ejecutar                                         Ctrl+F5 │
-│ Correr las pruebas (make test)                              Ctrl+F6 │
-│ Revisar la memoria: fugas y accesos inválidos (valgrind)            │
-│ Depurar / continuar                                              F5 │
-│ Paso (siguiente línea)                                          F10 │
-│ Entrar en la función                                            F11 │
-│ Salir de la función                                       Shift+F11 │
-│ Detener la depuración                                      Shift+F5 │
-│ Poner/quitar breakpoint                                      Ctrl+B │
-│ Memoria (cat-scan)                                            Alt+M │
-│ Exportar la traza de memoria (reporte HTML de mem-trace)            │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│ Compilar archivo o proyecto                   F6 │
+│ Compilar y ejecutar                      Ctrl+F5 │
+│ Correr pruebas (make test)               Ctrl+F6 │
+├──────────────────────────────────────────────────┤
+│ Limpiar compilación (make clean)                 │
+│ Generar documentación (make doc)                 │
+├──────────────────────────────────────────────────┤
+│ Ver ejercicios y objetivos del proyecto    Alt+Y │
+└──────────────────────────────────────────────────┘
+```
+
+## Depurar
+
+```text
+┌───────────────────────────────────────────────────────────┐
+│ Iniciar depuración / continuar                         F5 │
+│ Detener depuración                               Shift+F5 │
+│ Poner / quitar breakpoint                          Ctrl+B │
+├───────────────────────────────────────────────────────────┤
+│ Paso a paso (siguiente línea)                         F10 │
+│ Entrar en la función (step into)                      F11 │
+│ Salir de la función (step out)                  Shift+F11 │
+├───────────────────────────────────────────────────────────┤
+│ Revisar memoria con valgrind (fugas y accesos)            │
+│ Inspección visual de memoria (cat-scan)             Alt+M │
+│ Exportar traza de memoria (reporte HTML)                  │
+└───────────────────────────────────────────────────────────┘
 ```
 
 ## Git
 
 ```text
-┌──────────────────────────────────────────────────────────────────────────────┐
-│ Comparar con la versión de git (diff lado a lado)                Alt+Shift+D │
-│ Git: clonar un repositorio…                                                  │
-│ Panel de Git                                                           Alt+G │
-│ Git: agregar todo al stage                                                 a │
-│ Git: quitar todo del stage                                                 u │
-│ Git: commit…                                                               c │
-│ Git: historial                                                             l │
-│ Git: deshacer el último commit (sus cambios quedan en el stage)            z │
-└──────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ Abrir panel interactivo de Git                    Alt+G │
+├─────────────────────────────────────────────────────────┤
+│ Comparar cambios (diff lado a lado)         Alt+Shift+D │
+│ Historial de cambios (log)                              │
+├─────────────────────────────────────────────────────────┤
+│ Confirmar cambios (commit)…                             │
+│ Deshacer último commit (mantener en stage)              │
+│ Clonar repositorio…                                     │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ## Examen
@@ -170,23 +205,10 @@ comprueba que esté al día.
 Sólo en modo examen (`--exam`).
 
 ```text
-┌──────────────────────┐
-│ Entregar examen  F12 │
-└──────────────────────┘
-```
-
-## Herramientas
-
-```text
-┌───────────────────────────────────────────────────────────────┐
-│ Herramientas del ecosistema para este archivo…          Alt+H │
-│ Autoformato del archivo                           Alt+Shift+F │
-│ Generar la documentación del proyecto (make doc)              │
-│ Explicar la regla del diagnóstico                          F1 │
-│ Integraciones: qué herramientas corren y cuándo…              │
-│ Nuevo plugin Python (.jonesy/plugins)…                        │
-│ Recargar los plugins Python                                   │
-└───────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────┐
+│ Entregar examen…             F12 │
+│ Verificar estado de entrega      │
+└──────────────────────────────────┘
 ```
 
 ## Ayuda
@@ -194,8 +216,10 @@ Sólo en modo examen (`--exam`).
 ```text
 ┌───────────────────────────────────────────┐
 │ Paleta de comandos                 Ctrl+K │
-│ Explicar la regla del diagnóstico      F1 │
+│ Explicar error o regla actual          F1 │
+├───────────────────────────────────────────┤
 │ Atajos de teclado                         │
+│ Guía rápida para estudiantes de C         │
 │ Acerca de jonesy                          │
 └───────────────────────────────────────────┘
 ```

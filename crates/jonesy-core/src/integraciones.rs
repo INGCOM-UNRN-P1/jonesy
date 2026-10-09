@@ -23,7 +23,7 @@ const DE_FABRICA: &str = include_str!("../data/integraciones.toml");
 pub enum Cuando {
     /// Al guardar un archivo que coincide con `archivos`.
     Guardar,
-    /// Sólo con sus acciones del menú Herramientas o la paleta.
+    /// Sólo con sus acciones (Alt+H) o la paleta.
     #[default]
     Manual,
 }
@@ -374,7 +374,10 @@ pub fn interpretar(
                         severidad: Severidad::Estilo,
                         mensaje: format!("Falta documentar {tipo} {nombre}"),
                         codigo: Some("sin-documentar".into()),
-                        sugerencia: Some("Herramientas → Generar el esqueleto de documentación (corbel scaffold)".into()),
+                        sugerencia: Some(
+                            "Alt+H → Generar el esqueleto de documentación (corbel scaffold)"
+                                .into(),
+                        ),
                         origen: Origen::Herramienta,
                         herramienta: herramienta.clone(),
                         categoria: Some("documentacion".into()),

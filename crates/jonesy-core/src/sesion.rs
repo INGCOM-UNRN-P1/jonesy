@@ -25,9 +25,9 @@ pub struct Sesion {
     pub izquierdo: Option<String>,
     /// Directorios expandidos del explorador (relativos a la raíz).
     pub expandidos: Vec<String>,
-    /// Integraciones encendidas o apagadas a mano (Herramientas → Integraciones).
+    /// Integraciones encendidas o apagadas a mano (Archivo → Configuración del entorno).
     pub integraciones: Vec<(String, bool)>,
-    /// Tema de colores elegido desde Ver → Cambiar tema.
+    /// Tema de colores elegido desde Archivo → Configuración del entorno → Apariencia.
     pub tema: Option<String>,
 }
 
