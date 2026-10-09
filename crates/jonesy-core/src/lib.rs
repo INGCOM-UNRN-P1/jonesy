@@ -20,6 +20,7 @@ pub mod fallos;
 pub mod gdb;
 pub mod glosario;
 pub mod integraciones;
+pub mod precedencia;
 pub mod proceso;
 pub mod proyecto;
 pub mod pruebas;

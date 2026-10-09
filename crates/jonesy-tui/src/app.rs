@@ -5795,6 +5795,25 @@ impl App {
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
+            Accion::Precedencia => {
+                let b = &self.buf().buf;
+                let expr = b
+                    .texto_seleccionado()
+                    .filter(|t| !t.trim().is_empty())
+                    .unwrap_or_else(|| {
+                        jonesy_core::precedencia::de_linea(&b.linea_texto(b.linea_columna().0))
+                    });
+                match jonesy_core::precedencia::analizar(&expr) {
+                    Ok(a) => self.visor_explicacion(
+                        "Precedencia".into(),
+                        &jonesy_core::precedencia::markdown(&a),
+                    ),
+                    Err(e) => self.avisar(
+                        format!("No pude leer la expresión «{}»: {e}.", expr.trim()),
+                        Nivel::Aviso,
+                    ),
+                }
+            }
             Accion::Tablas => {
                 self.glosario_visor.clear();
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);

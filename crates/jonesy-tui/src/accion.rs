@@ -109,6 +109,7 @@ pub enum Accion {
     Glosario,
     Tablas,
     CatalogoReglas,
+    Precedencia,
 }
 
 pub struct Info {
@@ -223,6 +224,10 @@ impl Accion {
             Glosario => ("Glosario de C…", ""),
             Tablas => ("Tablas de consulta (tipos, printf, ASCII, precedencia)", ""),
             CatalogoReglas => ("Reglas de la cátedra (catálogo con ejemplos)…", ""),
+            Precedencia => (
+                "Ver la precedencia de la expresión (paréntesis implícitos)",
+                "",
+            ),
         };
         Info { titulo, atajo }
     }
@@ -329,6 +334,7 @@ impl Accion {
             Glosario,
             Tablas,
             CatalogoReglas,
+            Precedencia,
             Salir,
         ]
     }
@@ -475,6 +481,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(Formatear),
                 A(LimpiarEspacios),
+                A(Precedencia),
             ],
         ),
         menu(

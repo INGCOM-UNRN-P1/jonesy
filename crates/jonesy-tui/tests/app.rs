@@ -2776,3 +2776,21 @@ fn catalogo_de_reglas_y_f1_unificado() {
         "{p}"
     );
 }
+
+#[test]
+fn precedencia_de_la_linea() {
+    let dir = proyecto(&[
+        ("main.c", "int main(void)\n{\n    int x = 3;\n    if (x & 1 == 0) {\n        return 1;\n    }\n    return 0;\n}\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(3, 6);
+    a.buf_mut().buf.mover_a(pos, false);
+    a.accion(jonesy_tui::accion::Accion::Precedencia);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(
+        p.contains("x & (1 == 0)") && p.contains("comparaciones van antes"),
+        "{p}"
+    );
+}

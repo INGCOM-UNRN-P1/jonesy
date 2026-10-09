@@ -96,7 +96,7 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
-| Editar | [E]ditar | F10 y E | 22 |
+| Editar | [E]ditar | F10 y E | 23 |
 | Ver | [V]er | Alt+V (o F10 y V) | 16 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 10 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
@@ -130,35 +130,36 @@ comprueba que esté al día.
 ## Editar
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│ Deshacer                                             Ctrl+Z │
-│ Rehacer                                              Ctrl+Y │
-├─────────────────────────────────────────────────────────────┤
-│ Cortar                                               Ctrl+X │
-│ Copiar                                               Ctrl+C │
-│ Pegar                                                Ctrl+V │
-│ Seleccionar todo                                     Ctrl+A │
-├─────────────────────────────────────────────────────────────┤
-│ Buscar…                                         F3 / Ctrl+F │
-│ Buscar siguiente                                   Shift+F3 │
-│ Buscar y reemplazar…                                 Ctrl+H │
-│ Buscar en el proyecto…                         Ctrl+Shift+F │
-│ Ir a la línea…                                       Ctrl+G │
-│ Ir a la definición                          F12 / Ctrl+clic │
-│ Volver a donde estaba                                 Alt+← │
-├─────────────────────────────────────────────────────────────┤
-│ Poner / quitar marcador                             Ctrl+F2 │
-│ Ir al marcador siguiente                           Shift+F2 │
-│ Marcadores…                                                 │
-├─────────────────────────────────────────────────────────────┤
-│ Comentar / descomentar líneas                        Ctrl+/ │
-│ Duplicar línea                                       Ctrl+D │
-│ Mover línea arriba                                    Alt+↑ │
-│ Mover línea abajo                                     Alt+↓ │
-├─────────────────────────────────────────────────────────────┤
-│ Autoformatear código (gaff o clang-format)      Alt+Shift+F │
-│ Quitar espacios al final de las líneas                      │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Deshacer                                                             Ctrl+Z │
+│ Rehacer                                                              Ctrl+Y │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Cortar                                                               Ctrl+X │
+│ Copiar                                                               Ctrl+C │
+│ Pegar                                                                Ctrl+V │
+│ Seleccionar todo                                                     Ctrl+A │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Buscar…                                                         F3 / Ctrl+F │
+│ Buscar siguiente                                                   Shift+F3 │
+│ Buscar y reemplazar…                                                 Ctrl+H │
+│ Buscar en el proyecto…                                         Ctrl+Shift+F │
+│ Ir a la línea…                                                       Ctrl+G │
+│ Ir a la definición                                          F12 / Ctrl+clic │
+│ Volver a donde estaba                                                 Alt+← │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Poner / quitar marcador                                             Ctrl+F2 │
+│ Ir al marcador siguiente                                           Shift+F2 │
+│ Marcadores…                                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Comentar / descomentar líneas                                        Ctrl+/ │
+│ Duplicar línea                                                       Ctrl+D │
+│ Mover línea arriba                                                    Alt+↑ │
+│ Mover línea abajo                                                     Alt+↓ │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Autoformatear código (gaff o clang-format)                      Alt+Shift+F │
+│ Quitar espacios al final de las líneas                                      │
+│ Ver la precedencia de la expresión (paréntesis implícitos)                  │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Ver
