@@ -3874,6 +3874,26 @@ impl App {
         }
     }
 
+    /// Ayuda → Diagnóstico del entorno: el informe de `jonesy doctor` (con las pruebas
+    /// de humo, en otro hilo).
+    pub fn diagnostico_entorno(&mut self) {
+        let proyecto = jonesy_core::Proyecto::abrir(&self.proyecto.raiz);
+        let integraciones = self.integraciones.clone();
+        let errores = self.errores_integraciones.clone();
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let informe = jonesy_core::doctor::informe(
+                env!("CARGO_PKG_VERSION"),
+                jonesy_core::doctor::chequeos(&proyecto, &integraciones, &errores, true),
+            );
+            let _ = tx.send(Aviso::Doctor(jonesy_core::doctor::markdown(&informe)));
+        });
+        self.avisar(
+            "Revisando el entorno (compila, depura y revisa un programa de prueba)…",
+            Nivel::Info,
+        );
+    }
+
     /// Examen → Verificar estado de entrega.
     pub fn estado_entrega(&mut self) {
         let Some(e) = &self.examen else {
@@ -4710,6 +4730,7 @@ impl App {
                 });
             }
             Accion::EstadoEntrega => self.estado_entrega(),
+            Accion::Doctor => self.diagnostico_entorno(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -5026,6 +5047,14 @@ impl App {
             Aviso::Despertar => {}
             Aviso::Proceso(s) => self.al_proceso(s),
             Aviso::Plugins(r) => self.al_plugin(r),
+            Aviso::Doctor(texto) => {
+                let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
+                self.modal = Some(Modal::Visor {
+                    titulo: "Diagnóstico del entorno".into(),
+                    lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
+                    desplazamiento: 0,
+                });
+            }
             Aviso::Senal(s) => {
                 self.finalizar(sistema::nombre_senal(s));
                 self.salir = true;

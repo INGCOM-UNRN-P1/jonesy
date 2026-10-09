@@ -13,7 +13,9 @@ Uso:
   jonesy [opciones] [directorio | archivos...]
   jonesy replay <telemetry.log> [--resumen | --json]
   jonesy verificar <telemetry.log | entrega.tar> [--json]
-  jonesy doctor [--json] [directorio]   herramientas del entorno y del ecosistema
+  jonesy doctor [--rapido] [--json] [directorio]
+                     salud del entorno: compilar, depurar, memoria, git, terminal,
+                     proyecto y ecosistema (--rapido saltea las pruebas de humo)
 
 Opciones:
   --exam             modo examen (también JONESY_EXAM_MODE=1)
@@ -120,35 +122,22 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
             );
             let informe = jonesy_core::doctor::informe(
                 env!("CARGO_PKG_VERSION"),
-                jonesy_core::doctor::chequeos(&proyecto.raiz, &integraciones),
+                jonesy_core::doctor::chequeos(
+                    &proyecto,
+                    &integraciones,
+                    &errores,
+                    !tiene("--rapido"),
+                ),
             );
             if tiene("--json") {
                 println!("{}", serde_json::to_string_pretty(&informe)?);
             } else {
-                println!("jonesy {} · {}", informe.version, proyecto.raiz.display());
-                for c in &informe.chequeos {
-                    let marca = if c.ok {
-                        "✓"
-                    } else if c.requerido {
-                        "✗"
-                    } else {
-                        "·"
-                    };
-                    println!("{marca} {:<12} {:<45} {}", c.nombre, c.proposito, c.detalle);
-                    if !c.ok && !c.sugerencia.is_empty() {
-                        println!("  {:<12} → {}", "", c.sugerencia);
-                    }
-                }
-                for e in &errores {
-                    println!("✗ integración inválida: {e}");
-                }
-                println!(
+                use std::io::IsTerminal;
+                let color =
+                    std::io::stdout().is_terminal() && std::env::var_os("NO_COLOR").is_none();
+                print!(
                     "{}",
-                    if informe.ok {
-                        "Todo lo necesario está instalado."
-                    } else {
-                        "Falta algo necesario (✗)."
-                    }
+                    jonesy_core::doctor::texto(&informe, &proyecto.raiz, color)
                 );
             }
             return Ok(if informe.ok {

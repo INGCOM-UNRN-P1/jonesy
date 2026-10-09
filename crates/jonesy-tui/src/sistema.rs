@@ -19,6 +19,8 @@ pub enum Aviso {
     Proceso(jonesy_core::proceso::Salida),
     Plugins(jonesy_plugins::Respuesta),
     Senal(i32),
+    /// Terminó el diagnóstico del entorno (Ayuda → Diagnóstico del entorno): Markdown.
+    Doctor(String),
 }
 
 pub fn preparar() -> std::io::Result<()> {

@@ -22,6 +22,7 @@ memoria). Lo de docentes e infraestructura queda en segundo plano.
 | Markdown pegaba palabras en el borde | hecho | afectaba consignas y ayudas. |
 | Memoria en Windows | falta | no hay valgrind; evaluar AddressSanitizer donde exista o apoyarse en cat-scan. |
 | Programas con entrada bajo valgrind | falta | Revisar la memoria corre sin teclado (en el panel): un programa que lee de stdin recibe EOF. Correrlo en el deck y leer la salida al terminar. |
+| Salud del entorno | hecho | `jonesy doctor` por categorías con pruebas de humo (gcc, gdb, valgrind), ptrace, identidad de git, terminal, `.jonesy.toml` y permisos; también en Ayuda. |
 | Primera vez | falta | una pantalla de bienvenida corta (F6, Ctrl+F5, Ctrl+F6, F5, F1) para quien nunca usó el IDE. |
 | Explicaciones de errores de ripley/gaff | flojo | F1 depende de que cada herramienta tenga `explain`; unificar el formato con el de los errores de gcc. |
 | Menús reorganizados | hecho | según `docs/critica_y_propuesta_de_reorganizacion.md`: Construir y Depurar separados, Herramientas pasa a Archivo → Configuración del entorno (integraciones, plugins, compilador y formato, apariencia), separadores, Ver con los modos F7/F8/F9 primero, sin atajos de panel en el menú Git, guía rápida, limpiar compilación, restablecer paneles y estado de la entrega. Letra subrayada en cada menú: F10 y la letra abre cualquiera; Alt+letra directo salvo Editar, Git y Ayuda (Alt+E, Alt+G, Alt+Y son de paneles). |

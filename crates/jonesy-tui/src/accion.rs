@@ -79,6 +79,7 @@ pub enum Accion {
     GuiaRapida,
     EstadoEntrega,
     ConfigurarPlugins,
+    Doctor,
 }
 
 pub struct Info {
@@ -160,6 +161,7 @@ impl Accion {
             GuiaRapida => ("Guía rápida para estudiantes de C", ""),
             EstadoEntrega => ("Verificar estado de entrega", ""),
             ConfigurarPlugins => ("Configurar plugins…", ""),
+            Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
         };
         Info { titulo, atajo }
     }
@@ -236,6 +238,7 @@ impl Accion {
             GuiaRapida,
             EstadoEntrega,
             ConfigurarPlugins,
+            Doctor,
             Salir,
         ]
     }
@@ -458,8 +461,9 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(Paleta),
             A(ExplicarRegla),
             SEP,
-            A(Atajos),
             A(GuiaRapida),
+            A(Atajos),
+            A(Doctor),
             A(AcercaDe),
         ],
     ));

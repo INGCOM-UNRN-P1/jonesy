@@ -96,7 +96,7 @@ comprueba que esté al día.
 | Git | [G]it | F10 y G | 6 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
-| Ayuda | A[y]uda | F10 y Y | 5 |
+| Ayuda | A[y]uda | F10 y Y | 6 |
 
 ## Archivo
 
@@ -240,14 +240,15 @@ Sólo en modo examen (`--exam`).
 ## Ayuda
 
 ```text
-┌───────────────────────────────────────────┐
-│ Paleta de comandos                 Ctrl+K │
-│ Explicar error o regla actual          F1 │
-├───────────────────────────────────────────┤
-│ Atajos de teclado                         │
-│ Guía rápida para estudiantes de C         │
-│ Acerca de jonesy                          │
-└───────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│ Paleta de comandos                       Ctrl+K │
+│ Explicar error o regla actual                F1 │
+├─────────────────────────────────────────────────┤
+│ Guía rápida para estudiantes de C               │
+│ Atajos de teclado                               │
+│ Diagnóstico del entorno (jonesy doctor)         │
+│ Acerca de jonesy                                │
+└─────────────────────────────────────────────────┘
 ```
 
 <!-- menus: fin -->

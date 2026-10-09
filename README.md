@@ -73,6 +73,8 @@ Requiere Rust ≥ 1.85. En tiempo de ejecución usa lo que haya en el `PATH`:
 (si faltan, esas funciones se desactivan solas) y `python3` sólo si el
 proyecto tiene plugins.
 
+Después de instalar, `jonesy doctor` dice si falta algo en el entorno.
+
 ## Uso
 
 ```bash
@@ -215,7 +217,14 @@ TOML, ver [`docs/integraciones.md`](docs/integraciones.md)):
 - **Archivo → Configuración del entorno** (solapa Integraciones) muestra cuáles están activas y permite apagarlas; un
   proyecto suma las suyas en `.jonesy/integraciones/` y un usuario en
   `~/.config/jonesy/integraciones/`.
-- `jonesy doctor [--json]` informa qué está instalado con el sobre común del ecosistema.
+- `jonesy doctor [--rapido] [--json] [dir]` revisa la **salud del entorno** y dice qué
+  falta y cómo resolverlo, por categoría: compilación (gcc compila y corre un programa
+  de prueba), depuración (gdb lo depura, ptrace), memoria (valgrind lo revisa), git (nombre
+  y correo para los commits), terminal (UTF-8, TERM, color verdadero), Python, proyecto
+  (`.jonesy.toml` válido, permisos), entorno de la cátedra y herramientas del ecosistema.
+  ✗ es necesario (sale con código 1), ! recomendado, · opcional. `--rapido` saltea las
+  pruebas de humo; `--json` emite el sobre común del ecosistema. También desde
+  *Ayuda → Diagnóstico del entorno*.
 
 ## Extensiones
 

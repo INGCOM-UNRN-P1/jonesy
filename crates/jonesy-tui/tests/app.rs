@@ -1961,3 +1961,16 @@ fn pruebas_de_otros_frameworks_en_sarif() {
     });
     assert_eq!(a.mensaje.as_ref().unwrap().0, "Pruebas: 1 pasan, 1 fallan.");
 }
+
+#[test]
+fn diagnostico_del_entorno_desde_ayuda() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::Doctor);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 130, 60);
+    assert!(p.contains("Diagnóstico del entorno"), "{p}");
+    assert!(p.contains("Compilación") && p.contains("Proyecto"), "{p}");
+}
