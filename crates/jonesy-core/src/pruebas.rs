@@ -72,6 +72,46 @@ fn numero_tras(linea: &str, rotulo: &str) -> Option<usize> {
         .ok()
 }
 
+/// Nombre de la prueba `TEST(nombre)` (o `RUN_TEST(nombre)`) donde está la línea `linea`
+/// (0-based) de `texto`: la definición más cercana hacia arriba.
+pub fn prueba_en(texto: &str, linea: usize) -> Option<String> {
+    let lineas: Vec<&str> = texto.lines().collect();
+    let extraer = |l: &str, pre: &str| -> Option<String> {
+        let i = l.find(pre)?;
+        let resto = &l[i + pre.len()..];
+        let n: String = resto
+            .trim_start()
+            .chars()
+            .take_while(|c| c.is_alphanumeric() || *c == '_')
+            .collect();
+        (!n.is_empty()).then_some(n)
+    };
+    if let Some(n) = lineas.get(linea).and_then(|l| extraer(l, "RUN_TEST(")) {
+        return Some(n);
+    }
+    (0..=linea.min(lineas.len().saturating_sub(1)))
+        .rev()
+        .find_map(|i| {
+            let l = lineas[i].trim_start();
+            l.starts_with("TEST(")
+                .then(|| extraer(l, "TEST("))
+                .flatten()
+        })
+}
+
+/// Nombre del ejecutable de pruebas de un Makefile (`TEST_TARGET = …`; si no, `test_bin`).
+pub fn binario_de_pruebas(makefile: &str) -> String {
+    makefile
+        .lines()
+        .find_map(|l| {
+            let (k, v) = l.split_once('=')?;
+            (k.trim_end_matches([' ', '?', ':', '\t']).trim() == "TEST_TARGET")
+                .then(|| v.trim().to_string())
+        })
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "test_bin".into())
+}
+
 /// Resultado de pruebas que informan en SARIF (otros frameworks): el documento puede estar
 /// en la salida o en `archivo` (relativo a `dir`), que sólo cuenta si se escribió después
 /// de `desde` (para no leer el de una corrida anterior).
@@ -298,6 +338,20 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("obtenido: \"chau\""));
+    }
+
+    #[test]
+    fn prueba_del_cursor_y_binario() {
+        let t = "#include \"p1_test.h\"\n\nTEST(suma)\n{\n    ASSERT_TRUE(1);\n}\n\nTEST( resta )\n{\n}\n\nint main(void)\n{\n    RUN_TEST(suma);\n}\n";
+        assert_eq!(prueba_en(t, 4).as_deref(), Some("suma"));
+        assert_eq!(prueba_en(t, 8).as_deref(), Some("resta"));
+        assert_eq!(prueba_en(t, 13).as_deref(), Some("suma"), "sobre RUN_TEST");
+        assert_eq!(prueba_en(t, 0), None);
+        assert_eq!(
+            binario_de_pruebas("CC ?= gcc\nTEST_TARGET = pruebas\n"),
+            "pruebas"
+        );
+        assert_eq!(binario_de_pruebas("all:\n"), "test_bin");
     }
 
     #[test]

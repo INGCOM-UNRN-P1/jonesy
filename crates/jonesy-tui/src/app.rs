@@ -655,6 +655,8 @@ pub struct App {
     esquema_cache: Option<(Option<PathBuf>, u64, Vec<jonesy_core::simbolos::Simbolo>)>,
     /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
     inicio_pruebas: Option<std::time::SystemTime>,
+    /// Correr hasta el cursor sin depuración en curso: dónde detenerse al arrancar.
+    hasta_linea: Option<(PathBuf, usize)>,
     pub depuracion: Option<Depuracion>,
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
     /// Marcadores de línea (1-based), como los breakpoints.
@@ -828,6 +830,7 @@ impl App {
             sel_busqueda: 0,
             esquema_cache: None,
             inicio_pruebas: None,
+            hasta_linea: None,
             depuracion: None,
             breakpoints: BTreeSet::new(),
             marcadores: BTreeSet::new(),
@@ -2561,7 +2564,9 @@ impl App {
                 return;
             }
         };
-        if self.breakpoints.is_empty() && !hasta_el_fallo {
+        if let Some((archivo, linea)) = self.hasta_linea.take() {
+            let _ = gdb.poner_breakpoint_temporal(&archivo, linea);
+        } else if self.breakpoints.is_empty() && !hasta_el_fallo {
             let _ = gdb.enviar("-break-insert -t main", jonesy_core::gdb::Pedido::Otro);
         }
         for (archivo, linea) in &self.breakpoints {
@@ -4459,6 +4464,68 @@ impl App {
         self.correr_en_panel_con(comando, Lectura::Pruebas);
     }
 
+    /// Construir → Correr la prueba del cursor (Shift+F6): compila el ejecutable de
+    /// pruebas del ejercicio y lo corre con `-k nombre` (filtro de p1_test).
+    pub fn probar_aqui(&mut self) {
+        let b = &self.buf().buf;
+        let Some(nombre) = jonesy_core::pruebas::prueba_en(&b.contenido(), b.linea_columna().0)
+        else {
+            self.avisar(
+                "Poné el cursor dentro de una prueba (TEST(nombre) { … }).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let activo = self.activo_ruta();
+        let Some(m) = activo
+            .as_deref()
+            .and_then(|a| self.proyecto.estructura.modulo_de(a))
+            .cloned()
+        else {
+            self.avisar(
+                "Para correr una sola prueba hace falta el Makefile del ejercicio.",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let dir = self.proyecto.raiz.join(&m.rel);
+        let bin = std::fs::read_to_string(dir.join("Makefile"))
+            .map(|t| jonesy_core::pruebas::binario_de_pruebas(&t))
+            .unwrap_or_else(|_| "test_bin".into());
+        let q = |s: &str| jonesy_core::proyecto::shell_quote(s);
+        let comando = format!(
+            "make -C {d} {b} && cd {d} && ./{b} -k {n}",
+            d = q(&dir.to_string_lossy()),
+            b = q(&bin),
+            n = q(&nombre)
+        );
+        self.inicio_pruebas = Some(std::time::SystemTime::now() - Duration::from_secs(2));
+        self.correr_en_panel_con(comando, Lectura::Pruebas);
+        self.avisar(format!("Corriendo sólo «{nombre}»…"), Nivel::Info);
+    }
+
+    /// Depurar → Correr hasta el cursor (Ctrl+F10): sin poner un breakpoint.
+    pub fn correr_hasta_cursor(&mut self) {
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let linea = self.buf().buf.linea_columna().0 + 1;
+        if let Some(d) = &mut self.depuracion {
+            if d.gdb.corriendo {
+                self.avisar(
+                    "El programa está corriendo: esperá a que se detenga.",
+                    Nivel::Aviso,
+                );
+                return;
+            }
+            let _ = d.gdb.correr_hasta(&ruta, linea);
+            return;
+        }
+        // Sin depuración: arranca y se detiene en la línea del cursor en vez de en main.
+        self.hasta_linea = Some((ruta, linea));
+        self.compilar(Luego::Depurar);
+    }
+
     /// Depurar → Revisar memoria con valgrind: valgrind sobre las pruebas (`make memcheck`) o sobre
     /// el programa, con cada error y fuga explicados en su línea.
     pub fn revisar_memoria(&mut self) {
@@ -5135,6 +5202,8 @@ impl App {
             Accion::Compilar => self.compilar(Luego::Nada),
             Accion::Ejecutar => self.compilar(Luego::Ejecutar),
             Accion::Probar => self.probar(),
+            Accion::ProbarAqui => self.probar_aqui(),
+            Accion::CorrerHastaCursor => self.correr_hasta_cursor(),
             Accion::RevisarMemoria => self.revisar_memoria(),
             Accion::Depurar => self.depurar(),
             Accion::Paso | Accion::Entrar | Accion::SalirFuncion => self.depurador_paso(a),
@@ -5951,8 +6020,10 @@ impl App {
             (KeyCode::F(5), _, _, _) => Some(Accion::Depurar),
             (KeyCode::F(11), _, _, true) => Some(Accion::SalirFuncion),
             (KeyCode::F(11), _, _, _) => Some(Accion::Entrar),
+            (KeyCode::F(10), true, _, _) => Some(Accion::CorrerHastaCursor),
             (KeyCode::F(10), _, _, _) => Some(Accion::Paso),
             (KeyCode::F(6), true, _, _) => Some(Accion::Probar),
+            (KeyCode::F(6), _, _, true) => Some(Accion::ProbarAqui),
             (KeyCode::F(6), _, _, _) => Some(Accion::Compilar),
             (KeyCode::F(7), _, _, _) => Some(Accion::VistaConsigna),
             (KeyCode::F(8), _, _, _) => Some(Accion::VistaCodigo),

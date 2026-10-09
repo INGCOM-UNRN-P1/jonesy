@@ -99,6 +99,8 @@ pub enum Accion {
     EjecutarConEntrada,
     CompararSalidas,
     ArgumentosPrograma,
+    ProbarAqui,
+    CorrerHastaCursor,
 }
 
 pub struct Info {
@@ -203,6 +205,8 @@ impl Accion {
             ),
             CompararSalidas => ("Comparar con las salidas esperadas", ""),
             ArgumentosPrograma => ("Argumentos del programa…", ""),
+            ProbarAqui => ("Correr la prueba del cursor", "Shift+F6"),
+            CorrerHastaCursor => ("Correr hasta el cursor", "Ctrl+F10"),
         };
         Info { titulo, atajo }
     }
@@ -299,6 +303,8 @@ impl Accion {
             EjecutarConEntrada,
             CompararSalidas,
             ArgumentosPrograma,
+            ProbarAqui,
+            CorrerHastaCursor,
             Salir,
         ]
     }
@@ -480,6 +486,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(ArgumentosPrograma),
                 A(CompararSalidas),
                 A(Probar),
+                A(ProbarAqui),
                 SEP,
                 A(LimpiarCompilacion),
                 A(GenerarDoc),
@@ -498,6 +505,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Paso),
                 A(Entrar),
                 A(SalirFuncion),
+                A(CorrerHastaCursor),
                 SEP,
                 A(RevisarMemoria),
                 A(CatScan),
@@ -621,6 +629,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Buscar en el proyecto (resultados en el panel Búsqueda) | Ctrl+Shift+F o Ctrl+F3 |
 | Marcador: poner o quitar · siguiente | Ctrl+F2 · Shift+F2 |
 | Problema siguiente · anterior | Alt+N · Alt+Shift+N |
+| Correr la prueba del cursor · correr hasta el cursor | Shift+F6 · Ctrl+F10 |
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |

@@ -93,8 +93,8 @@ comprueba que esté al día.
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
 | Editar | [E]ditar | F10 y E | 22 |
 | Ver | [V]er | Alt+V (o F10 y V) | 15 |
-| Construir | [C]onstruir | Alt+C (o F10 y C) | 9 |
-| Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
+| Construir | [C]onstruir | Alt+C (o F10 y C) | 10 |
+| Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
 | Git | [G]it | F10 y G | 6 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
@@ -183,19 +183,20 @@ comprueba que esté al día.
 ## Construir
 
 ```text
-┌──────────────────────────────────────────────────────────────────┐
-│ Compilar archivo o proyecto                                   F6 │
-│ Compilar y ejecutar                                      Ctrl+F5 │
-│ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)          │
-│ Argumentos del programa…                                         │
-│ Comparar con las salidas esperadas                               │
-│ Correr pruebas (make test)                               Ctrl+F6 │
-├──────────────────────────────────────────────────────────────────┤
-│ Limpiar compilación (make clean)                                 │
-│ Generar documentación (make doc)                                 │
-├──────────────────────────────────────────────────────────────────┤
-│ Ver ejercicios y objetivos del proyecto                    Alt+Y │
-└──────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│ Compilar archivo o proyecto                                    F6 │
+│ Compilar y ejecutar                                       Ctrl+F5 │
+│ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)           │
+│ Argumentos del programa…                                          │
+│ Comparar con las salidas esperadas                                │
+│ Correr pruebas (make test)                                Ctrl+F6 │
+│ Correr la prueba del cursor                              Shift+F6 │
+├───────────────────────────────────────────────────────────────────┤
+│ Limpiar compilación (make clean)                                  │
+│ Generar documentación (make doc)                                  │
+├───────────────────────────────────────────────────────────────────┤
+│ Ver ejercicios y objetivos del proyecto                     Alt+Y │
+└───────────────────────────────────────────────────────────────────┘
 ```
 
 ## Depurar
@@ -209,6 +210,7 @@ comprueba que esté al día.
 │ Paso a paso (siguiente línea)                         F10 │
 │ Entrar en la función (step into)                      F11 │
 │ Salir de la función (step out)                  Shift+F11 │
+│ Correr hasta el cursor                           Ctrl+F10 │
 ├───────────────────────────────────────────────────────────┤
 │ Revisar memoria con valgrind (fugas y accesos)            │
 │ Inspección visual de memoria (cat-scan)             Alt+M │

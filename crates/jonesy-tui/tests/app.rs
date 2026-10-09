@@ -2443,3 +2443,78 @@ fn casos_entrada_argumentos_medida_y_cuelgue() {
         });
     }
 }
+
+#[test]
+#[cfg(unix)] // make, sh, gcc y gdb
+fn prueba_del_cursor_y_correr_hasta_el_cursor() {
+    if std::process::Command::new("make")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    // Un «test_bin» que imprime como p1_test la prueba que se le pide con -k.
+    let receta = "TEST_TARGET = test_bin\n\ntest_bin:\n\t@printf '#!/bin/sh\\necho \"  [CORRIENDO] $$2 ... PASÓ (0.01 ms)\"\\n' > test_bin && chmod +x test_bin\n";
+    let dir = proyecto(&[
+        ("ej1/Makefile", receta),
+        ("ej1/prueba.c", "#include \"p1_test.h\"\n\nTEST(suma)\n{\n}\n\nTEST(resta)\n{\n    ASSERT_TRUE(1);\n}\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ej1/prueba.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(8, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::SHIFT);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Pruebas:"))
+    });
+    assert_eq!(a.mensaje.as_ref().unwrap().0, "Pruebas: pasan las 1.");
+    assert!(
+        a.salida
+            .iter()
+            .any(|(l, _)| l.contains("[CORRIENDO] resta")),
+        "{:?}",
+        a.salida
+    );
+
+    // Correr hasta el cursor (Ctrl+F10), arrancando y ya depurando.
+    for h in ["gcc", "gdb"] {
+        if std::process::Command::new(h)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    let codigo =
+        "int main(void)\n{\n    int a = 1;\n    a = a + 1;\n    a = a * 3;\n    return a - 6;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(3, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(10), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .and_then(|d| d.ubicacion.as_ref())
+            .is_some_and(|(_, l)| *l == 4)
+    });
+    let pos = a.buf().buf.linea_columna_a_pos(5, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(10), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .and_then(|d| d.ubicacion.as_ref())
+            .is_some_and(|(_, l)| *l == 6)
+    });
+    a.accion(jonesy_tui::accion::Accion::Detener);
+}

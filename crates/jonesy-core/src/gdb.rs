@@ -494,6 +494,28 @@ impl Gdb {
         Ok(token)
     }
 
+    /// Correr hasta `archivo:linea`: un breakpoint temporal y continuar.
+    pub fn correr_hasta(&mut self, archivo: &Path, linea: usize) -> std::io::Result<()> {
+        self.poner_breakpoint_temporal(archivo, linea)?;
+        self.continuar()
+    }
+
+    /// Un breakpoint que se borra solo al detenerse (`-break-insert -t`).
+    pub fn poner_breakpoint_temporal(
+        &mut self,
+        archivo: &Path,
+        linea: usize,
+    ) -> std::io::Result<()> {
+        self.enviar(
+            &format!(
+                "-break-insert -t {}",
+                comillas_mi(&format!("{}:{linea}", archivo.display()))
+            ),
+            Pedido::Otro,
+        )
+        .map(|_| ())
+    }
+
     pub fn poner_breakpoint(&mut self, archivo: &Path, linea: usize) -> std::io::Result<()> {
         self.enviar(
             &format!(
