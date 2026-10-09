@@ -132,6 +132,72 @@ pub fn tablas() -> String {
     s
 }
 
+/// Zonas de la pantalla que recorre el recorrido guiado.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Zona {
+    Menu,
+    Editor,
+    Consigna,
+    QuickDoc,
+    Estado,
+    Inferior,
+    Izquierdo,
+    Ninguna,
+}
+
+/// Pasos del recorrido guiado (Ayuda → Recorrido guiado): zona, título, qué es y, si la
+/// zona no está abierta, cómo abrirla.
+pub const RECORRIDO: [(Zona, &str, &str, &str); 8] = [
+    (
+        Zona::Menu,
+        "Los menús",
+        "Todas las acciones del IDE. Se abren con un clic, con Alt y la letra subrayada o con F10 y la letra. Ctrl+K busca cualquier acción por su nombre.",
+        "",
+    ),
+    (
+        Zona::Editor,
+        "El editor",
+        "Acá escribís el código. Ctrl+S guarda; al guardar, las herramientas de la cátedra revisan el estilo y marcan lo que encuentran al final de la línea. F1 explica el error o la regla de la línea.",
+        "",
+    ),
+    (
+        Zona::Consigna,
+        "La consigna",
+        "El enunciado del ejercicio, al lado del código. En pantallas chicas: F7 la muestra y F8 vuelve al código.",
+        "Este proyecto no tiene consigna (un archivo consigna.md o README.md).",
+    ),
+    (
+        Zona::QuickDoc,
+        "La documentación (quick-doc)",
+        "Mientras escribís una llamada, muestra qué recibe la función, qué devuelve y sus trampas. F4 la muestra u oculta.",
+        "Está oculta: F4 la muestra.",
+    ),
+    (
+        Zona::Estado,
+        "La barra de estado",
+        "Dónde está el cursor, los avisos y los botones del ciclo: F6 compilar, Ctrl+F5 ejecutar, Ctrl+F6 probar, F5 depurar. Se usan con un clic o con su tecla.",
+        "",
+    ),
+    (
+        Zona::Inferior,
+        "El panel de abajo",
+        "Problemas (los errores explicados), la salida de la compilación, la terminal, la ejecución del programa y el depurador. Alt+P problemas, Alt+T terminal.",
+        "Está cerrado: se abre solo al compilar o ejecutar, o con Alt+P y Alt+T.",
+    ),
+    (
+        Zona::Izquierdo,
+        "La barra izquierda",
+        "Los archivos (Alt+E), las bibliotecas y ejercicios del proyecto con sus objetivos de make (Alt+Y) y el esquema de funciones del archivo (Alt+S).",
+        "Está cerrada: Alt+E la abre con los archivos, Alt+Y con el proyecto, Alt+S con el esquema.",
+    ),
+    (
+        Zona::Ninguna,
+        "Listo",
+        "Ayuda → Guía rápida explica el ciclo completo de un ejercicio, Ayuda → Glosario los términos de C y Ayuda → Recorrido guiado repite este paseo.",
+        "",
+    ),
+];
+
 /// Niveles de precedencia de C, de mayor a menor, con su asociatividad.
 pub const PRECEDENCIA: [(&str, &str); 15] = [
     ("`()` `[]` `->` `.` `x++` `x--`", "→"),

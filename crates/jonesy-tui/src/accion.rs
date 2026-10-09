@@ -110,6 +110,7 @@ pub enum Accion {
     Tablas,
     CatalogoReglas,
     Precedencia,
+    Recorrido,
 }
 
 pub struct Info {
@@ -228,6 +229,7 @@ impl Accion {
                 "Ver la precedencia de la expresión (paréntesis implícitos)",
                 "",
             ),
+            Recorrido => ("Recorrido guiado por la pantalla", ""),
         };
         Info { titulo, atajo }
     }
@@ -335,6 +337,7 @@ impl Accion {
             Tablas,
             CatalogoReglas,
             Precedencia,
+            Recorrido,
             Salir,
         ]
     }
@@ -587,6 +590,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(ExplicarRegla),
             SEP,
             A(Bienvenida),
+            A(Recorrido),
             A(GuiaRapida),
             A(Glosario),
             A(Tablas),

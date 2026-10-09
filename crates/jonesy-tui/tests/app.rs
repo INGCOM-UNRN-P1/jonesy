@@ -2794,3 +2794,34 @@ fn precedencia_de_la_linea() {
         "{p}"
     );
 }
+
+#[test]
+fn recorrido_guiado_por_las_zonas() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("consigna.md", "# Ejercicio\n\nSumar.\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::Recorrido);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("Los menús · 1/8"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("El editor · 2/8"), "{p}");
+    // El panel de abajo está cerrado: lo dice y cómo abrirlo.
+    for _ in 0..4 {
+        tecla(&mut a, KeyCode::Right, KeyModifiers::NONE);
+    }
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("El panel de abajo") && p.contains("Está cerrado"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Left, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("La barra de estado · 5/8"), "{p}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(a.modal.is_none());
+}

@@ -2978,6 +2978,80 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.y,
             ))
         }
+        Modal::Recorrido { paso } => {
+            use crate::ayuda::{Zona, RECORRIDO};
+            let (zona, titulo, texto, oculta) = RECORRIDO[(*paso).min(RECORRIDO.len() - 1)];
+            let a = &app.areas;
+            let rect = match zona {
+                Zona::Menu => Some(a.menu),
+                Zona::Editor => a.editor,
+                Zona::Consigna => a.consigna,
+                Zona::QuickDoc => a.quickdoc,
+                Zona::Estado => Some(a.estado),
+                Zona::Inferior => a.inferior,
+                Zona::Izquierdo => a.izquierdo,
+                Zona::Ninguna => None,
+            };
+            // La zona, marcada con un borde grueso.
+            if let Some(z) = rect {
+                let marco = Rect {
+                    x: z.x,
+                    y: z.y,
+                    width: z.width.min(area.width.saturating_sub(z.x)),
+                    height: z.height.max(1).min(area.height.saturating_sub(z.y)),
+                };
+                f.render_widget(
+                    Block::default()
+                        .borders(if marco.height >= 2 {
+                            ratatui::widgets::Borders::ALL
+                        } else {
+                            ratatui::widgets::Borders::BOTTOM | ratatui::widgets::Borders::TOP
+                        })
+                        .border_type(ratatui::widgets::BorderType::Thick)
+                        .border_style(
+                            Style::default()
+                                .fg(tema::advertencia())
+                                .add_modifier(Modifier::BOLD),
+                        ),
+                    marco,
+                );
+            }
+            // La explicación, cerca de la zona sin taparla si se puede.
+            let explicacion = if rect.is_none() && !oculta.is_empty() {
+                format!("{texto}\n\n{oculta}")
+            } else {
+                texto.to_string()
+            };
+            let w = 60.min(area.width.saturating_sub(4));
+            let alto_txt = explicacion.chars().count() as u16 / w.saturating_sub(4).max(1) + 6;
+            let h = alto_txt.min(area.height.saturating_sub(2));
+            let (x, y) = match rect {
+                Some(z) if z.y + z.height + h < area.height => (z.x + 2, z.y + z.height),
+                Some(z) if z.y > h => (z.x + 2, z.y - h),
+                _ => (
+                    area.width.saturating_sub(w) / 2,
+                    area.height.saturating_sub(h) / 2,
+                ),
+            };
+            let r = Rect::new(x.min(area.width.saturating_sub(w)), y, w, h);
+            limpiar(f, r);
+            let b = bloque(
+                format!(" {} · {}/{} ", titulo, paso + 1, RECORRIDO.len()),
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let l: Vec<Line> = vec![
+                Line::raw(explicacion),
+                Line::raw(""),
+                Line::styled(
+                    "Enter o → sigue · ← vuelve · Esc termina",
+                    Style::default().fg(tema::atenuado()),
+                ),
+            ];
+            f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), i);
+            None
+        }
         Modal::Simulacro { texto } => {
             let r = centrado(area, 64, 6);
             limpiar(f, r);
@@ -3464,10 +3538,9 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 Span::styled("G", tecla),
                 Span::styled(" guía rápida · ", tenue),
                 Span::styled("D", tecla),
-                Span::styled(
-                    " diagnóstico completo · siempre en Ayuda → Bienvenida",
-                    tenue,
-                ),
+                Span::styled(" diagnóstico · ", tenue),
+                Span::styled("R", tecla),
+                Span::styled(" recorrido por la pantalla", tenue),
             ]));
             f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), i);
             None

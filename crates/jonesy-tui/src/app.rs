@@ -332,6 +332,10 @@ pub enum Modal {
         siempre: bool,
         faltan: Vec<(String, String, String)>,
     },
+    /// Ayuda → Recorrido guiado: paso actual (ver `ayuda::RECORRIDO`).
+    Recorrido {
+        paso: usize,
+    },
     /// Archivo → Simulacro de examen: minutos.
     Simulacro {
         texto: String,
@@ -5795,6 +5799,7 @@ impl App {
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
+            Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
             Accion::Precedencia => {
                 let b = &self.buf().buf;
                 let expr = b
@@ -7601,6 +7606,21 @@ impl App {
                     lenguaje,
                 });
             }
+            Modal::Recorrido { mut paso } => {
+                let n = crate::ayuda::RECORRIDO.len();
+                match k.code {
+                    KeyCode::Esc => return,
+                    KeyCode::Enter | KeyCode::Right | KeyCode::Char(' ') => {
+                        if paso + 1 >= n {
+                            return;
+                        }
+                        paso += 1;
+                    }
+                    KeyCode::Left | KeyCode::Backspace => paso = paso.saturating_sub(1),
+                    _ => {}
+                }
+                self.modal = Some(Modal::Recorrido { paso });
+            }
             Modal::Simulacro { mut texto } => {
                 if cerrar {
                     return;
@@ -7778,6 +7798,10 @@ impl App {
                 KeyCode::Char('d' | 'D') => {
                     jonesy_core::sesion::bienvenida::recordar(siempre);
                     self.accion(Accion::Doctor);
+                }
+                KeyCode::Char('r' | 'R') => {
+                    jonesy_core::sesion::bienvenida::recordar(siempre);
+                    self.modal = Some(Modal::Recorrido { paso: 0 });
                 }
                 KeyCode::Enter | KeyCode::Esc => jonesy_core::sesion::bienvenida::recordar(siempre),
                 _ => {
