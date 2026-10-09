@@ -20,6 +20,7 @@ pub mod proceso;
 pub mod proyecto;
 pub mod pruebas;
 pub mod sesion;
+pub mod valgrind;
 
 pub use buffer::{Buffer, Delta, Lenguaje};
 pub use diagnostico::{Diagnostico, Origen, Severidad};

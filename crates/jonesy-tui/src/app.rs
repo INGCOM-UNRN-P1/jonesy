@@ -334,6 +334,17 @@ pub enum Luego {
     Depurar,
 }
 
+/// Cómo interpretar la salida de un objetivo de make.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lectura {
+    /// Sólo errores de gcc y del enlazador.
+    Make,
+    /// Construir → Probar: la salida de p1_test.
+    Pruebas,
+    /// Construir → Revisar la memoria: la salida de valgrind.
+    Memoria,
+}
+
 #[derive(Debug, Clone)]
 enum Tarea {
     Compilar {
@@ -363,8 +374,8 @@ enum Tarea {
     /// Objetivo de make lanzado desde la vista de proyecto o la paleta.
     Objetivo {
         comando: String,
-        /// Son las pruebas (Construir → Probar): se interpreta la salida de p1_test.
-        pruebas: bool,
+        /// Cómo leer la salida además de los errores de gcc.
+        lectura: Lectura,
     },
     /// Autoformato sobre una copia temporal del buffer.
     Formatear {
@@ -2784,16 +2795,23 @@ impl App {
             } => {
                 self.fin_formateo(archivo, temporal, version, codigo, salida);
             }
-            Tarea::Objetivo { comando, pruebas } => {
+            Tarea::Objetivo { comando, lectura } => {
                 self.cargar_doc();
                 self.tel(TelemetryEvent::CommandExec {
                     command: comando.clone(),
                     exit_code: codigo,
                 });
-                if pruebas {
+                if lectura == Lectura::Pruebas {
                     let r = jonesy_core::pruebas::interpretar(&salida, &self.proyecto.raiz);
                     if r.reconocida {
                         self.fin_pruebas(r, codigo);
+                        return;
+                    }
+                }
+                if lectura == Lectura::Memoria {
+                    let r = jonesy_core::valgrind::interpretar(&salida, &self.proyecto.raiz);
+                    if r.reconocida {
+                        self.fin_memoria(r, &salida);
                         return;
                     }
                 }
@@ -3389,10 +3407,10 @@ impl App {
     /// Corre un comando no interactivo con la salida en vivo en el panel y los errores de
     /// gcc y del enlazador en Problemas.
     pub fn correr_en_panel(&mut self, comando: String) {
-        self.correr_en_panel_con(comando, false);
+        self.correr_en_panel_con(comando, Lectura::Make);
     }
 
-    fn correr_en_panel_con(&mut self, comando: String, pruebas: bool) {
+    fn correr_en_panel_con(&mut self, comando: String, lectura: Lectura) {
         if self
             .procesos
             .values()
@@ -3412,7 +3430,7 @@ impl App {
             &comando,
             Tarea::Objetivo {
                 comando: comando.clone(),
-                pruebas,
+                lectura,
             },
         );
     }
@@ -3428,7 +3446,52 @@ impl App {
             );
             return;
         };
-        self.correr_en_panel_con(comando, true);
+        self.correr_en_panel_con(comando, Lectura::Pruebas);
+    }
+
+    /// Construir → Revisar la memoria: valgrind sobre las pruebas (`make memcheck`) o sobre
+    /// el programa, con cada error y fuga explicados en su línea.
+    pub fn revisar_memoria(&mut self) {
+        if !jonesy_core::proyecto::en_path("valgrind") {
+            self.avisar(
+                "valgrind no está instalado (sudo dnf install valgrind / sudo apt install valgrind). Sin valgrind, cat-scan (Alt+M al depurar) muestra el heap.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let activo = self.activo_ruta();
+        let Some(comando) = self.proyecto.comando_memoria(activo.as_deref()) else {
+            self.avisar(
+                "No sé qué revisar: abrí un .c o agregá un objetivo «memcheck» al Makefile.",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        self.correr_en_panel_con(comando, Lectura::Memoria);
+    }
+
+    fn fin_memoria(&mut self, r: jonesy_core::valgrind::Resultado, salida: &str) {
+        let mut d = diagnostico::parsear_gcc(salida, &self.proyecto.raiz);
+        d.extend(r.diagnosticos);
+        self.diag_compilador = d;
+        let (texto, nivel) = if r.errores == 0 && r.bytes_perdidos == 0 {
+            ("Memoria: sin errores ni fugas.".to_string(), Nivel::Ok)
+        } else {
+            (
+                format!(
+                    "Memoria: {} error(es), {} bytes perdidos (mirá Problemas).",
+                    r.errores, r.bytes_perdidos
+                ),
+                Nivel::Error,
+            )
+        };
+        self.salida
+            .push((format!("[{texto}]"), nivel == Nivel::Error));
+        self.avisar(texto, nivel);
+        if nivel == Nivel::Error && !self.diag_compilador.is_empty() {
+            self.pestana = Pestana::Problemas;
+            self.sel_problema = 0;
+        }
     }
 
     fn fin_pruebas(&mut self, r: jonesy_core::pruebas::Resultado, codigo: Option<i32>) {
@@ -4005,6 +4068,7 @@ impl App {
             Accion::Compilar => self.compilar(Luego::Nada),
             Accion::Ejecutar => self.compilar(Luego::Ejecutar),
             Accion::Probar => self.probar(),
+            Accion::RevisarMemoria => self.revisar_memoria(),
             Accion::Depurar => self.depurar(),
             Accion::Paso | Accion::Entrar | Accion::SalirFuncion => self.depurador_paso(a),
             Accion::Detener => self.detener_depuracion(),

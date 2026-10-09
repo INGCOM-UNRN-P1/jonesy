@@ -327,6 +327,36 @@ impl Proyecto {
             .map(|m| m.comando("test"))
     }
 
+    /// Revisar la memoria con valgrind: el objetivo `memcheck` del módulo (o de la raíz);
+    /// si no hay, compilar y correr el programa del archivo activo bajo valgrind.
+    pub fn comando_memoria(&self, activo: Option<&Path>) -> Option<String> {
+        use crate::estructura::TipoModulo;
+        let modulo = activo.and_then(|a| self.estructura.modulo_de(a));
+        if let Some(m) = modulo.filter(|m| m.tiene("memcheck")).or_else(|| {
+            self.estructura
+                .modulos
+                .iter()
+                .find(|m| m.tipo == TipoModulo::Raiz && m.tiene("memcheck"))
+        }) {
+            return Some(m.comando("memcheck"));
+        }
+        let valgrind = "valgrind --leak-check=full --error-exitcode=1";
+        let compilar = self.comando_compilar(activo)?;
+        if let Some(m) = self.modulo_activo(activo) {
+            let p = m.programa.as_ref()?;
+            return Some(format!(
+                "{compilar} && cd {} && {valgrind} ./{}",
+                shell_quote(&m.rel),
+                shell_quote(p)
+            ));
+        }
+        if self.makefile().is_some() {
+            return None;
+        }
+        let stem = activo?.file_stem()?.to_string_lossy().into_owned();
+        Some(format!("{compilar} && {valgrind} ./{}", shell_quote(&stem)))
+    }
+
     /// Módulo con Makefile que contiene al archivo activo (no la raíz).
     pub fn modulo_activo(&self, activo: Option<&Path>) -> Option<&crate::estructura::Modulo> {
         let m = self.estructura.modulo_de(activo?)?;

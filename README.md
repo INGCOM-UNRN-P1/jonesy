@@ -13,7 +13,9 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   PTY real con vt100) y, si se corta (violación de segmento, abort…), explica por
   qué y **F5** lo depura hasta la línea donde falló; **Ctrl+F6** corre las pruebas
   (`make test` con `p1_test`) y deja cada fallo en su línea con lo esperado y lo
-  obtenido.
+  obtenido; **Construir → Revisar la memoria** corre valgrind (`make memcheck` o
+  el programa) y explica cada acceso inválido, uso después de `free`, `free`
+  doble y fuga en la línea del alumno, con dónde se pidió o liberó el bloque.
 - **Herramientas del ecosistema** como plugins: ripley, gaff, kaneda y spunkmeyer al
   guardar (texto virtual, panel por tema, **F1** con la explicación y el enlace al
   apunte) y el resto desde el menú Herramientas.

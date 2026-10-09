@@ -1596,3 +1596,51 @@ fn probar_muestra_los_fallos_en_su_linea() {
     b.accion(jonesy_tui::accion::Accion::Probar);
     assert!(b.mensaje.as_ref().unwrap().0.starts_with("No hay pruebas"));
 }
+
+#[test]
+#[cfg(unix)] // gcc y valgrind
+fn revisar_memoria_explica_errores_y_fugas_en_su_linea() {
+    for herramienta in ["gcc", "valgrind"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    let codigo = "#include <stdlib.h>\n\nint main(void)\n{\n    int *v = malloc(3 * sizeof *v);\n    v[3] = 1;\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::RevisarMemoria);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Memoria:"))
+    });
+    assert_eq!(
+        a.mensaje.as_ref().unwrap().0,
+        "Memoria: 2 error(es), 12 bytes perdidos (mirá Problemas)."
+    );
+    let d: Vec<(usize, String)> = a
+        .diag_compilador
+        .iter()
+        .map(|d| (d.linea, d.resumen.clone().unwrap_or_default()))
+        .collect();
+    assert!(
+        d.iter()
+            .any(|(l, r)| *l == 6 && r.starts_with("Escritura fuera de la memoria pedida")),
+        "{d:#?}"
+    );
+    assert!(
+        d.iter()
+            .any(|(l, r)| *l == 5 && r.starts_with("Fuga de memoria: 12 bytes")),
+        "{d:#?}"
+    );
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("(valgrind)"), "{p}");
+}
