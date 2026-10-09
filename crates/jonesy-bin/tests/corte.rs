@@ -17,6 +17,12 @@ fn esperar(que: &str, mut cond: impl FnMut() -> bool) {
 
 /// Abre jonesy sobre `main.c`, escribe `texto`, le manda SIGHUP y espera que termine.
 fn cortar(dir: &Path, args: &[&str], texto: &str) {
+    // Estado del usuario propio, con la bienvenida ya vista (si no, lo tipeado iría a
+    // esa pantalla y no al editor).
+    let estado = dir.join(".estado-usuario");
+    std::fs::create_dir_all(&estado).unwrap();
+    std::fs::write(estado.join("bienvenida-vista"), "").unwrap();
+    std::env::set_var("JONESY_ESTADO", &estado);
     let mut a: Vec<String> = args.iter().map(|s| s.to_string()).collect();
     a.push("main.c".into());
     let mut deck =

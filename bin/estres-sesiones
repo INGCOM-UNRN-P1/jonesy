@@ -79,6 +79,11 @@ def lanzar(jonesy, d):
         os.chdir(d)
         os.environ["TERM"] = "xterm-256color"
         os.environ["SHELL"] = "/bin/sh"
+        # Estado de usuario propio con la bienvenida ya vista (una sesión de trabajo).
+        estado = os.path.join(d, ".estado-usuario")
+        os.makedirs(estado, exist_ok=True)
+        open(os.path.join(estado, "bienvenida-vista"), "w").close()
+        os.environ["JONESY_ESTADO"] = estado
         os.execv(jonesy, [jonesy, "--telemetria", "main.c"])
     fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
     return pid, fd

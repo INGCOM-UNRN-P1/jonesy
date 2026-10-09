@@ -21,7 +21,16 @@ fn proyecto(archivos: &[(&str, &str)]) -> tempfile::TempDir {
     dir
 }
 
+/// Estado del usuario (proyectos recientes, bienvenida vista) en un directorio propio de
+/// las pruebas, para no tocar el real.
+fn estado_de_prueba() {
+    static ESTADO: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
+    let d = ESTADO.get_or_init(|| tempfile::tempdir().unwrap());
+    std::env::set_var("JONESY_ESTADO", d.path());
+}
+
 fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
+    estado_de_prueba();
     let (tx, rx) = channel();
     let op = Opciones {
         raiz: dir.to_path_buf(),
@@ -1978,9 +1987,13 @@ fn diagnostico_del_entorno_desde_ayuda() {
 
 #[test]
 fn bienvenida_la_primera_vez_y_desde_ayuda() {
-    // El estado del usuario (marca de «ya vista») en un directorio propio de la prueba.
-    let estado = tempfile::tempdir().unwrap();
-    std::env::set_var("JONESY_ESTADO", estado.path());
+    // El estado del usuario (marca de «ya vista») en un directorio propio de la prueba:
+    // un subdirectorio para no depender de lo que hagan las demás.
+    estado_de_prueba();
+    let base = std::path::PathBuf::from(std::env::var_os("JONESY_ESTADO").unwrap());
+    let propio = base.join("bienvenida");
+    std::fs::create_dir_all(&propio).unwrap();
+    std::env::set_var("JONESY_ESTADO", &propio);
     let dir = proyecto(&[("main.c", MAIN)]);
     let abrir = |examen: bool| {
         let (tx, rx) = channel();
@@ -2021,4 +2034,5 @@ fn bienvenida_la_primera_vez_y_desde_ayuda() {
     // En examen nunca.
     let (e, _rx) = abrir(true);
     assert!(!matches!(e.modal, Some(Modal::Bienvenida { .. })));
+    std::env::set_var("JONESY_ESTADO", &base);
 }
