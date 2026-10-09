@@ -106,6 +106,8 @@ pub enum Accion {
     MaximizarPanel,
     Simulacro,
     TerminarSimulacro,
+    Glosario,
+    Tablas,
 }
 
 pub struct Info {
@@ -217,6 +219,8 @@ impl Accion {
             MaximizarPanel => ("Maximizar el panel actual (y volver)", "Alt+Z"),
             Simulacro => ("Simulacro de examen…", ""),
             TerminarSimulacro => ("Terminar el simulacro", "F12"),
+            Glosario => ("Glosario de C…", ""),
+            Tablas => ("Tablas de consulta (tipos, printf, ASCII, precedencia)", ""),
         };
         Info { titulo, atajo }
     }
@@ -320,6 +324,8 @@ impl Accion {
             MaximizarPanel,
             Simulacro,
             TerminarSimulacro,
+            Glosario,
+            Tablas,
             Salir,
         ]
     }
@@ -572,6 +578,8 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             SEP,
             A(Bienvenida),
             A(GuiaRapida),
+            A(Glosario),
+            A(Tablas),
             A(Atajos),
             A(Doctor),
             A(AcercaDe),

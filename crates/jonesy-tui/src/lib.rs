@@ -2,6 +2,7 @@
 
 pub mod accion;
 pub mod app;
+pub mod ayuda;
 pub mod dibujo;
 pub mod layout;
 pub mod markdown;

@@ -143,6 +143,8 @@ pub enum QuePaleta {
     Linea(PathBuf, usize),
     /// Entrada para Ctrl+F5 en este ejercicio (None: desde el teclado).
     Entrada(Option<PathBuf>),
+    /// Un término del glosario (índice).
+    Glosario(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -687,6 +689,8 @@ pub struct App {
     git_remoto: Option<OpRemota>,
     /// Ver → Maximizar el panel (Alt+Z): el del foco ocupa todo el cuerpo.
     pub maximizado: bool,
+    /// Términos del glosario que menciona la explicación abierta (g los ofrece).
+    glosario_visor: Vec<usize>,
     /// Simulacro de examen en curso.
     pub simulacro: Option<Simulacro>,
     /// Último recordatorio de hacer commit.
@@ -867,6 +871,7 @@ impl App {
             hasta_linea: None,
             git_remoto: None,
             maximizado: false,
+            glosario_visor: vec![],
             simulacro: None,
             ultimo_recordatorio_commit: Instant::now(),
             depuracion: None,
@@ -3426,12 +3431,7 @@ impl App {
             .filter(|d| d.resumen.is_some())
             .and_then(|d| jonesy_core::errores_gcc::explicar(&d.mensaje))
         {
-            let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
-            self.modal = Some(Modal::Visor {
-                titulo: "Error de compilación".into(),
-                lineas: markdown::renderizar(&e.texto, ancho, &self.sim).lineas,
-                desplazamiento: 0,
-            });
+            self.visor_explicacion("Error de compilación".into(), &e.texto);
             return;
         }
         let Some(d) = d.filter(|d| d.codigo.is_some()) else {
@@ -3458,12 +3458,7 @@ impl App {
                     sistema::osc52(e);
                 }
             }
-            let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
-            self.modal = Some(Modal::Visor {
-                titulo: codigo,
-                lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
-                desplazamiento: 0,
-            });
+            self.visor_explicacion(codigo, &texto);
             return;
         }
         let cmd = jonesy_core::integraciones::expandir(
@@ -4407,6 +4402,52 @@ impl App {
         self.modal = Some(Modal::Bienvenida {
             siempre: false,
             faltan,
+        });
+    }
+
+    /// Abre una explicación en Markdown; si menciona términos del glosario, lo dice al pie
+    /// y la tecla g los ofrece.
+    pub fn visor_explicacion(&mut self, titulo: String, texto: &str) {
+        let terminos = jonesy_core::glosario::en_texto(texto);
+        let mut texto = texto.to_string();
+        if !terminos.is_empty() {
+            let nombres: Vec<String> = terminos
+                .iter()
+                .map(|i| jonesy_core::glosario::terminos()[*i].termino.clone())
+                .collect();
+            texto.push_str(&format!("\n**Glosario** (g): {}\n", nombres.join(" · ")));
+        }
+        self.glosario_visor = terminos;
+        let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
+        self.modal = Some(Modal::Visor {
+            titulo,
+            lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
+            desplazamiento: 0,
+        });
+    }
+
+    /// Ayuda → Glosario (o g en una explicación: primero los términos que menciona).
+    pub fn abrir_glosario(&mut self) {
+        let todos = jonesy_core::glosario::terminos();
+        let primero: Vec<usize> = std::mem::take(&mut self.glosario_visor);
+        let resto = (0..todos.len()).filter(|i| !primero.contains(i));
+        let orden: Vec<usize> = primero.iter().copied().chain(resto).collect();
+        let opciones = orden
+            .into_iter()
+            .map(|i| OpcionPaleta {
+                titulo: format!(
+                    "{} — {}",
+                    todos[i].termino,
+                    todos[i].definicion.chars().take(70).collect::<String>()
+                ),
+                atajo: String::new(),
+                que: QuePaleta::Glosario(i),
+            })
+            .collect();
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
         });
     }
 
@@ -5612,6 +5653,16 @@ impl App {
             }
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
+            Accion::Glosario => self.abrir_glosario(),
+            Accion::Tablas => {
+                self.glosario_visor.clear();
+                let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
+                self.modal = Some(Modal::Visor {
+                    titulo: "Tablas de consulta".into(),
+                    lineas: markdown::renderizar(&crate::ayuda::tablas(), ancho, &self.sim).lineas,
+                    desplazamiento: 0,
+                });
+            }
             Accion::Comentar => self.editar(|b| b.alternar_comentario()),
             Accion::IrADefinicion => self.ir_a_definicion(),
             Accion::AlternarMarcador => self.alternar_marcador(),
@@ -7175,6 +7226,11 @@ impl App {
                 let alto = self.tam.1.saturating_sub(8) as usize;
                 match k.code {
                     KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => return,
+                    // El glosario, empezando por los términos que menciona esta ventana.
+                    KeyCode::Char('g') => {
+                        self.abrir_glosario();
+                        return;
+                    }
                     KeyCode::Up => desplazamiento = desplazamiento.saturating_sub(1),
                     KeyCode::Down => desplazamiento += 1,
                     KeyCode::PageUp => desplazamiento = desplazamiento.saturating_sub(alto),
@@ -7697,6 +7753,15 @@ impl App {
                     },
                     Nivel::Ok,
                 );
+            }
+            QuePaleta::Glosario(i) => {
+                let t = jonesy_core::glosario::terminos()[i].termino.clone();
+                self.visor_explicacion(
+                    format!("Glosario: {t}"),
+                    &jonesy_core::glosario::markdown(i),
+                );
+                // Desde una ficha, g vuelve al glosario completo.
+                self.glosario_visor.clear();
             }
             QuePaleta::Linea(p, l) => {
                 self.recordar_posicion();

@@ -2691,3 +2691,35 @@ fn maximizar_autoguardado_y_simulacro() {
     let p = pantalla(&mut e, 160, 40);
     assert!(p.contains("guardado hace"), "{p}");
 }
+
+#[test]
+fn glosario_desde_las_explicaciones_y_tablas() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Una explicación que menciona términos del glosario los ofrece al pie.
+    a.diag_compilador = jonesy_core::diagnostico::parsear_gcc(
+        "main.c:3:5: warning: function returns address of local variable [-Wreturn-local-addr]\n",
+        dir.path(),
+    );
+    a.foco = Foco::Inferior;
+    a.pestana = Pestana::Problemas;
+    a.panel_inferior = true;
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(p.contains("Glosario (g)") && p.contains("malloc"), "{p}");
+    // g abre el glosario con esos términos primero; Enter muestra la ficha.
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::NONE);
+    assert!(matches!(a.modal, Some(Modal::Paleta { .. })));
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(p.contains("Glosario:"), "{p}");
+    a.modal = None;
+    // Las tablas de consulta.
+    a.accion(jonesy_tui::accion::Accion::Tablas);
+    let p = pantalla(&mut a, 120, 60);
+    assert!(p.contains("Tablas de consulta") && p.contains("%zu"), "{p}");
+}

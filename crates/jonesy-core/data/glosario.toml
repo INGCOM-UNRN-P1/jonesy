@@ -1,0 +1,260 @@
+# Glosario de C para Programación I (Ayuda → Glosario y la tecla g en las explicaciones).
+#
+#   termino      el nombre como aparece en el índice
+#   alias        otras formas en que aparece en un texto (para reconocerlo)
+#   definicion   en una o dos oraciones
+#   ejemplo      opcional, código corto
+#   ver          términos relacionados
+
+[[termino]]
+termino = "puntero"
+alias = ["punteros", "pointer"]
+definicion = "Variable que guarda una dirección de memoria: dónde está otro dato. Se declara con `*` (`int *p`) y se lee lo apuntado con `*p`."
+ejemplo = "int x = 5;\nint *p = &x;   /* p guarda la dirección de x */\n*p = 7;        /* cambia x */"
+ver = ["dirección", "desreferenciar", "NULL"]
+
+[[termino]]
+termino = "dirección"
+alias = ["direcciones", "&"]
+definicion = "Posición de un dato en la memoria. El operador `&` la obtiene (`&x`); es lo que guarda un puntero y lo que `scanf` necesita para guardar lo leído."
+ver = ["puntero"]
+
+[[termino]]
+termino = "desreferenciar"
+alias = ["desreferencia", "dereferencia", "dereferencing"]
+definicion = "Acceder al dato al que apunta un puntero, con `*p` (o `p->campo` en un struct). Desreferenciar un puntero NULL o inválido corta el programa."
+ver = ["puntero", "violación de segmento"]
+
+[[termino]]
+termino = "NULL"
+alias = ["puntero nulo"]
+definicion = "Valor de un puntero que no apunta a nada. Lo devuelven `malloc` y `fopen` cuando fallan: hay que verificarlo antes de usar el puntero."
+ejemplo = "int *v = malloc(n * sizeof *v);\nif (v == NULL) {\n    return 1;\n}"
+ver = ["puntero", "malloc"]
+
+[[termino]]
+termino = "stack"
+alias = ["pila", "la pila"]
+definicion = "Zona de memoria donde viven las variables locales y los parámetros. Se libera sola al salir de cada función: por eso no se devuelve la dirección de una local."
+ver = ["heap", "variable local"]
+
+[[termino]]
+termino = "heap"
+alias = ["montículo", "memoria dinámica"]
+definicion = "Zona de memoria que se pide en tiempo de ejecución con `malloc`/`calloc`/`realloc` y que vive hasta que se libera con `free`."
+ver = ["malloc", "free", "fuga de memoria"]
+
+[[termino]]
+termino = "malloc"
+alias = ["calloc", "realloc"]
+definicion = "Pide un bloque de memoria en el heap y devuelve su dirección (o NULL si no hay). `calloc` además lo pone en cero; `realloc` cambia su tamaño."
+ejemplo = "int *v = malloc(10 * sizeof *v);"
+ver = ["free", "heap", "NULL"]
+
+[[termino]]
+termino = "free"
+alias = []
+definicion = "Libera un bloque pedido con `malloc`. Después, el puntero queda colgante: no se usa más (conviene ponerlo en NULL). Liberar dos veces corta el programa."
+ver = ["malloc", "puntero colgante", "free doble"]
+
+[[termino]]
+termino = "fuga de memoria"
+alias = ["fugas de memoria", "fuga", "fugas", "memory leak"]
+definicion = "Memoria pedida con `malloc` que nunca se libera: el programa pierde la última referencia al bloque. valgrind las informa como «definitely lost»."
+ver = ["malloc", "free", "valgrind"]
+
+[[termino]]
+termino = "puntero colgante"
+alias = ["punteros colgantes", "dangling pointer"]
+definicion = "Puntero que apunta a memoria que ya no es válida (liberada con `free` o una local de una función que terminó). Usarlo es un error."
+ver = ["free", "uso después de free"]
+
+[[termino]]
+termino = "uso después de free"
+alias = ["use after free", "uso tras free"]
+definicion = "Leer o escribir memoria que ya se liberó. A veces «anda» y falla después: valgrind lo detecta como lectura o escritura inválida."
+ver = ["puntero colgante", "valgrind"]
+
+[[termino]]
+termino = "free doble"
+alias = ["double free", "liberación doble"]
+definicion = "Llamar a `free` dos veces sobre el mismo bloque. glibc lo detecta y aborta el programa (SIGABRT)."
+ver = ["free", "SIGABRT"]
+
+[[termino]]
+termino = "violación de segmento"
+alias = ["segfault", "segmentation fault", "SIGSEGV"]
+definicion = "El programa accedió a memoria que no le corresponde y el sistema lo cortó. Causas típicas: puntero NULL o sin inicializar, índice fuera del arreglo, uso después de free."
+ver = ["puntero", "NULL", "desbordamiento"]
+
+[[termino]]
+termino = "SIGABRT"
+alias = ["abort"]
+definicion = "Señal con la que el programa se aborta a sí mismo: un `assert` que falló o glibc que detectó memoria corrupta (free doble, escritura fuera de un bloque)."
+ver = ["free doble"]
+
+[[termino]]
+termino = "desbordamiento"
+alias = ["desbordamiento de búfer", "buffer overflow", "fuera del arreglo", "índice fuera"]
+definicion = "Escribir o leer más allá del final de un arreglo o bloque. C no lo controla: pisa otros datos y el programa falla después, lejos del error."
+ver = ["arreglo", "violación de segmento"]
+
+[[termino]]
+termino = "arreglo"
+alias = ["arreglos", "array", "vector"]
+definicion = "Secuencia de elementos del mismo tipo contiguos en memoria, con índices de 0 a n − 1. Su nombre, usado en una expresión, es la dirección del primer elemento."
+ejemplo = "int v[3] = {1, 2, 3};   /* v[0], v[1], v[2] */"
+ver = ["desbordamiento", "cadena"]
+
+[[termino]]
+termino = "cadena"
+alias = ["cadenas", "string"]
+definicion = "Arreglo de `char` terminado en el carácter nulo `'\\0'`. Las funciones de `string.h` (`strlen`, `strcpy`, `strcmp`) se basan en ese terminador."
+ejemplo = "char s[] = \"hola\";   /* 5 lugares: h o l a \\0 */"
+ver = ["terminador", "arreglo"]
+
+[[termino]]
+termino = "terminador"
+alias = ["'\\0'", "carácter nulo", "nul"]
+definicion = "El carácter `'\\0'` (valor 0) que marca el fin de una cadena. Olvidarlo, o no dejarle lugar, hace que las funciones de cadenas sigan leyendo de más."
+ver = ["cadena"]
+
+[[termino]]
+termino = "struct"
+alias = ["estructura", "estructuras", "registro"]
+definicion = "Tipo que agrupa varios campos con nombre. Se accede con `.` (`p.x`) o, con un puntero, con `->` (`q->x`, igual a `(*q).x`)."
+ejemplo = "struct punto { int x; int y; };"
+ver = ["typedef", "TDA"]
+
+[[termino]]
+termino = "typedef"
+alias = []
+definicion = "Da otro nombre a un tipo: `typedef struct nodo nodo_t;`. No crea un tipo nuevo, sólo un alias."
+ver = ["struct"]
+
+[[termino]]
+termino = "TDA"
+alias = ["tipo de dato abstracto", "tipo opaco"]
+definicion = "Tipo que se usa sólo a través de sus funciones (crear, agregar, destruir…) sin tocar sus campos: el `.h` declara la struct sin definirla."
+ver = ["struct", "header"]
+
+[[termino]]
+termino = "prototipo"
+alias = ["prototipos", "declaración de función"]
+definicion = "La firma de una función sin su cuerpo (`int suma(int a, int b);`). Le dice al compilador cómo llamarla antes de que aparezca su definición."
+ver = ["header", "enlazador"]
+
+[[termino]]
+termino = "header"
+alias = ["cabecera", ".h", "archivo de cabecera"]
+definicion = "Archivo `.h` con prototipos, tipos y macros, que se incluye con `#include`. No lleva código de funciones (eso va en el `.c`)."
+ver = ["prototipo", "guarda de inclusión"]
+
+[[termino]]
+termino = "guarda de inclusión"
+alias = ["include guard", "#ifndef"]
+definicion = "El trío `#ifndef X_H` / `#define X_H` / `#endif` que evita que un `.h` se procese dos veces en el mismo archivo."
+ver = ["header"]
+
+[[termino]]
+termino = "enlazador"
+alias = ["linker", "ld", "enlazado"]
+definicion = "Etapa que junta los `.o` y las bibliotecas en el ejecutable. Sus errores típicos: «referencia sin definir» (falta el código de una función) y «definición múltiple»."
+ver = ["prototipo", "compilación"]
+
+[[termino]]
+termino = "compilación"
+alias = ["compilar", "compilador"]
+definicion = "Traducir el código C a código de máquina. gcc compila cada `.c` a un `.o` y después el enlazador arma el ejecutable."
+ver = ["enlazador", "advertencia"]
+
+[[termino]]
+termino = "advertencia"
+alias = ["advertencias", "warning", "warnings"]
+definicion = "Aviso del compilador de algo sospechoso que igual compila (una variable sin usar, un `=` en una condición). En la materia se tratan casi como errores."
+ver = ["compilación"]
+
+[[termino]]
+termino = "comportamiento indefinido"
+alias = ["undefined behavior", "ub"]
+definicion = "Lo que hace un programa cuando viola las reglas de C (leer sin inicializar, salirse de un arreglo, desbordar un `int`): puede andar, fallar o dar cualquier resultado."
+ver = ["variable sin inicializar", "desbordamiento"]
+
+[[termino]]
+termino = "variable sin inicializar"
+alias = ["sin inicializar", "uninitialized"]
+definicion = "Variable local a la que no se le dio valor: contiene basura. Usarla es comportamiento indefinido."
+ver = ["comportamiento indefinido", "variable local"]
+
+[[termino]]
+termino = "variable local"
+alias = ["locales", "variable global", "globales"]
+definicion = "Una local se declara dentro de una función y existe sólo ahí (en la pila); una global, fuera de todas, existe todo el programa. En la materia se evitan las globales."
+ver = ["ámbito", "stack"]
+
+[[termino]]
+termino = "ámbito"
+alias = ["scope", "alcance"]
+definicion = "La parte del código donde un nombre es visible: el bloque `{ }` donde se declaró (o el archivo, si es global)."
+ver = ["variable local"]
+
+[[termino]]
+termino = "recursión"
+alias = ["recursiva", "recursivo", "recursividad"]
+definicion = "Una función que se llama a sí misma. Necesita un caso base que corte; sin él, la pila se agota y el programa se corta."
+ver = ["stack"]
+
+[[termino]]
+termino = "sizeof"
+alias = []
+definicion = "Operador que da el tamaño en bytes de un tipo o variable. Con un arreglo da el tamaño total, pero con un puntero (o un arreglo pasado a una función) da el tamaño del puntero."
+ejemplo = "int *v = malloc(n * sizeof *v);"
+ver = ["arreglo", "malloc"]
+
+[[termino]]
+termino = "casteo"
+alias = ["cast", "conversión de tipo"]
+definicion = "Convertir un valor a otro tipo explícitamente: `(double) suma / n`. Sirve, por ejemplo, para que una división entre enteros dé decimales."
+ver = []
+
+[[termino]]
+termino = "EOF"
+alias = ["fin de archivo"]
+definicion = "Valor que devuelven `getchar`, `fgetc` o `scanf` cuando no hay más entrada. En la terminal se envía con Ctrl+D (Ctrl+Z en Windows)."
+ver = ["stdin"]
+
+[[termino]]
+termino = "stdin"
+alias = ["stdout", "stderr", "entrada estándar", "salida estándar"]
+definicion = "Los tres canales de un programa: entrada (`stdin`, el teclado), salida (`stdout`, la pantalla) y errores (`stderr`). Se pueden redirigir a archivos con `<` y `>`."
+ver = ["EOF"]
+
+[[termino]]
+termino = "argc"
+alias = ["argv", "argumentos de línea de comandos"]
+definicion = "`int main(int argc, char *argv[])`: `argc` es cuántos argumentos llegaron (contando el nombre del programa) y `argv` el arreglo de cadenas con ellos."
+ver = ["cadena"]
+
+[[termino]]
+termino = "valgrind"
+alias = ["memcheck"]
+definicion = "Herramienta que corre el programa vigilando cada acceso a memoria: informa lecturas y escrituras inválidas, usos de valores sin inicializar y fugas."
+ver = ["fuga de memoria", "uso después de free"]
+
+[[termino]]
+termino = "breakpoint"
+alias = ["punto de interrupción", "breakpoints"]
+definicion = "Marca en una línea donde el depurador detiene el programa para inspeccionar variables. En jonesy: clic en el margen o Ctrl+B, y F5."
+ver = ["depurador"]
+
+[[termino]]
+termino = "depurador"
+alias = ["gdb", "depurar", "debugger"]
+definicion = "Herramienta para ejecutar el programa paso a paso y ver sus variables. jonesy usa gdb: F5 arranca, F10 avanza, F11 entra en una función."
+ver = ["breakpoint"]
+
+[[termino]]
+termino = "Makefile"
+alias = ["make"]
+definicion = "Archivo con las reglas para compilar un proyecto: qué depende de qué y con qué comando se arma. `make` compila sólo lo que cambió."
+ver = ["compilación"]

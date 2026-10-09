@@ -103,7 +103,7 @@ comprueba que esté al día.
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
-| Ayuda | A[y]uda | F10 y Y | 7 |
+| Ayuda | A[y]uda | F10 y Y | 9 |
 
 ## Archivo
 
@@ -275,16 +275,18 @@ Sólo en modo examen (`--exam`).
 ## Ayuda
 
 ```text
-┌─────────────────────────────────────────────────┐
-│ Paleta de comandos                       Ctrl+K │
-│ Explicar error o regla actual                F1 │
-├─────────────────────────────────────────────────┤
-│ Bienvenida                                      │
-│ Guía rápida para estudiantes de C               │
-│ Atajos de teclado                               │
-│ Diagnóstico del entorno (jonesy doctor)         │
-│ Acerca de jonesy                                │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│ Paleta de comandos                                      Ctrl+K │
+│ Explicar error o regla actual                               F1 │
+├────────────────────────────────────────────────────────────────┤
+│ Bienvenida                                                     │
+│ Guía rápida para estudiantes de C                              │
+│ Glosario de C…                                                 │
+│ Tablas de consulta (tipos, printf, ASCII, precedencia)         │
+│ Atajos de teclado                                              │
+│ Diagnóstico del entorno (jonesy doctor)                        │
+│ Acerca de jonesy                                               │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 <!-- menus: fin -->
