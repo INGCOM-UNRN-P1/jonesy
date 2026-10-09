@@ -4,81 +4,68 @@ Rastro de lo que falta o está flojo respecto de [`jonesy_spec.md`](jonesy_spec.
 los pedidos posteriores. Cada ítem dice su estado y, si aplica, el requisito.
 
 Estados: **falta** (no está), **flojo** (está pero incompleto o sin probar),
-**en curso**, **hecho** (se deja unos días para referencia y después se borra).
+**en curso**, **hecho** (se deja unos días para referencia y después se borra),
+**externo** (depende de otro repositorio o de una máquina que no está acá).
 
-## Pedidos recientes
+## Lo que queda
 
-| Ítem | Estado | Notas |
+Todo lo que se puede resolver dentro de este repositorio y en esta máquina está hecho.
+Queda:
+
+| Ítem | Estado | Qué hace falta |
 |---|---|---|
-| Paneles redimensionables con mouse y desde opciones | hecho | todos los separadores; `[interfaz.paneles]` y sesión |
-| Archivo → Nuevo archivo, Abrir proyecto/directorio | hecho | con proyectos recientes |
-| Git → Clonar repositorio | hecho | corre en el deck para la autenticación interactiva |
-| Explorador de directorios | hecho | barra izquierda, pestaña Archivos |
-| Editar → Autoformato | hecho | `gaff format` o `clang-format`, configurable |
-| Pestañas para varios archivos | hecho | ×, clic del medio, desborde, Ctrl+Tab, Alt+1…9, abrir varios |
-| Estructura del proyecto (Makefiles, library.json, tp.sh) | hecho | pestaña Proyecto; F6/Ctrl+F5/F5 por módulo |
-| Soporte de Windows | flojo | ver sección Windows |
-| Más verificaciones en la CI | hecho | matriz Linux/Windows/macOS, MSRV, docs, shellcheck, worker, audit, binarios |
-| Explorador: renombrar y borrar archivos | falta | hoy sólo crea archivos y carpetas |
-| Estructura: dependencias entre bibliotecas | falta | F6 compila las bibliotecas de `LIB_NAME` de un ejercicio, pero no las dependencias de una biblioteca con otra |
-| Resaltado de Makefiles | hecho | directivas, variables, objetivos, recetas; TAB visible y receta con espacios marcada en rojo |
-| Integración con el ecosistema como plugins | hecho | manifiestos TOML (de fábrica, usuario, proyecto); ripley, gaff, kaneda y spunkmeyer al guardar; acciones de gaff, corbel, daedalus, tetsuo, motoko y callahan en Herramientas (Alt+H); F1 por herramienta; panel por tema; `jonesy doctor --json`. Ver `docs/integraciones.md` |
-| Diff lado a lado | hecho | panel de git (archivos y commits) y buffer actual contra HEAD (Alt+Shift+D); `s` alterna con unificado |
-| quick-doc con la documentación del proyecto | hecho | busca `doc/api.json` (corbel), lo muestra en el quick-doc y avisa con un botón `make doc` si falta o quedó viejo (RF-9 de la especificación de corbel). Falta que corbel implemente `corbel proyecto` y que plantilla-TP tenga el objetivo `doc` |
-| Diff: resaltado de sintaxis y líneas largas | flojo | el diff no colorea C y las líneas que no entran se cortan (sin desplazamiento horizontal) |
-| Diff: archivos binarios y renombres | flojo | un binario aparece como diferencias de texto vacías; un renombre se ve como borrado + nuevo |
-| Diff: entre dos commits cualesquiera | falta | hoy: archivo contra índice/HEAD, buffer contra HEAD y cada commit del log contra su padre |
-| Aviso de documentación con corbel instalado | flojo | si corbel está en el PATH, `[sin doc: corbel]` aparece en cualquier proyecto sin `doc/api.json`, aunque nadie use corbel ahí; se podría silenciar por proyecto |
-| `corbel proyecto` y objetivo `doc` en plantilla-TP | falta | dependen de implementar `corbel/especificacion_documentacion_proyecto.md` (fases 1 a 5) |
-| Carga al guardar con todas las herramientas | flojo | cada guardado de un .c lanza ripley (~10 s), gaff, kaneda y spunkmeyer (~0,3 s c/u); ripley ya incluye reglas de gaff y kaneda, así que se deduplica en la vista pero se calcula dos veces. Decidir si con ripley instalado conviene apagar gaff/kaneda al guardar, o pedirle a ripley que no las repita |
-| Integraciones permitidas en examen | flojo | hoy todas salvo callahan; la cátedra tiene que decidir cuáles (por ejemplo, si `gaff fix` o `corbel scaffold` corrigen demasiado durante un examen) |
-| hal, vasquez, holden y dredd como integraciones | falta | hal (core dumps) no tiene manifiesto; vasquez y holden llegan sólo vía `make fallos`; dredd no evalúa desde el IDE |
-| Dos sistemas de extensiones | flojo | conviven los manifiestos de integraciones (comandos externos) y los plugins Python (`.jonesy/plugins`); falta documentar cuándo usar cada uno o unificarlos |
-| Integraciones en Windows | flojo | los comandos de fábrica son de shell POSIX; con `cmd` sin sh podrían fallar las comillas |
-| Descripciones de objetivos en la barra | flojo | con 28 columnas se cortan; el pie muestra la completa. Se puede ensanchar la barra |
+| `corbel proyecto` y objetivo `doc` en plantilla-TP | externo | implementar `corbel/especificacion_documentacion_proyecto.md` (fases 1 a 5) en corbel y sumar `make doc` a plantilla-TP. jonesy ya lee `doc/api.json` y avisa qué correr. |
+| dredd verifica la bitácora | externo | que dredd llame a `jonesy verificar <paquete.tar> --json` y use `ok`/`chequeos` (contrato en [`docs/entrega.md`](docs/entrega.md)). Es un cambio en el repositorio de dredd. |
+| Prueba manual en Windows | externo | nadie lo corrió en una máquina con Windows. La CI compila, pasa clippy y las pruebas en `windows-latest`. |
+| Verificación local para Windows | externo | no hay target de Windows en esta máquina. Para tenerlo: `sudo dnf install rust-std-static-x86_64-pc-windows-gnu` y `cargo check --target x86_64-pc-windows-gnu`. |
+| E/S del programa depurado en Windows | flojo | sin PTY separado: la salida del programa se mezcla con la consola de GDB. Requiere ConPTY para el inferior; conviene encararlo con la prueba manual. |
+| Shell y comandos en Windows | flojo | se usa `sh` si está (UCRT64/MSYS2, Git Bash) y si no `cmd /C`, con comillas de cmd. Los comandos de fábrica (`make`, `./programa`) suponen el entorno UCRT64 de `entorno`. |
+| MSRV | externo | `rust-version` 1.85 se comprueba sólo en la CI (acá está el Rust de dnf). |
+| ripley tarda ~10 s por archivo | externo | jonesy lo corre en segundo plano, con indicador y 1,5 s de espera tras el último guardado; la latencia es de ripley. |
 
-## Requisitos de la especificación
+## Decisiones tomadas
 
-| Requisito | Estado | Detalle |
-|---|---|---|
-| §10 / RNF-A.3 tráfico en reposo 0 B/s | falta | en reposo redibuja cada 2 s (sondeo de git) y ratatui reescribe el cursor: 32 B cada 2 s. Redibujar sólo si cambió algo. |
-| RF-8.3 enlaces con Enter | flojo | sólo se abren con clic; falta navegarlos con teclado y abrirlos en el panel adyacente en vez de reemplazar el editor. |
-| RF-11.5 botón `[ Abrir en Terminal ]` en git | hecho | botones [Commit] [Log] [Clonar] [Abrir en Terminal]. |
-| RF-4.3 accesos inválidos en cat-scan | flojo | marca punteros colgantes; no muestra `events` ni `meta.warnings` de mem-trace (accesos tras `free`, fugas al final). |
-| RF-4.3 cat-scan con Makefile | flojo | mem-trace sólo se lanza para programas de un archivo sin Makefile. |
-| RF-6.3 recuperación | flojo | las copias de `.jonesy/recuperacion/` se escriben ante SIGHUP fuera del examen, pero al reabrir no se ofrece restaurarlas. |
-| RF-5.3 shell de cátedra | falta | el deck abre `$SHELL`; no toma las variables de `entorno` (`PORTABLE_ROOT`, rutas de bibliotecas) ni `entorno/config/gdb`. |
-| RF-6.5 / RNF-D.3 dredd | falta | la entrega verifica con `make test` (no existe `dredd eval --local`) y dredd no verifica la cadena de `telemetry.log`. Requiere cambios en dredd o integrar con `entorno entregar`/`verificar`. Decidir cuál. |
-| RF-3.1 ripley vía worker Python | no aplica | reemplazado por las integraciones declarativas: ripley corre como una más. |
-| §12.5 estrés de 100 sesiones | falta | no hay script ni medición (≤ 5,5 GiB y < 1,5 % de CPU). |
-| §12.6 corte por SIGHUP | flojo | implementado (guarda, sella y restaura la sesión) pero sin prueba automática. |
-| §10.2 reconexión de sesión ≤ 20 ms | no aplica | jonesy no tiene modo servidor. |
-
-## Could (MoSCoW)
-
-| Ítem | Estado |
+| Tema | Decisión |
 |---|---|
-| Gráfico de velocidad de tipeo para el docente | falta |
-| Exportar la traza de memoria a archivo | falta (el HTML de mem-trace queda en `.jonesy/memtrace/`, pero no hay acción para abrirlo o copiarlo) |
-| Editor interactivo de snippets para plugins Python | falta |
-| Temas visuales adicionales | falta |
-| Deshacer el último commit (`git reset --soft HEAD~1`) | falta |
+| Carga al guardar | gaff, kaneda y spunkmeyer (rápidas, ~0,3 s) corren en cada guardado; ripley (`lento = true`) espera 1,5 s sin guardados nuevos y se cancela si llega otro. Lo repetido se muestra una vez por regla y línea, prefiriendo la versión con categoría y enlace. |
+| Herramientas en examen | corren todas salvo las de `examen = false` (callahan). Se ocultan las acciones que corrigen el código (`modo = "recargar"`: `gaff fix`, `corbel scaffold`). Cada acción puede fijarlo con `examen = true/false` en su manifiesto. |
+| dredd | no es una acción del IDE: el contrato es `jonesy verificar` (hash del paquete, archivos contra el manifiesto, cadena y sello de la bitácora, sesión cerrada). |
+| Integraciones o plugins Python | conviven: integración para una herramienta CLI existente, plugin para lógica propia chica (tabla en `docs/integraciones.md`). |
+| Documentación del proyecto | `doc/` no se versiona; se genera con `make doc` y el IDE lo indica. Sólo se avisa en proyectos que la usan (un Makefile con objetivo `doc`, `corbel.toml` o `doc/` presente); `[documentacion] aviso` lo fuerza o lo apaga. |
 
-## Windows
+## Hecho en la última tanda
 
-| Ítem | Estado | Detalle |
+| Ítem | Requisito | Cómo quedó |
 |---|---|---|
-| Compilación | flojo | señales, PTY del inferior de GDB y `libc` quedan detrás de `cfg(unix)`; la CI compila y prueba en Windows, pero no se corrió todavía. |
-| Verificación local | falta | no hay target de Windows en esta máquina; se verifica sólo en la CI. Para chequear localmente: `sudo dnf install rust-std-static-x86_64-pc-windows-gnu` y `cargo check --target x86_64-pc-windows-gnu`. |
-| E/S del programa depurado | flojo | sin PTY separado en Windows: la salida del programa se mezcla con la consola de GDB. |
-| Shell y comandos | flojo | se usa `sh` si está en el `PATH` (UCRT64/MSYS2, Git Bash) y si no `cmd /C`; los comandos por defecto (`make`, `./programa`) suponen el entorno UCRT64 de `entorno`. |
-| Prueba manual en Windows | falta | nadie lo corrió todavía en una máquina con Windows. |
+| Tráfico en reposo 0 B/s | §10 / RNF-A.3 | sólo se redibuja si cambió algo visible: 0 bytes en 10 s de reposo (antes 160). |
+| Enlaces de Markdown con teclado | RF-8.3 | Tab/Shift+Tab los recorre en la consigna y la vista previa, Enter los abre; las anclas internas saltan dentro del documento. |
+| cat-scan: eventos y fugas | RF-4.3 | muestra los eventos del paso (doble free, uso tras free) y el resumen final de fugas de mem-trace. |
+| cat-scan en ejercicios con Makefile | RF-4.3 | mem-trace compila el módulo con sus bibliotecas e includes. |
+| Recuperación tras un corte | RF-6.3 | al reabrir se ofrece restaurar las copias de `.jonesy/recuperacion` (s restaura, n descarta, Esc las conserva). |
+| Shell de cátedra | RF-5.3 | detecta `entorno` (`P1_ENTORNO`, `~/p1/entorno`, `PORTABLE_ROOT`), aplica sus variables y `bin` al PATH y usa su gdbinit. `jonesy doctor` lo informa. |
+| Verificar una entrega | RF-6.5 / RNF-D.3 | `jonesy verificar <paquete.tar> [--json]`. |
+| Explorador: renombrar y borrar | — | F2 y Supr (no en examen). |
+| Dependencias entre bibliotecas | — | F6 compila las dependencias transitivas (`DEPENDENCIAS`/`LIB_DEPS` del Makefile y `dependencies` de library.json). |
+| Diff: resaltado, líneas largas, binarios, renombres | — | sintaxis por lenguaje, ←/→ desplaza, binarios y renombres con su propio bloque. |
+| Diff entre dos commits | — | `m` marca un commit en el log y Enter sobre otro los compara. |
+| Aviso de documentación | — | sólo en proyectos que la usan; `[documentacion] aviso` lo fuerza o lo apaga. |
+| hal, vasquez, holden | — | manifiestos de fábrica (hal y vasquez en la terminal, holden en el panel). |
+| Integraciones en Windows | — | comillas según el intérprete (`cmd` o `sh`). |
+| Descripciones de objetivos en la barra | — | barra izquierda de 32 columnas por defecto. |
+| Gráfico de velocidad de tipeo | Could | en `jonesy replay` (tipeado y pegado por minuto) y en `--resumen`. |
+| Exportar la traza de memoria | Could | genera `memoria-<programa>.html` y lo abre (o copia la ruta por OSC 52). |
+| Editor de snippets para plugins | Could | Herramientas → Nuevo plugin parte de una plantilla; guardarlo lo recarga y sus errores (sintaxis, excepciones) aparecen en Problemas en su línea. |
+| Temas | Could | oscuro, claro y contraste (16 colores ANSI); `[interfaz] tema` o Ver → Cambiar tema, recordado en la sesión. |
+| Deshacer el último commit | Could | `z` en el panel de git (`reset --soft HEAD~1`); se niega si el commit ya se subió. |
+| Prueba del corte por SIGHUP | §12.6 | `crates/jonesy-bin/tests/corte.rs`: el binario real en una PTY, con y sin examen. |
+| Estrés de 100 sesiones | §12.5 | `bin/estres-sesiones`: 0,55 GiB y ~0 % de CPU con 100 sesiones en 16 núcleos; la CI lo corre con 20. |
+| Pruebas del menú con mouse y del compacto con barra | — | en `crates/jonesy-tui/tests/app.rs`. |
 
-## Calidad
+## Hecho antes
 
-| Ítem | Estado | Detalle |
-|---|---|---|
-| Pruebas de la TUI | flojo | cubren flujos principales con TestBackend (incluidos arrastre de separadores, explorador, proyecto, clonar, diff y documentación); faltan pruebas del menú con mouse y del modo compacto con la barra izquierda. |
-| ripley tarda ~10 s por archivo | flojo | jonesy lo corre en segundo plano con indicador y cola; la latencia es de ripley. |
-| MSRV | flojo | `rust-version` 1.85 declarada sin compilar con esa versión; la CI la comprueba. |
-| Commit con una prueba fallando | hecho | `95f8d41` se commiteó con la prueba del layout fallando; la corrigió `0ce85fb`. Los commits se hacen ahora sólo si fmt, clippy y las pruebas pasan. |
+Paneles redimensionables, Archivo → Nuevo/Abrir proyecto, clonar, explorador,
+autoformato, pestañas, estructura del proyecto (Makefiles, library.json, tp.sh),
+resaltado de Makefiles, integraciones con el ecosistema, diff lado a lado,
+documentación del proyecto en el quick-doc, botón Abrir en Terminal (RF-11.5), CI
+en Linux/Windows/macOS. RF-3.1 (ripley vía worker Python) y §10.2 (reconexión) no
+aplican: ripley corre como integración y jonesy no tiene modo servidor.
