@@ -612,6 +612,11 @@ pub struct App {
     /// El último programa se cortó por un error (violación de segmento, abort…): F5 lo
     /// depura sin detenerse en main, hasta la línea del fallo.
     pub ultimo_fallo: Option<&'static jonesy_core::fallos::Fallo>,
+    /// Posiciones desde donde se saltó a una definición (Alt+← vuelve).
+    pub historial_nav: Vec<(PathBuf, usize)>,
+    /// Pestaña Esquema: fila elegida y símbolos del buffer activo (por ruta y versión).
+    pub esquema_sel: usize,
+    esquema_cache: Option<(Option<PathBuf>, u64, Vec<jonesy_core::simbolos::Simbolo>)>,
     /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
     inicio_pruebas: Option<std::time::SystemTime>,
     pub depuracion: Option<Depuracion>,
@@ -772,6 +777,9 @@ impl App {
             ejecucion: None,
             vigilar_programa: false,
             ultimo_fallo: None,
+            historial_nav: vec![],
+            esquema_sel: 0,
+            esquema_cache: None,
             inicio_pruebas: None,
             depuracion: None,
             breakpoints: BTreeSet::new(),
@@ -3463,6 +3471,49 @@ impl App {
                     self.vista_proyecto.revelar(&self.proyecto.estructura, r);
                 }
             }
+            PestanaNav::Esquema => self.revelar_en_esquema(),
+        }
+    }
+
+    /// Símbolos del buffer activo (se recalculan sólo si cambió).
+    pub fn simbolos_activos(&mut self) -> Vec<jonesy_core::simbolos::Simbolo> {
+        let b = &self.buf().buf;
+        let clave = (b.ruta.clone(), b.version);
+        if let Some((r, v, s)) = &self.esquema_cache {
+            if (r, *v) == (&clave.0, clave.1) {
+                return s.clone();
+            }
+        }
+        let s = if b.lenguaje == jonesy_core::buffer::Lenguaje::C {
+            jonesy_core::simbolos::de_texto(&b.contenido())
+        } else {
+            vec![]
+        };
+        self.esquema_cache = Some((clave.0, clave.1, s.clone()));
+        s
+    }
+
+    /// Elige en el esquema el símbolo donde está el cursor.
+    fn revelar_en_esquema(&mut self) {
+        let linea = self.buf().buf.linea_columna().0;
+        let s = self.simbolos_activos();
+        self.esquema_sel = s.iter().rposition(|x| x.linea <= linea).unwrap_or(0);
+    }
+
+    /// Salta al símbolo `i` del esquema.
+    fn ir_a_simbolo(&mut self, i: usize, foco_editor: bool) {
+        let s = self.simbolos_activos();
+        let Some(x) = s.get(i) else { return };
+        self.esquema_sel = i;
+        let b = &mut self.buf_mut().buf;
+        let pos = b.linea_columna_a_pos(x.linea, x.columna);
+        b.mover_a(pos, false);
+        centrar(b, 8);
+        if foco_editor {
+            self.cambiar_foco(Foco::Editor);
+            if self.vista == Vista::Navegador {
+                self.vista = Vista::Codigo;
+            }
         }
     }
 
@@ -4316,13 +4367,20 @@ impl App {
                 return;
             }
             KeyCode::Tab | KeyCode::BackTab => {
-                let otra = match self.navegador {
-                    Some(PestanaNav::Archivos) => PestanaNav::Proyecto,
+                let adelante = k.code == KeyCode::Tab;
+                let otra = match (self.navegador, adelante) {
+                    (Some(PestanaNav::Archivos), true) => PestanaNav::Proyecto,
+                    (Some(PestanaNav::Proyecto), true) => PestanaNav::Esquema,
+                    (Some(PestanaNav::Esquema), false) => PestanaNav::Proyecto,
+                    (Some(PestanaNav::Archivos), false) => PestanaNav::Esquema,
                     _ => PestanaNav::Archivos,
                 };
                 self.navegador = Some(otra);
                 if otra == PestanaNav::Archivos && self.explorador.filas.is_empty() {
                     self.explorador.reconstruir(&self.proyecto.raiz);
+                }
+                if otra == PestanaNav::Esquema {
+                    self.revelar_en_esquema();
                 }
                 return;
             }
@@ -4335,6 +4393,23 @@ impl App {
             .unwrap_or(10)
             .max(1);
         match self.navegador {
+            Some(PestanaNav::Esquema) => {
+                let n = self.simbolos_activos().len();
+                let s = &mut self.esquema_sel;
+                match k.code {
+                    KeyCode::Up => *s = s.saturating_sub(1),
+                    KeyCode::Down => *s = (*s + 1).min(n.saturating_sub(1)),
+                    KeyCode::PageUp => *s = s.saturating_sub(alto),
+                    KeyCode::PageDown => *s = (*s + alto).min(n.saturating_sub(1)),
+                    KeyCode::Home => *s = 0,
+                    KeyCode::End => *s = n.saturating_sub(1),
+                    KeyCode::Enter | KeyCode::Right | KeyCode::Char(' ') => {
+                        let i = *s;
+                        self.ir_a_simbolo(i, k.code == KeyCode::Enter);
+                    }
+                    _ => {}
+                }
+            }
             Some(PestanaNav::Archivos) => {
                 let raiz = self.proyecto.raiz.clone();
                 let e = &mut self.explorador;
@@ -4827,6 +4902,8 @@ impl App {
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::Comentar => self.editar(|b| b.alternar_comentario()),
+            Accion::IrADefinicion => self.ir_a_definicion(),
+            Accion::Volver => self.volver(),
             Accion::DuplicarLinea => self.editar(|b| b.duplicar_lineas()),
             Accion::SubirLinea => self.editar(|b| b.mover_lineas(false)),
             Accion::BajarLinea => self.editar(|b| b.mover_lineas(true)),
@@ -4872,6 +4949,7 @@ impl App {
                 });
             }
             Accion::EstructuraProyecto => self.alternar_navegador(PestanaNav::Proyecto),
+            Accion::Esquema => self.alternar_navegador(PestanaNav::Esquema),
             Accion::NuevoArchivo => {
                 let dir = if self.foco == Foco::Navegador
                     && self.navegador == Some(PestanaNav::Archivos)
@@ -4919,6 +4997,78 @@ impl App {
             sistema::osc52(&t);
         }
         self.portapapeles = t;
+    }
+
+    /// Recuerda dónde está el cursor (para volver con Alt+←).
+    fn recordar_posicion(&mut self) {
+        if let Some(r) = self.activo_ruta() {
+            let pos = self.buf().buf.cursor;
+            if self.historial_nav.last() != Some(&(r.clone(), pos)) {
+                self.historial_nav.push((r, pos));
+                if self.historial_nav.len() > 50 {
+                    self.historial_nav.remove(0);
+                }
+            }
+        }
+    }
+
+    /// F12 / Ctrl+clic: la definición de la función, tipo o macro bajo el cursor (en el
+    /// buffer, aunque no esté guardado, o en los .c/.h del proyecto).
+    pub fn ir_a_definicion(&mut self) {
+        let b = &self.buf().buf;
+        let Some(nombre) = b.palabra_en(b.cursor).filter(|p| !p.is_empty()) else {
+            self.avisar("Poné el cursor sobre un nombre.", Nivel::Aviso);
+            return;
+        };
+        let ruta = b.ruta.clone();
+        let texto = b.contenido();
+        let actual = ruta.as_deref().map(|r| (r, texto.as_str()));
+        match jonesy_core::simbolos::definicion(&nombre, actual, &self.proyecto.raiz) {
+            Some((archivo, s)) => {
+                self.recordar_posicion();
+                self.ir_a(&archivo, s.linea + 1, s.columna + 1);
+                self.cambiar_foco(Foco::Editor);
+                self.avisar(
+                    format!(
+                        "{} · {}:{} (Alt+← vuelve)",
+                        s.texto,
+                        self.proyecto.relativa(&archivo),
+                        s.linea + 1
+                    ),
+                    Nivel::Info,
+                );
+            }
+            None => {
+                let base = jonesy_doc::Base::embebida();
+                let cabecera = base
+                    .funcion(&nombre)
+                    .map(|f| f.cabecera.clone())
+                    .or_else(|| base.tipo(&nombre).map(|t| t.cabecera.clone()));
+                self.avisar(
+                    match cabecera {
+                        Some(h) => format!(
+                            "«{nombre}» es de la biblioteca estándar (<{h}>): el quick-doc (F4) la explica."
+                        ),
+                        None => format!("No encontré la definición de «{nombre}» en el proyecto."),
+                    },
+                    Nivel::Aviso,
+                );
+            }
+        }
+    }
+
+    /// Alt+←: vuelve a donde se estaba antes de ir a una definición.
+    pub fn volver(&mut self) {
+        let Some((ruta, pos)) = self.historial_nav.pop() else {
+            self.avisar("No hay a dónde volver.", Nivel::Aviso);
+            return;
+        };
+        if self.abrir_archivo(&ruta, true).is_some() {
+            let b = &mut self.buf_mut().buf;
+            b.mover_a(pos.min(b.largo()), false);
+            centrar(b, 8);
+            self.cambiar_foco(Foco::Editor);
+        }
     }
 
     /// Elige la próxima coincidencia después del cursor (o de la elegida), circular.
@@ -5351,11 +5501,17 @@ impl App {
             (KeyCode::F(7), _, _, _) => Some(Accion::VistaConsigna),
             (KeyCode::F(8), _, _, _) => Some(Accion::VistaCodigo),
             (KeyCode::F(9), _, _, _) => Some(Accion::VistaTerminal),
-            (KeyCode::F(12), _, _, _) => Some(Accion::Entregar),
+            // F12: entregar en el examen; fuera, ir a la definición.
+            (KeyCode::F(12), _, _, _) => Some(if self.examen.is_some() {
+                Accion::Entregar
+            } else {
+                Accion::IrADefinicion
+            }),
             (KeyCode::Char('g'), false, true, _) => Some(Accion::PanelGit),
             (KeyCode::Char('e'), false, true, _) => Some(Accion::Explorador),
             (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
+            (KeyCode::Char('s'), false, true, _) => Some(Accion::Esquema),
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
                 Some(Accion::Formatear)
@@ -5768,6 +5924,7 @@ impl App {
             match k.code {
                 KeyCode::Up => self.accion(Accion::SubirLinea),
                 KeyCode::Down => self.accion(Accion::BajarLinea),
+                KeyCode::Left => self.accion(Accion::Volver),
                 _ => {}
             }
             return;
@@ -6497,6 +6654,11 @@ impl App {
                             let v = &mut self.vista_proyecto;
                             v.sel = ((v.sel as isize + paso * 3).max(0) as usize).min(n);
                         }
+                        Some(PestanaNav::Esquema) => {
+                            let n = self.simbolos_activos().len().saturating_sub(1);
+                            self.esquema_sel =
+                                ((self.esquema_sel as isize + paso * 3).max(0) as usize).min(n);
+                        }
                         None => {}
                     }
                 } else if self.zonas.preview.is_some_and(dentro) {
@@ -6543,9 +6705,7 @@ impl App {
                     }
                 }
             }
-            MouseEventKind::Down(MouseButton::Left) => {
-                self.clic(x, y, m.modifiers.contains(KeyModifiers::SHIFT))
-            }
+            MouseEventKind::Down(MouseButton::Left) => self.clic(x, y, m.modifiers),
             MouseEventKind::Drag(MouseButton::Left) => match self.arrastre {
                 Some(Arrastre::Seleccion) => {
                     if let Some(p) = self.posicion_en_editor(x, y) {
@@ -6577,7 +6737,9 @@ impl App {
         }
     }
 
-    fn clic(&mut self, x: u16, y: u16, shift: bool) {
+    fn clic(&mut self, x: u16, y: u16, modificadores: KeyModifiers) {
+        let shift = modificadores.contains(KeyModifiers::SHIFT);
+        let ctrl = modificadores.contains(KeyModifiers::CONTROL);
         let dentro = |r: Rect| x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
         let doble = self.ultimo_clic.is_some_and(|(t, cx, cy)| {
             t.elapsed() < Duration::from_millis(400) && cx == x && cy == y
@@ -6738,6 +6900,11 @@ impl App {
                             }
                         }
                     }
+                    Some(PestanaNav::Esquema) => {
+                        // Un clic salta al símbolo (el foco queda en la barra).
+                        self.ir_a_simbolo(i, false);
+                        self.foco = Foco::Navegador;
+                    }
                     Some(PestanaNav::Proyecto) => {
                         let filas = self.vista_proyecto.filas(&self.proyecto.estructura);
                         if let Some(f) = filas.get(i).cloned() {
@@ -6771,6 +6938,12 @@ impl App {
             if dentro(z.texto) {
                 self.cambiar_foco(Foco::Editor);
                 if let Some(p) = self.posicion_en_editor(x, y) {
+                    // Ctrl+clic: ir a la definición de lo que está bajo el mouse.
+                    if ctrl {
+                        self.buf_mut().buf.mover_a(p, false);
+                        self.ir_a_definicion();
+                        return;
+                    }
                     if doble {
                         self.buf_mut().buf.seleccionar_palabra(p);
                     } else {

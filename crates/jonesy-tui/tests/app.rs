@@ -2134,3 +2134,67 @@ fn buscar_y_reemplazar_una_por_una_y_todas() {
         "int tope = 1;\nint y = max + MAX;\n"
     );
 }
+
+#[test]
+fn definicion_volver_y_esquema() {
+    use jonesy_tui::navegador::PestanaNav;
+    let principal = "#include \"lib.h\"\n\nint main(void)\n{\n    return suma(1, 2);\n}\n";
+    let dir = proyecto(&[
+        ("main.c", principal),
+        ("lib.h", "int suma(int a, int b);\n"),
+        (
+            "lib.c",
+            "#include \"lib.h\"\n\nint suma(int a, int b)\n{\n    return a + b;\n}\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(4, 12);
+    a.buf_mut().buf.mover_a(pos, false);
+    // F12 va a la definición (en lib.c, no al prototipo de lib.h).
+    tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.nombre(), "lib.c");
+    assert_eq!(a.buf().buf.linea_columna().0, 2);
+    // Alt+← vuelve.
+    tecla(&mut a, KeyCode::Left, KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.nombre(), "main.c");
+    assert_eq!(a.buf().buf.cursor, pos);
+    // Una función de la biblioteca estándar: lo dice.
+    a.buf_mut()
+        .buf
+        .reemplazar_todo("int main(void) { printf(\"x\"); }\n");
+    a.buf_mut().buf.mover_a(19, false);
+    tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
+    assert!(a
+        .mensaje
+        .as_ref()
+        .unwrap()
+        .0
+        .contains("biblioteca estándar"));
+    // Ctrl+clic sobre «main» la encuentra en el mismo buffer (sin guardar).
+    pantalla(&mut a, 120, 30);
+    let z = a.zonas.editor.unwrap();
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    a.evento(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: z.texto.x + 5,
+        row: z.texto.y,
+        modifiers: KeyModifiers::CONTROL,
+    }));
+    assert!(
+        a.mensaje.as_ref().unwrap().0.contains("main.c:1"),
+        "{:?}",
+        a.mensaje
+    );
+    // Esquema (Alt+S): las funciones del archivo; Enter salta.
+    a.abrir_archivo(&dir.path().join("lib.c"), true);
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::ALT);
+    assert_eq!(a.navegador, Some(PestanaNav::Esquema));
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Esquema") && p.contains("suma"), "{p}");
+    a.buf_mut().buf.mover_a(0, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.linea_columna().0, 2);
+    assert_eq!(a.foco, Foco::Editor);
+}

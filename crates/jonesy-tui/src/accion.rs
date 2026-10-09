@@ -87,6 +87,9 @@ pub enum Accion {
     BajarLinea,
     LimpiarEspacios,
     Reemplazar,
+    IrADefinicion,
+    Volver,
+    Esquema,
 }
 
 pub struct Info {
@@ -176,6 +179,9 @@ impl Accion {
             BajarLinea => ("Mover línea abajo", "Alt+↓"),
             LimpiarEspacios => ("Quitar espacios al final de las líneas", ""),
             Reemplazar => ("Buscar y reemplazar…", "Ctrl+H"),
+            IrADefinicion => ("Ir a la definición", "F12 / Ctrl+clic"),
+            Volver => ("Volver a donde estaba", "Alt+←"),
+            Esquema => ("Esquema del archivo (funciones y tipos)", "Alt+S"),
         };
         Info { titulo, atajo }
     }
@@ -260,6 +266,9 @@ impl Accion {
             BajarLinea,
             LimpiarEspacios,
             Reemplazar,
+            IrADefinicion,
+            Volver,
+            Esquema,
             Salir,
         ]
     }
@@ -338,7 +347,7 @@ impl Menu {
 }
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
-pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 'r', 'p', 'o', 'm'];
+pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'r', 'p', 'o', 'm'];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
 /// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
@@ -390,6 +399,8 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(BuscarSiguiente),
                 A(Reemplazar),
                 A(IrALinea),
+                A(IrADefinicion),
+                A(Volver),
                 SEP,
                 A(Comentar),
                 A(DuplicarLinea),
@@ -409,6 +420,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(VistaTerminal),
                 SEP,
                 A(Explorador),
+                A(Esquema),
                 A(Problemas),
                 A(SalidaCompilacion),
                 A(Terminal),
@@ -567,6 +579,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Buscar y reemplazar (Tab campo, Alt+M mayúsculas, Alt+P palabra, Enter reemplaza, F3 saltea, Alt+T todas) | Ctrl+H |
 | Ir a línea | Ctrl+G |
+| Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
+| Esquema del archivo (funciones, tipos, macros) | Alt+S |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
 | Mover línea arriba / abajo | Alt+↑ / Alt+↓ |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |

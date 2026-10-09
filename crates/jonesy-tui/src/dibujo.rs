@@ -294,10 +294,15 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
     }
     // Pestañas sobre el borde superior.
     let mut x = r.x + 1;
-    for p in [PestanaNav::Archivos, PestanaNav::Proyecto] {
+    for p in [
+        PestanaNav::Archivos,
+        PestanaNav::Proyecto,
+        PestanaNav::Esquema,
+    ] {
         let t = match p {
             PestanaNav::Archivos => " Archivos ",
             PestanaNav::Proyecto => " Proyecto ",
+            PestanaNav::Esquema => " Esquema ",
         };
         let w = t.chars().count() as u16;
         if x + w > r.x + r.width {
@@ -601,6 +606,99 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 ..i
             };
             f.render_widget(Paragraph::new(texto_pie), zona_pie);
+        }
+        Some(PestanaNav::Esquema) => {
+            let simbolos = app.simbolos_activos();
+            let atajos = pie_atajos(&["Enter va", "↑↓ elegir", "Alt+S cierra"], i.width as usize);
+            let pie = (atajos.len() as u16).min(i.height / 2);
+            let lista = Rect {
+                height: i.height.saturating_sub(pie),
+                ..i
+            };
+            if simbolos.is_empty() {
+                let texto = if app.buf().buf.lenguaje == jonesy_core::buffer::Lenguaje::C {
+                    "Este archivo no tiene funciones ni tipos todavía."
+                } else {
+                    "El esquema es para archivos .c y .h."
+                };
+                f.render_widget(
+                    Paragraph::new(texto)
+                        .style(Style::default().fg(tema::atenuado()))
+                        .wrap(Wrap { trim: true }),
+                    lista,
+                );
+            } else {
+                app.esquema_sel = app.esquema_sel.min(simbolos.len() - 1);
+                let alto = lista.height as usize;
+                let base = app.esquema_sel.saturating_sub(alto.saturating_sub(1));
+                app.zonas.lista_nav = Some((lista, base));
+                let cursor = app.buf().buf.linea_columna().0;
+                let actual = simbolos.iter().rposition(|x| x.linea <= cursor);
+                let ancho = lista.width as usize;
+                let lineas: Vec<Line> = simbolos
+                    .iter()
+                    .enumerate()
+                    .skip(base)
+                    .take(alto)
+                    .map(|(n, x)| {
+                        let fondo = if n == app.esquema_sel && foco {
+                            tema::fondo_seleccion()
+                        } else {
+                            tema::fondo()
+                        };
+                        let color = match x.tipo {
+                            jonesy_core::simbolos::Tipo::Funcion => tema::acento(),
+                            jonesy_core::simbolos::Tipo::Prototipo => tema::atenuado(),
+                            jonesy_core::simbolos::Tipo::Macro => tema::error(),
+                            _ => tema::advertencia(),
+                        };
+                        let icono = if ascii {
+                            match x.tipo {
+                                jonesy_core::simbolos::Tipo::Funcion => "f",
+                                jonesy_core::simbolos::Tipo::Prototipo => ".",
+                                t => t.icono(),
+                            }
+                        } else {
+                            x.tipo.icono()
+                        };
+                        let mut nombre = x.nombre.clone();
+                        let num = format!("{}", x.linea + 1);
+                        let max = ancho.saturating_sub(num.len() + 4);
+                        if nombre.chars().count() > max {
+                            nombre = nombre
+                                .chars()
+                                .take(max.saturating_sub(1))
+                                .collect::<String>()
+                                + "…";
+                        }
+                        let relleno = ancho.saturating_sub(nombre.chars().count() + num.len() + 3);
+                        let mut st = Style::default().bg(fondo);
+                        if Some(n) == actual {
+                            st = st.add_modifier(Modifier::BOLD);
+                        }
+                        Line::from(vec![
+                            Span::styled(format!(" {icono} "), st.fg(color)),
+                            Span::styled(nombre, st),
+                            Span::styled(" ".repeat(relleno), st),
+                            Span::styled(num, st.fg(tema::atenuado())),
+                        ])
+                    })
+                    .collect();
+                f.render_widget(Paragraph::new(lineas), lista);
+            }
+            f.render_widget(
+                Paragraph::new(
+                    atajos
+                        .into_iter()
+                        .map(|l| Line::styled(l, Style::default().fg(tema::atenuado())))
+                        .collect::<Vec<_>>(),
+                ),
+                Rect {
+                    y: lista.y + lista.height,
+                    height: pie,
+                    ..i
+                },
+            );
         }
         None => {}
     }

@@ -20,6 +20,7 @@ por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propues
   panel de git) y Ayuda (Alt+Y es la vista del proyecto), que se abren con F10 y la letra.
 - **F10 durante la depuración** es «Paso» (siguiente línea): para abrir un menú en ese
   momento, usá Alt+letra o el clic.
+- Alt+S abre el esquema del archivo en la barra izquierda (no es un menú).
 - Con el foco en la terminal, Alt+letra va a la shell (Alt+D, Alt+C… son atajos de bash).
 - A la derecha de cada entrada está su **atajo global**. Las teclas de una sola letra del
   panel de git (`a`, `u`, `c`, `l`, `z`, `m`) no aparecen en los menús: se muestran al pie
@@ -89,8 +90,8 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
-| Editar | [E]ditar | F10 y E | 16 |
-| Ver | [V]er | Alt+V (o F10 y V) | 12 |
+| Editar | [E]ditar | F10 y E | 18 |
+| Ver | [V]er | Alt+V (o F10 y V) | 13 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
 | Git | [G]it | F10 y G | 6 |
@@ -122,50 +123,53 @@ comprueba que esté al día.
 ## Editar
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ Deshacer                                         Ctrl+Z │
-│ Rehacer                                          Ctrl+Y │
-├─────────────────────────────────────────────────────────┤
-│ Cortar                                           Ctrl+X │
-│ Copiar                                           Ctrl+C │
-│ Pegar                                            Ctrl+V │
-│ Seleccionar todo                                 Ctrl+A │
-├─────────────────────────────────────────────────────────┤
-│ Buscar…                                     F3 / Ctrl+F │
-│ Buscar siguiente                               Shift+F3 │
-│ Buscar y reemplazar…                             Ctrl+H │
-│ Ir a la línea…                                   Ctrl+G │
-├─────────────────────────────────────────────────────────┤
-│ Comentar / descomentar líneas                    Ctrl+/ │
-│ Duplicar línea                                   Ctrl+D │
-│ Mover línea arriba                                Alt+↑ │
-│ Mover línea abajo                                 Alt+↓ │
-├─────────────────────────────────────────────────────────┤
-│ Autoformatear código (gaff o clang-format)  Alt+Shift+F │
-│ Quitar espacios al final de las líneas                  │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ Deshacer                                             Ctrl+Z │
+│ Rehacer                                              Ctrl+Y │
+├─────────────────────────────────────────────────────────────┤
+│ Cortar                                               Ctrl+X │
+│ Copiar                                               Ctrl+C │
+│ Pegar                                                Ctrl+V │
+│ Seleccionar todo                                     Ctrl+A │
+├─────────────────────────────────────────────────────────────┤
+│ Buscar…                                         F3 / Ctrl+F │
+│ Buscar siguiente                                   Shift+F3 │
+│ Buscar y reemplazar…                                 Ctrl+H │
+│ Ir a la línea…                                       Ctrl+G │
+│ Ir a la definición                          F12 / Ctrl+clic │
+│ Volver a donde estaba                                 Alt+← │
+├─────────────────────────────────────────────────────────────┤
+│ Comentar / descomentar líneas                        Ctrl+/ │
+│ Duplicar línea                                       Ctrl+D │
+│ Mover línea arriba                                    Alt+↑ │
+│ Mover línea abajo                                     Alt+↓ │
+├─────────────────────────────────────────────────────────────┤
+│ Autoformatear código (gaff o clang-format)      Alt+Shift+F │
+│ Quitar espacios al final de las líneas                      │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Ver
 
 ```text
-┌──────────────────────────────────────────────┐
-│ Modo código                               F8 │
-│ Modo consigna                             F7 │
-│ Modo terminal integrada                   F9 │
-├──────────────────────────────────────────────┤
-│ Explorador de archivos                 Alt+E │
-│ Problemas y diagnósticos               Alt+P │
-│ Salida de la compilación               Alt+O │
-│ Terminal (deck)                        Alt+T │
-│ Abrir panel interactivo de Git         Alt+G │
-│ Panel de reglas pedagógicas (ripley)   Alt+R │
-├──────────────────────────────────────────────┤
-│ Documentación contextual (quick-doc)      F4 │
-│ Vista previa de Markdown              Ctrl+P │
-├──────────────────────────────────────────────┤
-│ Restablecer disposición de paneles           │
-└──────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│ Modo código                                  F8 │
+│ Modo consigna                                F7 │
+│ Modo terminal integrada                      F9 │
+├─────────────────────────────────────────────────┤
+│ Explorador de archivos                    Alt+E │
+│ Esquema del archivo (funciones y tipos)   Alt+S │
+│ Problemas y diagnósticos                  Alt+P │
+│ Salida de la compilación                  Alt+O │
+│ Terminal (deck)                           Alt+T │
+│ Abrir panel interactivo de Git            Alt+G │
+│ Panel de reglas pedagógicas (ripley)      Alt+R │
+├─────────────────────────────────────────────────┤
+│ Documentación contextual (quick-doc)         F4 │
+│ Vista previa de Markdown                 Ctrl+P │
+├─────────────────────────────────────────────────┤
+│ Restablecer disposición de paneles              │
+└─────────────────────────────────────────────────┘
 ```
 
 ## Construir

@@ -14,6 +14,8 @@ use jonesy_core::estructura::{Estructura, TipoModulo};
 pub enum PestanaNav {
     Archivos,
     Proyecto,
+    /// Funciones, tipos y macros del archivo activo.
+    Esquema,
 }
 
 impl PestanaNav {
@@ -21,6 +23,7 @@ impl PestanaNav {
         match self {
             PestanaNav::Archivos => "archivos",
             PestanaNav::Proyecto => "proyecto",
+            PestanaNav::Esquema => "esquema",
         }
     }
 
@@ -28,6 +31,7 @@ impl PestanaNav {
         match s {
             "archivos" => Some(PestanaNav::Archivos),
             "proyecto" => Some(PestanaNav::Proyecto),
+            "esquema" => Some(PestanaNav::Esquema),
             _ => None,
         }
     }
