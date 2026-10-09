@@ -139,6 +139,8 @@ pub enum QuePaleta {
     Herramienta(String, usize),
     /// Ir a una línea (1-based) de un archivo: marcadores.
     Linea(PathBuf, usize),
+    /// Entrada para Ctrl+F5 en este ejercicio (None: desde el teclado).
+    Entrada(Option<PathBuf>),
 }
 
 #[derive(Debug, Clone)]
@@ -324,6 +326,15 @@ pub enum Modal {
         siempre: bool,
         faltan: Vec<(String, String, String)>,
     },
+    /// Construir → Comparar con las salidas esperadas: un caso por fila.
+    Casos {
+        resultados: Vec<jonesy_core::casos::ResultadoCaso>,
+        sel: usize,
+    },
+    /// Construir → Argumentos del programa.
+    ArgsPrograma {
+        texto: String,
+    },
     /// Editar → Buscar en el proyecto (Ctrl+Shift+F).
     BuscarProyecto {
         texto: String,
@@ -363,6 +374,8 @@ pub enum Luego {
     Nada,
     Ejecutar,
     Depurar,
+    /// Correr los casos de entrada y salida esperada.
+    Casos,
 }
 
 /// Cómo interpretar la salida de un objetivo de make.
@@ -481,6 +494,14 @@ pub enum QueConfig {
     ReleerIntegraciones,
     /// Sólo informa.
     Nada,
+}
+
+/// Estado de la vigilancia de cuelgues (ver `App::vigilar_cuelgue`).
+struct Vigia {
+    texto: u64,
+    cpu: u64,
+    desde: Instant,
+    avisado: bool,
 }
 
 pub struct Depuracion {
@@ -638,6 +659,13 @@ pub struct App {
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
     /// Marcadores de línea (1-based), como los breakpoints.
     pub marcadores: BTreeSet<(PathBuf, usize)>,
+    /// Por ejercicio: archivo de entrada para Ctrl+F5 y argumentos del programa.
+    pub entradas: HashMap<String, PathBuf>,
+    pub argumentos: HashMap<String, String>,
+    /// Archivo donde /usr/bin/time deja la medida de la última ejecución.
+    medida: Option<PathBuf>,
+    /// Vigilancia de un programa que usa la CPU sin mostrar nada (¿ciclo infinito?).
+    vigia: Option<Vigia>,
 
     pub repo: Option<Repo>,
     pub git_estado: Option<jonesy_git::Estado>,
@@ -803,6 +831,10 @@ impl App {
             depuracion: None,
             breakpoints: BTreeSet::new(),
             marcadores: BTreeSet::new(),
+            entradas: HashMap::new(),
+            argumentos: HashMap::new(),
+            medida: None,
+            vigia: None,
             repo,
             git_estado: None,
             git_marca: None,
@@ -915,6 +947,10 @@ impl App {
                 self.marcadores
                     .insert((self.proyecto.raiz.join(rel), linea));
             }
+            for (clave, rel) in s.entradas {
+                self.entradas.insert(clave, self.proyecto.raiz.join(rel));
+            }
+            self.argumentos.extend(s.argumentos);
         }
         for a in archivos {
             let ruta = if a.is_absolute() {
@@ -992,6 +1028,16 @@ impl App {
                 .marcadores
                 .iter()
                 .map(|(p, l)| (self.proyecto.relativa(p), *l))
+                .collect(),
+            entradas: self
+                .entradas
+                .iter()
+                .map(|(k, p)| (k.clone(), self.proyecto.relativa(p)))
+                .collect(),
+            argumentos: self
+                .argumentos
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
                 .collect(),
             paneles: Some(self.paneles),
             izquierdo: self.navegador.map(|p| p.nombre().to_string()),
@@ -2105,18 +2151,241 @@ impl App {
         self.lanzar(&comando, Tarea::Compilar { luego });
     }
 
+    /// Clave del ejercicio activo (su módulo o, si es un archivo suelto, el archivo) para
+    /// recordar su entrada y sus argumentos.
+    pub fn clave_ejercicio(&self) -> Option<String> {
+        let activo = self.activo_ruta()?;
+        Some(match self.proyecto.modulo_activo(Some(&activo)) {
+            Some(m) => m.rel.clone(),
+            None => self.proyecto.relativa(&activo),
+        })
+    }
+
+    /// Directorio del ejercicio activo (donde están sus casos).
+    pub fn dir_ejercicio(&self) -> PathBuf {
+        let activo = self.activo_ruta();
+        match activo
+            .as_deref()
+            .and_then(|a| self.proyecto.modulo_activo(Some(a)))
+        {
+            Some(m) => self.proyecto.raiz.join(&m.rel),
+            None => activo
+                .as_deref()
+                .and_then(Path::parent)
+                .map(Path::to_path_buf)
+                .unwrap_or_else(|| self.proyecto.raiz.clone()),
+        }
+    }
+
+    /// El ejecutable del ejercicio y dónde correrlo.
+    fn programa_y_dir(&self) -> Option<(PathBuf, PathBuf)> {
+        let activo = self.activo_ruta();
+        let prog = self.proyecto.programa_a_depurar(activo.as_deref())?;
+        let dir = match activo
+            .as_deref()
+            .and_then(|a| self.proyecto.modulo_activo(Some(a)))
+        {
+            Some(m) => self.proyecto.raiz.join(&m.rel),
+            None => self.proyecto.raiz.clone(),
+        };
+        Some((prog, dir))
+    }
+
+    fn argumentos_de_ejercicio(&self) -> Vec<String> {
+        self.clave_ejercicio()
+            .and_then(|k| self.argumentos.get(&k))
+            .map(|a| jonesy_core::casos::partir_argumentos(a))
+            .unwrap_or_default()
+    }
+
     fn ejecutar_en_deck(&mut self) {
         let activo = self.activo_ruta();
-        let Some(cmd) = self.proyecto.comando_ejecutar(activo.as_deref()) else {
-            self.avisar(
-                "No hay qué ejecutar: abrí un .c o configurá [ejecutar] en .jonesy.toml.",
-                Nivel::Aviso,
-            );
-            return;
+        let clave = self.clave_ejercicio().unwrap_or_default();
+        let entrada = self.entradas.get(&clave).filter(|p| p.is_file()).cloned();
+        let redir = entrada
+            .as_ref()
+            .map(|e| {
+                format!(
+                    " < {}",
+                    jonesy_core::proyecto::shell_quote(&e.to_string_lossy())
+                )
+            })
+            .unwrap_or_default();
+        let args: String = self
+            .argumentos_de_ejercicio()
+            .iter()
+            .map(|a| format!(" {}", jonesy_core::proyecto::shell_quote(a)))
+            .collect();
+        let propio = !self.proyecto.config.ejecutar.comando.trim().is_empty();
+        // Ya compiló (Luego::Ejecutar): se corre sólo el programa, medido con
+        // /usr/bin/time si está (tiempo y memoria máxima).
+        let directo = (!propio)
+            .then(|| self.programa_y_dir())
+            .flatten()
+            .filter(|(p, _)| p.is_file());
+        let cmd = match directo {
+            Some((prog, dir)) => {
+                let medir = jonesy_core::casos::time_gnu()
+                    .map(|t| {
+                        let f = std::env::temp_dir()
+                            .join(format!("jonesy-medida-{}.txt", std::process::id()));
+                        let _ = std::fs::remove_file(&f);
+                        let m = format!(
+                            "{t} -f '%e %M' -o {} ",
+                            jonesy_core::proyecto::shell_quote(&f.to_string_lossy())
+                        );
+                        self.medida = Some(f);
+                        m
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "cd {} && {medir}{}{args}{redir}",
+                    jonesy_core::proyecto::shell_quote(&dir.to_string_lossy()),
+                    jonesy_core::proyecto::shell_quote(&prog.to_string_lossy())
+                )
+            }
+            None => {
+                let Some(cmd) = self.proyecto.comando_ejecutar(activo.as_deref()) else {
+                    self.avisar(
+                        "No hay qué ejecutar: abrí un .c o configurá [ejecutar] en .jonesy.toml.",
+                        Nivel::Aviso,
+                    );
+                    return;
+                };
+                format!("{cmd}{redir}")
+            }
         };
         self.correr_en_deck(cmd);
         self.vigilar_programa = self.ejecucion.is_some();
+        self.vigia = None;
         self.ultimo_fallo = None;
+        if let Some(e) = entrada {
+            self.avisar(
+                format!(
+                    "Entrada desde {} (Construir → Ejecutar con entrada… la cambia).",
+                    self.proyecto.relativa(&e)
+                ),
+                Nivel::Info,
+            );
+        }
+    }
+
+    /// Construir → Comparar con las salidas esperadas (después de compilar).
+    fn correr_casos(&mut self) {
+        let dir = self.dir_ejercicio();
+        let mut casos = jonesy_core::casos::buscar(&dir);
+        if casos.is_empty() && dir != self.proyecto.raiz {
+            casos = jonesy_core::casos::buscar(&self.proyecto.raiz);
+        }
+        if casos.is_empty() {
+            self.avisar(
+                "No hay casos: creá entrada1.txt con su salida1.txt (o x.in y x.out) junto al ejercicio.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let Some((prog, cwd)) = self.programa_y_dir().filter(|(p, _)| p.is_file()) else {
+            self.avisar("No encontré el ejecutable del ejercicio.", Nivel::Error);
+            return;
+        };
+        let args = self.argumentos_de_ejercicio();
+        let tx = self.tx.clone();
+        self.avisar(format!("Corriendo {} caso(s)…", casos.len()), Nivel::Info);
+        std::thread::spawn(move || {
+            let r = jonesy_core::casos::correr_todos(
+                &prog,
+                &args,
+                &cwd,
+                &casos,
+                Duration::from_secs(10),
+            );
+            let _ = tx.send(Aviso::Casos(r));
+        });
+    }
+
+    /// Construir → Ejecutar con entrada…: elegir el archivo de entrada de Ctrl+F5.
+    fn elegir_archivo_de_entrada(&mut self) {
+        let dir = self.dir_ejercicio();
+        let mut casos = jonesy_core::casos::buscar(&dir);
+        if casos.is_empty() && dir != self.proyecto.raiz {
+            casos = jonesy_core::casos::buscar(&self.proyecto.raiz);
+        }
+        let mut opciones = vec![OpcionPaleta {
+            titulo: "Sin archivo: escribo yo en la terminal".into(),
+            atajo: String::new(),
+            que: QuePaleta::Entrada(None),
+        }];
+        for c in casos {
+            let primera = std::fs::read_to_string(&c.entrada)
+                .ok()
+                .and_then(|t| t.lines().next().map(str::to_string))
+                .unwrap_or_default();
+            opciones.push(OpcionPaleta {
+                titulo: format!("{}  ({primera}…)", self.proyecto.relativa(&c.entrada)),
+                atajo: String::new(),
+                que: QuePaleta::Entrada(Some(c.entrada)),
+            });
+        }
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
+    }
+
+    /// Tras correr el programa: la medida de /usr/bin/time (tiempo y memoria máxima).
+    fn medida_de_la_ejecucion(&mut self) -> Option<String> {
+        let f = self.medida.take()?;
+        let texto = std::fs::read_to_string(&f).ok()?;
+        let _ = std::fs::remove_file(&f);
+        let (seg, kib) = jonesy_core::casos::leer_medida(&texto)?;
+        let mem = if kib >= 1024 {
+            format!("{:.1} MiB", kib as f64 / 1024.0)
+        } else {
+            format!("{kib} KiB")
+        };
+        Some(format!("Terminó en {seg:.2} s · memoria máxima {mem}."))
+    }
+
+    /// Un programa que usa la CPU sin mostrar nada desde hace un rato: ¿ciclo infinito?
+    fn vigilar_cuelgue(&mut self) {
+        #[cfg(target_os = "linux")]
+        {
+            let Some(d) = &self.ejecucion else { return };
+            let Some(pid) = d.pid() else { return };
+            let texto = {
+                use std::hash::{Hash, Hasher};
+                let mut h = std::collections::hash_map::DefaultHasher::new();
+                d.texto().hash(&mut h);
+                h.finish()
+            };
+            let cpu = jonesy_core::proceso::cpu_de_descendientes(pid);
+            let ahora = Instant::now();
+            let v = self.vigia.get_or_insert(Vigia {
+                texto,
+                cpu,
+                desde: ahora,
+                avisado: false,
+            });
+            if v.texto != texto {
+                *v = Vigia {
+                    texto,
+                    cpu,
+                    desde: ahora,
+                    avisado: false,
+                };
+                return;
+            }
+            let pasado = ahora.duration_since(v.desde).as_secs_f64();
+            let usado = cpu.saturating_sub(v.cpu) as f64 / 100.0;
+            if !v.avisado && pasado >= 5.0 && usado >= 0.8 * pasado {
+                v.avisado = true;
+                self.avisar(
+                    "El programa usa la CPU sin mostrar nada desde hace 5 s: ¿un ciclo infinito? Shift+F5 lo corta.",
+                    Nivel::Aviso,
+                );
+            }
+        }
     }
 
     /// Corre un comando de shell en la pestaña Ejecución (con E/S interactiva) y deja la
@@ -2266,7 +2535,12 @@ impl App {
             }
         };
         let tx = self.tx.clone();
-        let args = self.proyecto.config.depurar.argumentos.clone();
+        // Los argumentos recordados del ejercicio, si no hay en .jonesy.toml.
+        let args = if self.proyecto.config.depurar.argumentos.is_empty() {
+            self.argumentos_de_ejercicio()
+        } else {
+            self.proyecto.config.depurar.argumentos.clone()
+        };
         let gdbinit = jonesy_core::entorno::detectar(&self.proyecto.config.interfaz.entorno)
             .and_then(|e| e.gdbinit);
         // Después de un corte, sin breakpoints, se corre de largo hasta el fallo.
@@ -2408,6 +2682,20 @@ impl App {
     }
 
     fn detener_depuracion(&mut self) {
+        // Sin depuración: Shift+F5 corta el programa que corre en la terminal (Ctrl+C).
+        if self.depuracion.is_none() {
+            let mut cortado = false;
+            if let Some(d) = self.ejecucion.as_mut() {
+                if d.vivo() {
+                    let _ = d.escribir(b"\x03");
+                    cortado = true;
+                }
+            }
+            if cortado {
+                self.avisar("Programa cortado (Ctrl+C).", Nivel::Info);
+            }
+            return;
+        }
         if let Some(mut d) = self.depuracion.take() {
             d.gdb.terminar();
             self.avisar("Depuración detenida.", Nivel::Info);
@@ -2847,6 +3135,7 @@ impl App {
                     }
                     match luego {
                         Luego::Ejecutar => self.ejecutar_en_deck(),
+                        Luego::Casos => self.correr_casos(),
                         Luego::Depurar => self.iniciar_depuracion(),
                         Luego::Nada => {}
                     }
@@ -4982,6 +5271,15 @@ impl App {
             Accion::Comentar => self.editar(|b| b.alternar_comentario()),
             Accion::IrADefinicion => self.ir_a_definicion(),
             Accion::AlternarMarcador => self.alternar_marcador(),
+            Accion::EjecutarConEntrada => self.elegir_archivo_de_entrada(),
+            Accion::CompararSalidas => self.compilar(Luego::Casos),
+            Accion::ArgumentosPrograma => {
+                let texto = self
+                    .clave_ejercicio()
+                    .and_then(|k| self.argumentos.get(&k).cloned())
+                    .unwrap_or_default();
+                self.modal = Some(Modal::ArgsPrograma { texto });
+            }
             Accion::SiguienteMarcador => self.siguiente_marcador(),
             Accion::Marcadores => self.lista_marcadores(),
             Accion::SiguienteProblema => self.problema_cercano(true),
@@ -5407,8 +5705,15 @@ impl App {
                 .remove(&(nombre.clone(), archivo.clone()));
             self.lanzar_integracion(&nombre, &archivo);
         }
+        if self.vigilar_programa && self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            self.vigilar_cuelgue();
+        }
         if self.vigilar_programa && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_programa = false;
+            self.vigia = None;
+            if let Some(m) = self.medida_de_la_ejecucion() {
+                self.avisar(m, Nivel::Info);
+            }
             let codigo = self.ejecucion.as_mut().and_then(|d| d.codigo_salida());
             if let Some(f) = codigo.and_then(|c| jonesy_core::fallos::de_codigo_salida(c.into())) {
                 if f.error {
@@ -5452,6 +5757,21 @@ impl App {
             Aviso::Despertar => {}
             Aviso::Proceso(s) => self.al_proceso(s),
             Aviso::Plugins(r) => self.al_plugin(r),
+            Aviso::Casos(resultados) => {
+                let total = resultados.len();
+                let con = resultados.iter().filter(|r| r.coincide.is_some()).count();
+                let bien = resultados
+                    .iter()
+                    .filter(|r| r.coincide == Some(true))
+                    .count();
+                self.avisar(
+                    format!(
+                        "Casos: {bien} de {con} coinciden con la salida esperada ({total} en total)."
+                    ),
+                    if bien == con { Nivel::Ok } else { Nivel::Error },
+                );
+                self.modal = Some(Modal::Casos { resultados, sel: 0 });
+            }
             Aviso::Doctor(texto) => {
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
                 self.modal = Some(Modal::Visor {
@@ -6701,6 +7021,59 @@ impl App {
                     lenguaje,
                 });
             }
+            Modal::ArgsPrograma { mut texto } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    if let Some(c) = self.clave_ejercicio() {
+                        if texto.trim().is_empty() {
+                            self.argumentos.remove(&c);
+                        } else {
+                            self.argumentos.insert(c, texto.trim().to_string());
+                        }
+                        self.guardar_sesion();
+                        self.avisar(
+                            "Argumentos guardados para este ejercicio (Ctrl+F5 y F5).",
+                            Nivel::Ok,
+                        );
+                    }
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::ArgsPrograma { texto });
+            }
+            Modal::Casos {
+                resultados,
+                mut sel,
+            } => {
+                let n = resultados.len().max(1);
+                match k.code {
+                    KeyCode::Esc => return,
+                    KeyCode::Up => sel = (sel + n - 1) % n,
+                    KeyCode::Down => sel = (sel + 1) % n,
+                    KeyCode::Enter => {
+                        if let Some(r) = resultados.get(sel) {
+                            let esperada = jonesy_core::casos::normalizar(&r.esperada);
+                            let obtenida = jonesy_core::casos::normalizar(&r.corrida.salida);
+                            self.modal = Some(Modal::Diff {
+                                titulo: format!(
+                                    "{}: salida esperada ⟷ obtenida (sin espacios al final)",
+                                    r.caso.nombre
+                                ),
+                                filas: jonesy_core::diff::comparar(&esperada, &obtenida, 1000),
+                                desplazamiento: 0,
+                                lado_a_lado: true,
+                                desplazamiento_h: 0,
+                                lenguaje: Lenguaje::Texto,
+                            });
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+                self.modal = Some(Modal::Casos { resultados, sel });
+            }
             Modal::BuscarProyecto {
                 mut texto,
                 mut mayusculas,
@@ -6925,6 +7298,29 @@ impl App {
             QuePaleta::Objetivo(m, o) => self.correr_objetivo(m, &o),
             QuePaleta::Tp(i) => self.correr_tp(i),
             QuePaleta::Herramienta(nombre, n) => self.correr_accion_herramienta(&nombre, n),
+            QuePaleta::Entrada(e) => {
+                if let Some(k) = self.clave_ejercicio() {
+                    match &e {
+                        Some(p) => {
+                            self.entradas.insert(k, p.clone());
+                        }
+                        None => {
+                            self.entradas.remove(&k);
+                        }
+                    }
+                    self.guardar_sesion();
+                }
+                self.avisar(
+                    match e {
+                        Some(p) => format!(
+                            "Ctrl+F5 va a leer la entrada de {}.",
+                            self.proyecto.relativa(&p)
+                        ),
+                        None => "Ctrl+F5 lee la entrada del teclado.".into(),
+                    },
+                    Nivel::Ok,
+                );
+            }
             QuePaleta::Linea(p, l) => {
                 self.recordar_posicion();
                 self.ir_a(&p, l, 1);

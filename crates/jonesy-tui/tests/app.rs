@@ -2333,3 +2333,113 @@ fn cascada_de_errores_y_columna_subrayada() {
         .count();
     assert!(subrayadas > 0, "algún token subrayado");
 }
+
+#[test]
+#[cfg(unix)] // gcc y sh
+fn casos_entrada_argumentos_medida_y_cuelgue() {
+    if std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let suma = "#include <stdio.h>\n\nint main(int argc, char *argv[])\n{\n    int a, b;\n    if (argc > 1) {\n        printf(\"%s\\n\", argv[1]);\n    }\n    if (scanf(\"%d %d\", &a, &b) == 2) {\n        printf(\"%d\\n\", a + b);\n    }\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("suma.c", suma),
+        ("entrada1.txt", "1 2\n"),
+        ("salida1.txt", "3\n"),
+        ("entrada2.txt", "2 2\n"),
+        ("salida2.txt", "5\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("suma.c"), true);
+    // Comparar con las salidas esperadas: uno coincide y otro no.
+    a.accion(jonesy_tui::accion::Accion::CompararSalidas);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Casos { .. }))
+    });
+    assert!(a
+        .mensaje
+        .as_ref()
+        .unwrap()
+        .0
+        .starts_with("Casos: 1 de 2 coinciden"));
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("✓ entrada1") && p.contains("1 línea(s) distintas"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(matches!(a.modal, Some(Modal::Diff { .. })));
+    a.modal = None;
+    // Elegir la entrada para Ctrl+F5 y los argumentos.
+    a.accion(jonesy_tui::accion::Accion::EjecutarConEntrada);
+    escribir(&mut a, "entrada1");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    a.accion(jonesy_tui::accion::Accion::ArgumentosPrograma);
+    escribir(&mut a, "\"dos palabras\"");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 30);
+    assert!(p.contains("[^F5 Ejecutar < entrada1.txt]"), "{p}");
+    a.accion(jonesy_tui::accion::Accion::Ejecutar);
+    esperar(&mut a, &rx, |a| {
+        a.ejecucion
+            .as_ref()
+            .is_some_and(|d| d.texto().contains("[proceso terminado"))
+    });
+    let texto = a.ejecucion.as_ref().unwrap().texto();
+    assert!(
+        texto.contains("dos palabras") && texto.contains("\n3"),
+        "{texto}"
+    );
+    if jonesy_core::casos::time_gnu().is_some() {
+        esperar(&mut a, &rx, |a| {
+            a.mensaje
+                .as_ref()
+                .is_some_and(|(m, _, _)| m.starts_with("Terminó en"))
+        });
+    }
+    // Lo recordado sobrevive a reabrir el proyecto.
+    a.guardar_sesion();
+    let (b, _rx) = app(dir.path(), false);
+    assert_eq!(
+        b.argumentos.values().next().map(String::as_str),
+        Some("\"dos palabras\"")
+    );
+    assert!(b
+        .entradas
+        .values()
+        .next()
+        .unwrap()
+        .ends_with("entrada1.txt"));
+    // Un ciclo infinito: se avisa y Shift+F5 lo corta.
+    #[cfg(target_os = "linux")]
+    {
+        let dir = proyecto(&[
+            ("colgado.c", "int main(void)\n{\n    volatile long x = 0;\n    for (;;) {\n        x++;\n    }\n}\n"),
+            (".jonesy.toml", "[ripley]\nactivo = false\n"),
+        ]);
+        let (mut a, rx) = app(dir.path(), false);
+        a.abrir_archivo(&dir.path().join("colgado.c"), true);
+        a.accion(jonesy_tui::accion::Accion::Ejecutar);
+        esperar(&mut a, &rx, |a| {
+            a.mensaje
+                .as_ref()
+                .is_some_and(|(m, _, _)| m.contains("ciclo infinito"))
+        });
+        tecla(&mut a, KeyCode::F(5), KeyModifiers::SHIFT);
+        esperar(&mut a, &rx, |a| {
+            a.mensaje
+                .as_ref()
+                .is_some_and(|(m, _, _)| m.contains("cortado"))
+        });
+        esperar(&mut a, &rx, |a| {
+            a.ejecucion
+                .as_ref()
+                .is_some_and(|d| d.texto().contains("[proceso terminado"))
+        });
+    }
+}

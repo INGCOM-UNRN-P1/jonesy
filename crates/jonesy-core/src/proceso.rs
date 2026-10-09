@@ -39,6 +39,43 @@ pub fn interprete() -> (&'static str, &'static str) {
 
 /// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
 /// `Fin` incluye toda la salida combinada, para parsear diagnósticos o JSON.
+/// Tiempo de CPU (en ticks, 1/100 s) de los descendientes de `pid` (Linux, /proc).
+pub fn cpu_de_descendientes(pid: u32) -> u64 {
+    let Ok(it) = std::fs::read_dir("/proc") else {
+        return 0;
+    };
+    let mut hijos: std::collections::HashMap<u32, Vec<u32>> = Default::default();
+    let mut cpu: std::collections::HashMap<u32, u64> = Default::default();
+    for e in it.flatten() {
+        let Some(p) = e.file_name().to_str().and_then(|n| n.parse::<u32>().ok()) else {
+            continue;
+        };
+        let Ok(t) = std::fs::read_to_string(format!("/proc/{p}/stat")) else {
+            continue;
+        };
+        let Some(resto) = t.rsplit_once(')').map(|x| x.1) else {
+            continue;
+        };
+        let campos: Vec<&str> = resto.split_whitespace().collect();
+        let (Some(ppid), Some(u), Some(s)) = (
+            campos.get(1).and_then(|x| x.parse::<u32>().ok()),
+            campos.get(11).and_then(|x| x.parse::<u64>().ok()),
+            campos.get(12).and_then(|x| x.parse::<u64>().ok()),
+        ) else {
+            continue;
+        };
+        hijos.entry(ppid).or_default().push(p);
+        cpu.insert(p, u + s);
+    }
+    let mut total = 0;
+    let mut pila = hijos.get(&pid).cloned().unwrap_or_default();
+    while let Some(p) = pila.pop() {
+        total += cpu.get(&p).copied().unwrap_or(0);
+        pila.extend(hijos.get(&p).cloned().unwrap_or_default());
+    }
+    total
+}
+
 pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: Sender<Salida>) {
     let comando = comando.to_string();
     let dir = dir.to_path_buf();

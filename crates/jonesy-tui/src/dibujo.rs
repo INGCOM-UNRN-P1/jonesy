@@ -2450,7 +2450,17 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     // Derecha: git y botones (RF-2.1: compilar con un clic).
     let mut botones: Vec<(String, Accion)> = vec![
         ("[F6 Compilar]".into(), Accion::Compilar),
-        ("[^F5 Ejecutar]".into(), Accion::Ejecutar),
+        (
+            match app
+                .clave_ejercicio()
+                .and_then(|k| app.entradas.get(&k))
+                .and_then(|p| p.file_name())
+            {
+                Some(n) => format!("[^F5 Ejecutar < {}]", n.to_string_lossy()),
+                None => "[^F5 Ejecutar]".into(),
+            },
+            Accion::Ejecutar,
+        ),
         (
             if app.depuracion.is_some() {
                 "[F5 Continuar]"
@@ -2929,6 +2939,85 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     .min(i.width.saturating_sub(1)),
                 i.y,
             ))
+        }
+        Modal::ArgsPrograma { texto } => {
+            let r = centrado(area, 64, 5);
+            limpiar(f, r);
+            let b = bloque(
+                " Argumentos del programa · Enter guarda · Esc cancela ",
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(
+                Paragraph::new(vec![
+                    Line::raw(texto.clone()),
+                    Line::raw(""),
+                    Line::styled(
+                        "Para este ejercicio; los usan Ctrl+F5 y F5. Vacío: sin argumentos.",
+                        Style::default().fg(tema::atenuado()),
+                    ),
+                ]),
+                i,
+            );
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
+        }
+        Modal::Casos { resultados, sel } => {
+            let alto = (resultados.len() as u16 + 4).min(area.height.saturating_sub(2));
+            let r = centrado(area, 80, alto);
+            limpiar(f, r);
+            let b = bloque(" Casos · Enter muestra la diferencia · Esc cierra ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let mut lineas: Vec<Line> = resultados
+                .iter()
+                .enumerate()
+                .map(|(n, x)| {
+                    let fondo = if n == *sel {
+                        tema::fondo_seleccion()
+                    } else {
+                        tema::fondo()
+                    };
+                    let st = Style::default().bg(fondo);
+                    let (marca, color, detalle) = match (x.coincide, x.corrida.colgado) {
+                        (_, true) => ("✗", tema::error(), "se colgó (más de 10 s)".to_string()),
+                        (Some(true), _) => ("✓", tema::ok(), "coincide".to_string()),
+                        (Some(false), _) => (
+                            "✗",
+                            tema::error(),
+                            format!("{} línea(s) distintas", x.distintas),
+                        ),
+                        (None, _) => ("·", tema::atenuado(), "sin salida esperada".to_string()),
+                    };
+                    let codigo = match x.corrida.codigo {
+                        Some(0) | None => String::new(),
+                        Some(c) => format!(" · código {c}"),
+                    };
+                    Line::from(vec![
+                        Span::styled(format!(" {marca} "), st.fg(color)),
+                        Span::styled(
+                            format!("{:<24}", x.caso.nombre),
+                            st.add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(format!("{detalle}{codigo}"), st),
+                        Span::styled(
+                            format!("  {:.2} s", x.corrida.tiempo.as_secs_f64()),
+                            st.fg(tema::atenuado()),
+                        ),
+                    ])
+                })
+                .collect();
+            lineas.push(Line::raw(""));
+            lineas.push(Line::styled(
+                " Se comparan sin espacios al final de las líneas ni líneas vacías al final.",
+                Style::default().fg(tema::atenuado()),
+            ));
+            f.render_widget(Paragraph::new(lineas), i);
+            None
         }
         Modal::BuscarProyecto {
             texto,

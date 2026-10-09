@@ -96,6 +96,9 @@ pub enum Accion {
     Marcadores,
     SiguienteProblema,
     AnteriorProblema,
+    EjecutarConEntrada,
+    CompararSalidas,
+    ArgumentosPrograma,
 }
 
 pub struct Info {
@@ -194,6 +197,12 @@ impl Accion {
             Marcadores => ("Marcadores…", ""),
             SiguienteProblema => ("Ir al problema siguiente", "Alt+N"),
             AnteriorProblema => ("Ir al problema anterior", "Alt+Shift+N"),
+            EjecutarConEntrada => (
+                "Ejecutar con entrada… (archivo de entrada para Ctrl+F5)",
+                "",
+            ),
+            CompararSalidas => ("Comparar con las salidas esperadas", ""),
+            ArgumentosPrograma => ("Argumentos del programa…", ""),
         };
         Info { titulo, atajo }
     }
@@ -287,6 +296,9 @@ impl Accion {
             Marcadores,
             SiguienteProblema,
             AnteriorProblema,
+            EjecutarConEntrada,
+            CompararSalidas,
+            ArgumentosPrograma,
             Salir,
         ]
     }
@@ -464,6 +476,9 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             vec![
                 A(Compilar),
                 A(Ejecutar),
+                A(EjecutarConEntrada),
+                A(ArgumentosPrograma),
+                A(CompararSalidas),
                 A(Probar),
                 SEP,
                 A(LimpiarCompilacion),

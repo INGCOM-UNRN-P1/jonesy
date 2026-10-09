@@ -21,6 +21,8 @@ pub enum Aviso {
     Senal(i32),
     /// Terminó el diagnóstico del entorno (Ayuda → Diagnóstico del entorno): Markdown.
     Doctor(String),
+    /// Terminaron los casos de Construir → Comparar con las salidas esperadas.
+    Casos(Vec<jonesy_core::casos::ResultadoCaso>),
 }
 
 pub fn preparar() -> std::io::Result<()> {

@@ -93,7 +93,7 @@ comprueba que esté al día.
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
 | Editar | [E]ditar | F10 y E | 22 |
 | Ver | [V]er | Alt+V (o F10 y V) | 15 |
-| Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
+| Construir | [C]onstruir | Alt+C (o F10 y C) | 9 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
 | Git | [G]it | F10 y G | 6 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
@@ -183,16 +183,19 @@ comprueba que esté al día.
 ## Construir
 
 ```text
-┌──────────────────────────────────────────────────┐
-│ Compilar archivo o proyecto                   F6 │
-│ Compilar y ejecutar                      Ctrl+F5 │
-│ Correr pruebas (make test)               Ctrl+F6 │
-├──────────────────────────────────────────────────┤
-│ Limpiar compilación (make clean)                 │
-│ Generar documentación (make doc)                 │
-├──────────────────────────────────────────────────┤
-│ Ver ejercicios y objetivos del proyecto    Alt+Y │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│ Compilar archivo o proyecto                                   F6 │
+│ Compilar y ejecutar                                      Ctrl+F5 │
+│ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)          │
+│ Argumentos del programa…                                         │
+│ Comparar con las salidas esperadas                               │
+│ Correr pruebas (make test)                               Ctrl+F6 │
+├──────────────────────────────────────────────────────────────────┤
+│ Limpiar compilación (make clean)                                 │
+│ Generar documentación (make doc)                                 │
+├──────────────────────────────────────────────────────────────────┤
+│ Ver ejercicios y objetivos del proyecto                    Alt+Y │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ## Depurar

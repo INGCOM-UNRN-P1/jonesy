@@ -21,6 +21,9 @@ pub struct Sesion {
     pub breakpoints: Vec<(String, usize)>,
     /// Marcadores de línea (Ctrl+F2), relativos a la raíz y 1-based.
     pub marcadores: Vec<(String, usize)>,
+    /// Por ejercicio (módulo o archivo): la entrada elegida para Ctrl+F5 y los argumentos.
+    pub entradas: Vec<(String, String)>,
+    pub argumentos: Vec<(String, String)>,
     /// Tamaños de paneles ajustados por el usuario.
     pub paneles: Option<crate::proyecto::TamPaneles>,
     /// Barra izquierda visible y su pestaña ("archivos" o "proyecto").
@@ -147,6 +150,8 @@ mod tests {
             preview_markdown: false,
             breakpoints: vec![("src/a.c".into(), 7)],
             marcadores: vec![("src/a.c".into(), 3)],
+            entradas: vec![("ej1".into(), "ej1/entrada1.txt".into())],
+            argumentos: vec![("ej1".into(), "-n 3".into())],
             paneles: Some(crate::proyecto::TamPaneles {
                 izquierdo: 30,
                 ..Default::default()
