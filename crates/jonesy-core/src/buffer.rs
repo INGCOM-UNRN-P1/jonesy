@@ -16,6 +16,8 @@ pub struct Delta {
     pub offset: usize,
     pub insertado: String,
     pub borrados: usize,
+    /// Saltos de línea que había en lo borrado (para correr marcas y breakpoints).
+    pub saltos_borrados: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -350,6 +352,7 @@ impl Buffer {
             return None;
         }
         let borrado = self.texto.slice(offset..offset + borrar).to_string();
+        let saltos_borrados = borrado.matches('\n').count();
         self.texto.remove(offset..offset + borrar);
         self.texto.insert(offset, insertar);
         let ahora = Instant::now();
@@ -389,6 +392,7 @@ impl Buffer {
             offset,
             insertado: insertar.to_string(),
             borrados: borrar,
+            saltos_borrados,
         })
     }
 
@@ -568,6 +572,7 @@ impl Buffer {
             offset: e.offset,
             insertado: e.borrado.clone(),
             borrados: n,
+            saltos_borrados: e.insertado.matches('\n').count(),
         };
         self.rehacer.push(e);
         Some(delta)
@@ -585,6 +590,7 @@ impl Buffer {
             offset: e.offset,
             insertado: e.insertado.clone(),
             borrados: n,
+            saltos_borrados: e.borrado.matches('\n').count(),
         };
         self.deshacer.push(e);
         Some(delta)
@@ -1047,7 +1053,8 @@ mod tests {
             Delta {
                 offset: 4,
                 insertado: "y".into(),
-                borrados: 0
+                borrados: 0,
+                saltos_borrados: 0
             }
         );
         assert_eq!(b.contenido(), "int yx;\n");

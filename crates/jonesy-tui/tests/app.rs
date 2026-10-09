@@ -1976,6 +1976,9 @@ fn pruebas_de_otros_frameworks_en_sarif() {
 
 #[test]
 fn diagnostico_del_entorno_desde_ayuda() {
+    // Sin las pruebas de humo (gcc, gdb, valgrind): cargan la máquina mientras corren
+    // las demás pruebas que usan gdb.
+    std::env::set_var("JONESY_DOCTOR_RAPIDO", "1");
     let dir = proyecto(&[("main.c", MAIN)]);
     let (mut a, rx) = app(dir.path(), false);
     a.accion(jonesy_tui::accion::Accion::Doctor);
@@ -2230,4 +2233,55 @@ fn buscar_en_el_proyecto_con_panel_de_resultados() {
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
     assert_eq!(a.buf().buf.linea_columna().0, 1);
     assert_eq!(a.buf().buf.texto_seleccionado().as_deref(), Some("total"));
+}
+
+#[test]
+fn marcadores_problemas_y_lineas_que_se_corren() {
+    let dir = proyecto(&[
+        ("main.c", "int a;\nint b;\nint c;\nint d;\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let main = dir.path().join("main.c");
+    a.abrir_archivo(&main, true);
+    // Marcadores en las líneas 2 y 4; Shift+F2 va de uno a otro.
+    let pos = a.buf().buf.linea_columna_a_pos(1, 0);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(2), KeyModifiers::CONTROL);
+    let pos = a.buf().buf.linea_columna_a_pos(3, 0);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(2), KeyModifiers::CONTROL);
+    let p = pantalla(&mut a, 100, 20);
+    assert_eq!(p.matches('◆').count(), 2, "{p}");
+    tecla(&mut a, KeyCode::F(2), KeyModifiers::SHIFT);
+    assert_eq!(a.buf().buf.linea_columna().0, 1, "da la vuelta al primero");
+    // Una línea nueva arriba corre los marcadores y los breakpoints.
+    a.alternar_breakpoint(2);
+    a.buf_mut().buf.mover_a(0, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.marcadores.contains(&(main.clone(), 3)) && a.marcadores.contains(&(main.clone(), 5)));
+    assert!(a.breakpoints.iter().any(|(_, l)| *l == 4));
+    // La lista de marcadores.
+    a.accion(jonesy_tui::accion::Accion::Marcadores);
+    let p = pantalla(&mut a, 100, 20);
+    assert!(p.contains("main.c:3") && p.contains("int b;"), "{p}");
+    a.modal = None;
+    // Problemas siguiente/anterior sin abrir el panel.
+    a.diag_compilador = jonesy_core::diagnostico::parsear_gcc(
+        "main.c:2:5: error: uno\nmain.c:5:5: warning: dos\n",
+        dir.path(),
+    );
+    a.buf_mut().buf.mover_a(0, false);
+    tecla(&mut a, KeyCode::Char('n'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.linea_columna(), (1, 4));
+    assert!(a.mensaje.as_ref().unwrap().0.starts_with("1/2: uno"));
+    tecla(&mut a, KeyCode::Char('n'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.linea_columna().0, 4);
+    tecla(
+        &mut a,
+        KeyCode::Char('N'),
+        KeyModifiers::ALT | KeyModifiers::SHIFT,
+    );
+    assert_eq!(a.buf().buf.linea_columna().0, 1);
+    assert!(!a.panel_inferior || a.pestana != Pestana::Problemas || a.foco == Foco::Editor);
 }

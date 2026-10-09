@@ -226,7 +226,7 @@ TOML, ver [`docs/integraciones.md`](docs/integraciones.md)):
   (`.jonesy.toml` válido, permisos), entorno de la cátedra y herramientas del ecosistema.
   ✗ es necesario (sale con código 1), ! recomendado, · opcional. `--rapido` saltea las
   pruebas de humo; `--json` emite el sobre común del ecosistema. También desde
-  *Ayuda → Diagnóstico del entorno*.
+  *Ayuda → Diagnóstico del entorno* (con `JONESY_DOCTOR_RAPIDO=1`, sin las pruebas de humo).
 
 ## Extensiones
 

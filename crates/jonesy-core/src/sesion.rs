@@ -19,6 +19,8 @@ pub struct Sesion {
     pub vista_compacta: String,
     pub preview_markdown: bool,
     pub breakpoints: Vec<(String, usize)>,
+    /// Marcadores de línea (Ctrl+F2), relativos a la raíz y 1-based.
+    pub marcadores: Vec<(String, usize)>,
     /// Tamaños de paneles ajustados por el usuario.
     pub paneles: Option<crate::proyecto::TamPaneles>,
     /// Barra izquierda visible y su pestaña ("archivos" o "proyecto").
@@ -144,6 +146,7 @@ mod tests {
             vista_compacta: "codigo".into(),
             preview_markdown: false,
             breakpoints: vec![("src/a.c".into(), 7)],
+            marcadores: vec![("src/a.c".into(), 3)],
             paneles: Some(crate::proyecto::TamPaneles {
                 izquierdo: 30,
                 ..Default::default()

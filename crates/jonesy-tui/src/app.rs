@@ -137,6 +137,8 @@ pub enum QuePaleta {
     Tp(usize),
     /// Acción de una integración: (nombre, índice de la acción).
     Herramienta(String, usize),
+    /// Ir a una línea (1-based) de un archivo: marcadores.
+    Linea(PathBuf, usize),
 }
 
 #[derive(Debug, Clone)]
@@ -634,6 +636,8 @@ pub struct App {
     inicio_pruebas: Option<std::time::SystemTime>,
     pub depuracion: Option<Depuracion>,
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
+    /// Marcadores de línea (1-based), como los breakpoints.
+    pub marcadores: BTreeSet<(PathBuf, usize)>,
 
     pub repo: Option<Repo>,
     pub git_estado: Option<jonesy_git::Estado>,
@@ -798,6 +802,7 @@ impl App {
             inicio_pruebas: None,
             depuracion: None,
             breakpoints: BTreeSet::new(),
+            marcadores: BTreeSet::new(),
             repo,
             git_estado: None,
             git_marca: None,
@@ -906,6 +911,10 @@ impl App {
                 self.breakpoints
                     .insert((self.proyecto.raiz.join(rel), linea));
             }
+            for (rel, linea) in s.marcadores {
+                self.marcadores
+                    .insert((self.proyecto.raiz.join(rel), linea));
+            }
         }
         for a in archivos {
             let ruta = if a.is_absolute() {
@@ -976,6 +985,11 @@ impl App {
             preview_markdown: self.preview_markdown,
             breakpoints: self
                 .breakpoints
+                .iter()
+                .map(|(p, l)| (self.proyecto.relativa(p), *l))
+                .collect(),
+            marcadores: self
+                .marcadores
                 .iter()
                 .map(|(p, l)| (self.proyecto.relativa(p), *l))
                 .collect(),
@@ -1180,6 +1194,26 @@ impl App {
         let b = self.buf_mut();
         if let Some(d) = f(&mut b.buf) {
             b.ultimo_cambio = Instant::now();
+            // Breakpoints y marcadores siguen a su línea si se agregan o quitan líneas.
+            let corrimiento =
+                d.insertado.matches('\n').count() as isize - d.saltos_borrados as isize;
+            if corrimiento != 0 {
+                if let Some(ruta) = b.buf.ruta.clone() {
+                    let linea = b.buf.texto.char_to_line(d.offset.min(b.buf.largo())) + 1;
+                    for marcas in [&mut self.breakpoints, &mut self.marcadores] {
+                        *marcas = std::mem::take(marcas)
+                            .into_iter()
+                            .map(|(p, l)| {
+                                if p == ruta && l > linea {
+                                    (p, (l as isize + corrimiento).max(linea as isize) as usize)
+                                } else {
+                                    (p, l)
+                                }
+                            })
+                            .collect();
+                    }
+                }
+            }
             self.tel(TelemetryEvent::TextDelta {
                 buffer_id: id,
                 offset: d.offset,
@@ -2535,7 +2569,7 @@ impl App {
         }
     }
 
-    fn alternar_breakpoint(&mut self, linea: usize) {
+    pub fn alternar_breakpoint(&mut self, linea: usize) {
         let Some(ruta) = self.activo_ruta() else {
             return;
         };
@@ -4027,10 +4061,12 @@ impl App {
         let integraciones = self.integraciones.clone();
         let errores = self.errores_integraciones.clone();
         let tx = self.tx.clone();
+        // JONESY_DOCTOR_RAPIDO saltea las pruebas de humo (máquinas lentas, pruebas).
+        let humo = std::env::var_os("JONESY_DOCTOR_RAPIDO").is_none();
         std::thread::spawn(move || {
             let informe = jonesy_core::doctor::informe(
                 env!("CARGO_PKG_VERSION"),
-                jonesy_core::doctor::chequeos(&proyecto, &integraciones, &errores, true),
+                jonesy_core::doctor::chequeos(&proyecto, &integraciones, &errores, humo),
             );
             let _ = tx.send(Aviso::Doctor(jonesy_core::doctor::markdown(&informe)));
         });
@@ -4936,6 +4972,11 @@ impl App {
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::Comentar => self.editar(|b| b.alternar_comentario()),
             Accion::IrADefinicion => self.ir_a_definicion(),
+            Accion::AlternarMarcador => self.alternar_marcador(),
+            Accion::SiguienteMarcador => self.siguiente_marcador(),
+            Accion::Marcadores => self.lista_marcadores(),
+            Accion::SiguienteProblema => self.problema_cercano(true),
+            Accion::AnteriorProblema => self.problema_cercano(false),
             Accion::Volver => self.volver(),
             Accion::DuplicarLinea => self.editar(|b| b.duplicar_lineas()),
             Accion::SubirLinea => self.editar(|b| b.mover_lineas(false)),
@@ -5598,6 +5639,12 @@ impl App {
             (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
             (KeyCode::Char('s'), false, true, _) => Some(Accion::Esquema),
+            (KeyCode::Char('n'), false, true, false) => Some(Accion::SiguienteProblema),
+            (KeyCode::Char('N'), false, true, _) | (KeyCode::Char('n'), false, true, true) => {
+                Some(Accion::AnteriorProblema)
+            }
+            (KeyCode::F(2), true, _, _) => Some(Accion::AlternarMarcador),
+            (KeyCode::F(2), _, _, true) => Some(Accion::SiguienteMarcador),
             // Ctrl+Shift+F sólo llega en algunas terminales: también Ctrl+F3.
             (KeyCode::Char('F'), true, _, _) | (KeyCode::Char('f'), true, _, true) => {
                 Some(Accion::BuscarEnProyecto)
@@ -5966,6 +6013,115 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Ctrl+F2: pone o quita un marcador en la línea del cursor.
+    fn alternar_marcador(&mut self) {
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let linea = self.buf().buf.linea_columna().0 + 1;
+        let clave = (ruta, linea);
+        if !self.marcadores.remove(&clave) {
+            self.marcadores.insert(clave);
+            self.avisar(
+                format!("Marcador en la línea {linea} (Shift+F2 va al siguiente)."),
+                Nivel::Info,
+            );
+        }
+        self.guardar_sesion();
+    }
+
+    /// Shift+F2: el próximo marcador después del cursor (en este archivo y después en
+    /// los demás, en orden), dando la vuelta.
+    fn siguiente_marcador(&mut self) {
+        if self.marcadores.is_empty() {
+            self.avisar("No hay marcadores: Ctrl+F2 pone uno.", Nivel::Aviso);
+            return;
+        }
+        let actual = (
+            self.activo_ruta().unwrap_or_default(),
+            self.buf().buf.linea_columna().0 + 1,
+        );
+        let (p, l) = self
+            .marcadores
+            .iter()
+            .find(|m| **m > actual)
+            .or_else(|| self.marcadores.iter().next())
+            .cloned()
+            .unwrap();
+        self.recordar_posicion();
+        self.ir_a(&p, l, 1);
+        self.cambiar_foco(Foco::Editor);
+    }
+
+    /// Ver → Marcadores: la lista para elegir uno.
+    fn lista_marcadores(&mut self) {
+        let opciones: Vec<OpcionPaleta> = self
+            .marcadores
+            .iter()
+            .map(|(p, l)| {
+                let texto = std::fs::read_to_string(p)
+                    .ok()
+                    .and_then(|t| t.lines().nth(l - 1).map(|x| x.trim().to_string()))
+                    .unwrap_or_default();
+                OpcionPaleta {
+                    titulo: format!("{}:{l}  {texto}", self.proyecto.relativa(p)),
+                    atajo: String::new(),
+                    que: QuePaleta::Linea(p.clone(), *l),
+                }
+            })
+            .collect();
+        if opciones.is_empty() {
+            self.avisar("No hay marcadores: Ctrl+F2 pone uno.", Nivel::Aviso);
+            return;
+        }
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
+    }
+
+    /// Alt+N / Alt+Shift+N: el problema siguiente o anterior al cursor, sin abrir el panel.
+    fn problema_cercano(&mut self, adelante: bool) {
+        let mut v: Vec<(PathBuf, usize, usize, String)> = self
+            .diagnosticos()
+            .into_iter()
+            .filter_map(|d| {
+                Some((
+                    d.archivo.clone()?,
+                    d.linea.max(1),
+                    d.columna.max(1),
+                    d.resumen.clone().unwrap_or_else(|| d.mensaje.clone()),
+                ))
+            })
+            .collect();
+        v.sort_by(|a, b| (&a.0, a.1, a.2).cmp(&(&b.0, b.1, b.2)));
+        v.dedup_by(|a, b| a.0 == b.0 && a.1 == b.1);
+        if v.is_empty() {
+            self.avisar("No hay problemas.", Nivel::Ok);
+            return;
+        }
+        let (fila, col) = self.buf().buf.linea_columna();
+        let aqui = (self.activo_ruta().unwrap_or_default(), fila + 1, col + 1);
+        let clave = |x: &(PathBuf, usize, usize, String)| (x.0.clone(), x.1, 0usize);
+        let elegido = if adelante {
+            v.iter()
+                .find(|x| clave(x) > (aqui.0.clone(), aqui.1, 0))
+                .or(v.first())
+        } else {
+            v.iter()
+                .rev()
+                .find(|x| clave(x) < (aqui.0.clone(), aqui.1, 0))
+                .or(v.last())
+        }
+        .cloned()
+        .unwrap();
+        let n = v.iter().position(|x| x == &elegido).unwrap_or(0) + 1;
+        self.ir_a(&elegido.0, elegido.1, elegido.2);
+        self.cambiar_foco(Foco::Editor);
+        self.avisar(format!("{n}/{}: {}", v.len(), elegido.3), Nivel::Aviso);
     }
 
     fn saltar_a_problema(&mut self, i: usize) {
@@ -6719,6 +6875,11 @@ impl App {
             QuePaleta::Objetivo(m, o) => self.correr_objetivo(m, &o),
             QuePaleta::Tp(i) => self.correr_tp(i),
             QuePaleta::Herramienta(nombre, n) => self.correr_accion_herramienta(&nombre, n),
+            QuePaleta::Linea(p, l) => {
+                self.recordar_posicion();
+                self.ir_a(&p, l, 1);
+                self.cambiar_foco(Foco::Editor);
+            }
             QuePaleta::Plugin(c) => {
                 if let Some(p) = &self.plugins {
                     let b = &self.buf().buf;

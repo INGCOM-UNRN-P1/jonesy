@@ -21,6 +21,7 @@ por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propues
 - **F10 durante la depuración** es «Paso» (siguiente línea): para abrir un menú en ese
   momento, usá Alt+letra o el clic.
 - Alt+S abre el esquema del archivo en la barra izquierda (no es un menú).
+- Alt+N y Alt+Shift+N van al problema siguiente y anterior (no son menús).
 - Con el foco en la terminal, Alt+letra va a la shell (Alt+D, Alt+C… son atajos de bash).
 - A la derecha de cada entrada está su **atajo global**. Las teclas de una sola letra del
   panel de git (`a`, `u`, `c`, `l`, `z`, `m`) no aparecen en los menús: se muestran al pie
@@ -90,8 +91,8 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
-| Editar | [E]ditar | F10 y E | 19 |
-| Ver | [V]er | Alt+V (o F10 y V) | 13 |
+| Editar | [E]ditar | F10 y E | 22 |
+| Ver | [V]er | Alt+V (o F10 y V) | 15 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
 | Git | [G]it | F10 y G | 6 |
@@ -140,6 +141,10 @@ comprueba que esté al día.
 │ Ir a la definición                          F12 / Ctrl+clic │
 │ Volver a donde estaba                                 Alt+← │
 ├─────────────────────────────────────────────────────────────┤
+│ Poner / quitar marcador                             Ctrl+F2 │
+│ Ir al marcador siguiente                           Shift+F2 │
+│ Marcadores…                                                 │
+├─────────────────────────────────────────────────────────────┤
 │ Comentar / descomentar líneas                        Ctrl+/ │
 │ Duplicar línea                                       Ctrl+D │
 │ Mover línea arriba                                    Alt+↑ │
@@ -153,24 +158,26 @@ comprueba que esté al día.
 ## Ver
 
 ```text
-┌─────────────────────────────────────────────────┐
-│ Modo código                                  F8 │
-│ Modo consigna                                F7 │
-│ Modo terminal integrada                      F9 │
-├─────────────────────────────────────────────────┤
-│ Explorador de archivos                    Alt+E │
-│ Esquema del archivo (funciones y tipos)   Alt+S │
-│ Problemas y diagnósticos                  Alt+P │
-│ Salida de la compilación                  Alt+O │
-│ Terminal (deck)                           Alt+T │
-│ Abrir panel interactivo de Git            Alt+G │
-│ Panel de reglas pedagógicas (ripley)      Alt+R │
-├─────────────────────────────────────────────────┤
-│ Documentación contextual (quick-doc)         F4 │
-│ Vista previa de Markdown                 Ctrl+P │
-├─────────────────────────────────────────────────┤
-│ Restablecer disposición de paneles              │
-└─────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────┐
+│ Modo código                                       F8 │
+│ Modo consigna                                     F7 │
+│ Modo terminal integrada                           F9 │
+├──────────────────────────────────────────────────────┤
+│ Explorador de archivos                         Alt+E │
+│ Esquema del archivo (funciones y tipos)        Alt+S │
+│ Problemas y diagnósticos                       Alt+P │
+│ Ir al problema siguiente                       Alt+N │
+│ Ir al problema anterior                  Alt+Shift+N │
+│ Salida de la compilación                       Alt+O │
+│ Terminal (deck)                                Alt+T │
+│ Abrir panel interactivo de Git                 Alt+G │
+│ Panel de reglas pedagógicas (ripley)           Alt+R │
+├──────────────────────────────────────────────────────┤
+│ Documentación contextual (quick-doc)              F4 │
+│ Vista previa de Markdown                      Ctrl+P │
+├──────────────────────────────────────────────────────┤
+│ Restablecer disposición de paneles                   │
+└──────────────────────────────────────────────────────┘
 ```
 
 ## Construir

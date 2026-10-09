@@ -936,6 +936,12 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 .is_some_and(|r| mismo_archivo(&a, r))
                 .then_some(l - 1)
         });
+    let marcas: Vec<usize> = app
+        .marcadores
+        .iter()
+        .filter(|(a, _)| ruta.as_ref().is_some_and(|r| mismo_archivo(a, r)))
+        .map(|(_, l)| l - 1)
+        .collect();
     let bps: Vec<usize> = app
         .breakpoints
         .iter()
@@ -1024,7 +1030,12 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 .set_fg(tema::atenuado());
             continue;
         }
-        // Gutter: breakpoint, número, marca de diagnóstico.
+        // Gutter: marcador, breakpoint, número, marca de diagnóstico.
+        if marcas.contains(&linea) {
+            buf[(gutter.x, y)]
+                .set_symbol(if sim.ascii { "#" } else { "◆" })
+                .set_fg(tema::acento());
+        }
         if bps.contains(&linea) {
             buf[(gutter.x, y)]
                 .set_symbol(sim.breakpoint)

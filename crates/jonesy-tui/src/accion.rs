@@ -91,6 +91,11 @@ pub enum Accion {
     Volver,
     Esquema,
     BuscarEnProyecto,
+    AlternarMarcador,
+    SiguienteMarcador,
+    Marcadores,
+    SiguienteProblema,
+    AnteriorProblema,
 }
 
 pub struct Info {
@@ -184,6 +189,11 @@ impl Accion {
             Volver => ("Volver a donde estaba", "Alt+←"),
             Esquema => ("Esquema del archivo (funciones y tipos)", "Alt+S"),
             BuscarEnProyecto => ("Buscar en el proyecto…", "Ctrl+Shift+F"),
+            AlternarMarcador => ("Poner / quitar marcador", "Ctrl+F2"),
+            SiguienteMarcador => ("Ir al marcador siguiente", "Shift+F2"),
+            Marcadores => ("Marcadores…", ""),
+            SiguienteProblema => ("Ir al problema siguiente", "Alt+N"),
+            AnteriorProblema => ("Ir al problema anterior", "Alt+Shift+N"),
         };
         Info { titulo, atajo }
     }
@@ -272,6 +282,11 @@ impl Accion {
             Volver,
             Esquema,
             BuscarEnProyecto,
+            AlternarMarcador,
+            SiguienteMarcador,
+            Marcadores,
+            SiguienteProblema,
+            AnteriorProblema,
             Salir,
         ]
     }
@@ -350,7 +365,7 @@ impl Menu {
 }
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
-pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'r', 'p', 'o', 'm'];
+pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'n', 'r', 'p', 'o', 'm'];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
 /// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
@@ -406,6 +421,10 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(IrADefinicion),
                 A(Volver),
                 SEP,
+                A(AlternarMarcador),
+                A(SiguienteMarcador),
+                A(Marcadores),
+                SEP,
                 A(Comentar),
                 A(DuplicarLinea),
                 A(SubirLinea),
@@ -426,6 +445,8 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Explorador),
                 A(Esquema),
                 A(Problemas),
+                A(SiguienteProblema),
+                A(AnteriorProblema),
                 A(SalidaCompilacion),
                 A(Terminal),
                 A(PanelGit),
@@ -583,6 +604,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Buscar y reemplazar (Tab campo, Alt+M mayúsculas, Alt+P palabra, Enter reemplaza, F3 saltea, Alt+T todas) | Ctrl+H |
 | Buscar en el proyecto (resultados en el panel Búsqueda) | Ctrl+Shift+F o Ctrl+F3 |
+| Marcador: poner o quitar · siguiente | Ctrl+F2 · Shift+F2 |
+| Problema siguiente · anterior | Alt+N · Alt+Shift+N |
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |
