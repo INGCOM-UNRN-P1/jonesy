@@ -1499,6 +1499,10 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
                 }
             }
             Pestana::Depurador if app.depuracion.is_none() => continue,
+            Pestana::Busqueda => match &app.busqueda_proyecto {
+                None => continue,
+                Some((_, r)) => titulo = format!("{titulo} ({})", r.hallazgos.len()),
+            },
             Pestana::Ejecucion if app.ejecucion.is_none() => continue,
             _ => {}
         }
@@ -1537,6 +1541,10 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
     match app.pestana {
         Pestana::Problemas => {
             dibujar_problemas(f, app, cuerpo);
+            None
+        }
+        Pestana::Busqueda => {
+            dibujar_busqueda(f, app, cuerpo);
             None
         }
         Pestana::Salida => {
@@ -1624,6 +1632,65 @@ fn icono_severidad(s: Severidad, ascii: bool) -> &'static str {
         (Severidad::Nota, true) => "N",
         (Severidad::Estilo, true) => "S",
     }
+}
+
+fn dibujar_busqueda(f: &mut Frame, app: &mut App, r: Rect) {
+    let Some((patron, res)) = app.busqueda_proyecto.clone() else {
+        return;
+    };
+    if res.hallazgos.is_empty() {
+        f.render_widget(
+            Paragraph::new(format!(" «{patron}» no aparece en el proyecto."))
+                .style(Style::default().fg(tema::atenuado())),
+            r,
+        );
+        return;
+    }
+    app.sel_busqueda = app.sel_busqueda.min(res.hallazgos.len() - 1);
+    let alto = r.height as usize;
+    let base = app.sel_busqueda.saturating_sub(alto.saturating_sub(1));
+    app.zonas.lista_inferior = Some((r, base));
+    let lineas: Vec<Line> = res
+        .hallazgos
+        .iter()
+        .enumerate()
+        .skip(base)
+        .take(alto)
+        .map(|(n, h)| {
+            let fondo = if n == app.sel_busqueda {
+                tema::fondo_seleccion()
+            } else {
+                tema::fondo()
+            };
+            let st = Style::default().bg(fondo);
+            let mut spans = vec![Span::styled(
+                format!(" {}:{} ", app.proyecto.relativa(&h.archivo), h.linea + 1),
+                st.fg(tema::atenuado()),
+            )];
+            // La línea sin sangría, con lo encontrado resaltado.
+            let chars: Vec<char> = h.texto.chars().collect();
+            let sangria = chars.iter().take_while(|c| c.is_whitespace()).count();
+            let mut ult = sangria;
+            for (a, z) in &h.rangos {
+                let a = (*a).max(sangria);
+                if a > ult {
+                    spans.push(Span::styled(chars[ult..a].iter().collect::<String>(), st));
+                }
+                if *z > a {
+                    spans.push(Span::styled(
+                        chars[a..*z].iter().collect::<String>(),
+                        st.fg(tema::advertencia()).add_modifier(Modifier::BOLD),
+                    ));
+                }
+                ult = (*z).max(ult);
+            }
+            if ult < chars.len() {
+                spans.push(Span::styled(chars[ult..].iter().collect::<String>(), st));
+            }
+            Line::from(spans)
+        })
+        .collect();
+    f.render_widget(Paragraph::new(lineas), r);
 }
 
 fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
@@ -2788,6 +2855,38 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let i = b.inner(r);
             f.render_widget(b, r);
             f.render_widget(Paragraph::new(texto.clone()), i);
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
+        }
+        Modal::BuscarProyecto {
+            texto,
+            mayusculas,
+            palabra,
+        } => {
+            let r = centrado(area, 64, 5);
+            limpiar(f, r);
+            let b = bloque(" Buscar en el proyecto · Enter busca · Esc cierra ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let marca = |on: bool| if on { "[x]" } else { "[ ]" };
+            f.render_widget(
+                Paragraph::new(vec![
+                    Line::raw(texto.clone()),
+                    Line::raw(""),
+                    Line::styled(
+                        format!(
+                            "{} mayúsculas (Alt+M)  {} palabra completa (Alt+P)",
+                            marca(*mayusculas),
+                            marca(*palabra)
+                        ),
+                        Style::default().fg(tema::nota()),
+                    ),
+                ]),
+                i,
+            );
             Some((
                 i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
                     .min(i.width.saturating_sub(1)),

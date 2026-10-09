@@ -90,7 +90,7 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
-| Editar | [E]ditar | F10 y E | 18 |
+| Editar | [E]ditar | F10 y E | 19 |
 | Ver | [V]er | Alt+V (o F10 y V) | 13 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
@@ -135,6 +135,7 @@ comprueba que esté al día.
 │ Buscar…                                         F3 / Ctrl+F │
 │ Buscar siguiente                                   Shift+F3 │
 │ Buscar y reemplazar…                                 Ctrl+H │
+│ Buscar en el proyecto…                         Ctrl+Shift+F │
 │ Ir a la línea…                                       Ctrl+G │
 │ Ir a la definición                          F12 / Ctrl+clic │
 │ Volver a donde estaba                                 Alt+← │

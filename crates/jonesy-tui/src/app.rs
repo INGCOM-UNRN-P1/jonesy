@@ -93,15 +93,18 @@ pub enum Pestana {
     Terminal,
     Ejecucion,
     Depurador,
+    /// Resultados de Editar → Buscar en el proyecto.
+    Busqueda,
 }
 
 impl Pestana {
-    pub const TODAS: [Pestana; 5] = [
+    pub const TODAS: [Pestana; 6] = [
         Pestana::Problemas,
         Pestana::Salida,
         Pestana::Terminal,
         Pestana::Ejecucion,
         Pestana::Depurador,
+        Pestana::Busqueda,
     ];
 
     pub fn titulo(self) -> &'static str {
@@ -111,6 +114,7 @@ impl Pestana {
             Pestana::Terminal => "Terminal",
             Pestana::Ejecucion => "Ejecución",
             Pestana::Depurador => "Depurador",
+            Pestana::Busqueda => "Búsqueda",
         }
     }
 }
@@ -317,6 +321,12 @@ pub enum Modal {
     Bienvenida {
         siempre: bool,
         faltan: Vec<(String, String, String)>,
+    },
+    /// Editar → Buscar en el proyecto (Ctrl+Shift+F).
+    BuscarProyecto {
+        texto: String,
+        mayusculas: bool,
+        palabra: bool,
     },
     /// Editar → Buscar y reemplazar (Ctrl+H).
     Reemplazar {
@@ -616,6 +626,9 @@ pub struct App {
     pub historial_nav: Vec<(PathBuf, usize)>,
     /// Pestaña Esquema: fila elegida y símbolos del buffer activo (por ruta y versión).
     pub esquema_sel: usize,
+    /// Última búsqueda en el proyecto: patrón, resultado y fila elegida.
+    pub busqueda_proyecto: Option<(String, jonesy_core::busqueda::Resultado)>,
+    pub sel_busqueda: usize,
     esquema_cache: Option<(Option<PathBuf>, u64, Vec<jonesy_core::simbolos::Simbolo>)>,
     /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
     inicio_pruebas: Option<std::time::SystemTime>,
@@ -779,6 +792,8 @@ impl App {
             ultimo_fallo: None,
             historial_nav: vec![],
             esquema_sel: 0,
+            busqueda_proyecto: None,
+            sel_busqueda: 0,
             esquema_cache: None,
             inicio_pruebas: None,
             depuracion: None,
@@ -4674,6 +4689,24 @@ impl App {
                 })
             }
             Accion::BuscarSiguiente => self.buscar_siguiente(),
+            Accion::BuscarEnProyecto => {
+                let texto = self
+                    .buf()
+                    .buf
+                    .texto_seleccionado()
+                    .filter(|t| !t.contains('\n'))
+                    .or_else(|| self.busqueda_proyecto.as_ref().map(|(p, _)| p.clone()))
+                    .or_else(|| {
+                        let b = &self.buf().buf;
+                        b.palabra_en(b.cursor)
+                    })
+                    .unwrap_or_default();
+                self.modal = Some(Modal::BuscarProyecto {
+                    texto,
+                    mayusculas: false,
+                    palabra: false,
+                });
+            }
             Accion::Reemplazar => {
                 let buscar = self
                     .buf()
@@ -5069,6 +5102,59 @@ impl App {
             centrar(b, 8);
             self.cambiar_foco(Foco::Editor);
         }
+    }
+
+    /// Busca en todos los archivos y muestra los resultados en la pestaña Búsqueda.
+    pub fn buscar_en_proyecto(&mut self, patron: &str, mayusculas: bool, palabra: bool) {
+        if patron.is_empty() {
+            return;
+        }
+        // Lo sin guardar también cuenta: se guarda antes (como al compilar).
+        self.guardar_todo();
+        let r = jonesy_core::busqueda::buscar(&self.proyecto.raiz, patron, mayusculas, palabra);
+        let (n, archivos, truncado) = (r.hallazgos.len(), r.archivos, r.truncado);
+        self.busqueda_proyecto = Some((patron.to_string(), r));
+        self.sel_busqueda = 0;
+        self.panel_inferior = true;
+        self.pestana = Pestana::Busqueda;
+        self.cambiar_foco(Foco::Inferior);
+        if self.modo() == Modo::Compacto {
+            self.vista = Vista::Terminal;
+        }
+        self.avisar(
+            if n == 0 {
+                format!("«{patron}» no aparece en el proyecto.")
+            } else {
+                format!(
+                    "«{patron}»: {n} línea(s) en {archivos} archivo(s){}. Enter abre.",
+                    if truncado {
+                        " (se muestran las primeras)"
+                    } else {
+                        ""
+                    }
+                )
+            },
+            if n == 0 { Nivel::Aviso } else { Nivel::Info },
+        );
+    }
+
+    /// Abre el resultado `i` de la búsqueda en el proyecto.
+    fn abrir_hallazgo(&mut self, i: usize) {
+        let Some(h) = self
+            .busqueda_proyecto
+            .as_ref()
+            .and_then(|(_, r)| r.hallazgos.get(i).cloned())
+        else {
+            return;
+        };
+        self.sel_busqueda = i;
+        self.recordar_posicion();
+        self.ir_a(&h.archivo, h.linea + 1, h.columna + 1);
+        let fin = h.rangos[0].1 - h.rangos[0].0;
+        let b = &mut self.buf_mut().buf;
+        let pos = b.cursor;
+        b.mover_a(pos + fin, true);
+        b.ancla = Some(pos);
     }
 
     /// Elige la próxima coincidencia después del cursor (o de la elegida), circular.
@@ -5512,6 +5598,11 @@ impl App {
             (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
             (KeyCode::Char('s'), false, true, _) => Some(Accion::Esquema),
+            // Ctrl+Shift+F sólo llega en algunas terminales: también Ctrl+F3.
+            (KeyCode::Char('F'), true, _, _) | (KeyCode::Char('f'), true, _, true) => {
+                Some(Accion::BuscarEnProyecto)
+            }
+            (KeyCode::F(3), true, _, _) => Some(Accion::BuscarEnProyecto),
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
                 Some(Accion::Formatear)
@@ -5770,6 +5861,30 @@ impl App {
             }
         }
         match self.pestana {
+            Pestana::Busqueda => {
+                let total = self
+                    .busqueda_proyecto
+                    .as_ref()
+                    .map(|(_, r)| r.hallazgos.len())
+                    .unwrap_or(0);
+                match k.code {
+                    KeyCode::Up => self.sel_busqueda = self.sel_busqueda.saturating_sub(1),
+                    KeyCode::Down => {
+                        self.sel_busqueda = (self.sel_busqueda + 1).min(total.saturating_sub(1))
+                    }
+                    KeyCode::PageUp => self.sel_busqueda = self.sel_busqueda.saturating_sub(10),
+                    KeyCode::PageDown => {
+                        self.sel_busqueda = (self.sel_busqueda + 10).min(total.saturating_sub(1))
+                    }
+                    KeyCode::Enter => {
+                        let i = self.sel_busqueda;
+                        self.abrir_hallazgo(i);
+                        self.cambiar_foco(Foco::Editor);
+                    }
+                    KeyCode::Esc | KeyCode::Tab => self.cambiar_foco(Foco::Editor),
+                    _ => {}
+                }
+            }
             Pestana::Problemas => {
                 let total = self.diagnosticos().len();
                 match k.code {
@@ -6378,6 +6493,31 @@ impl App {
                     lado_a_lado,
                     desplazamiento_h,
                     lenguaje,
+                });
+            }
+            Modal::BuscarProyecto {
+                mut texto,
+                mut mayusculas,
+                mut palabra,
+            } => {
+                if cerrar {
+                    return;
+                }
+                match (k.code, alt) {
+                    (KeyCode::Char('m' | 'M'), true) => mayusculas = !mayusculas,
+                    (KeyCode::Char('p' | 'P'), true) => palabra = !palabra,
+                    (KeyCode::Enter, _) => {
+                        self.buscar_en_proyecto(&texto, mayusculas, palabra);
+                        return;
+                    }
+                    _ => {
+                        editar_campo(&mut texto, &k);
+                    }
+                }
+                self.modal = Some(Modal::BuscarProyecto {
+                    texto,
+                    mayusculas,
+                    palabra,
                 });
             }
             Modal::Reemplazar {
@@ -6996,6 +7136,10 @@ impl App {
                 if self.pestana == Pestana::Problemas {
                     self.sel_problema = base + (y - r.y) as usize;
                     self.saltar_a_problema(self.sel_problema);
+                }
+                if self.pestana == Pestana::Busqueda {
+                    self.abrir_hallazgo(base + (y - r.y) as usize);
+                    self.foco = Foco::Inferior;
                 }
                 return;
             }

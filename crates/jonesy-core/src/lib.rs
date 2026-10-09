@@ -4,6 +4,7 @@
 //! (`--headless`, benchmarks) del binario.
 
 pub mod buffer;
+pub mod busqueda;
 pub mod catscan;
 pub mod diagnostico;
 pub mod diff;

@@ -90,6 +90,7 @@ pub enum Accion {
     IrADefinicion,
     Volver,
     Esquema,
+    BuscarEnProyecto,
 }
 
 pub struct Info {
@@ -182,6 +183,7 @@ impl Accion {
             IrADefinicion => ("Ir a la definición", "F12 / Ctrl+clic"),
             Volver => ("Volver a donde estaba", "Alt+←"),
             Esquema => ("Esquema del archivo (funciones y tipos)", "Alt+S"),
+            BuscarEnProyecto => ("Buscar en el proyecto…", "Ctrl+Shift+F"),
         };
         Info { titulo, atajo }
     }
@@ -269,6 +271,7 @@ impl Accion {
             IrADefinicion,
             Volver,
             Esquema,
+            BuscarEnProyecto,
             Salir,
         ]
     }
@@ -398,6 +401,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Buscar),
                 A(BuscarSiguiente),
                 A(Reemplazar),
+                A(BuscarEnProyecto),
                 A(IrALinea),
                 A(IrADefinicion),
                 A(Volver),
@@ -578,6 +582,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Buscar y reemplazar (Tab campo, Alt+M mayúsculas, Alt+P palabra, Enter reemplaza, F3 saltea, Alt+T todas) | Ctrl+H |
+| Buscar en el proyecto (resultados en el panel Búsqueda) | Ctrl+Shift+F o Ctrl+F3 |
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |

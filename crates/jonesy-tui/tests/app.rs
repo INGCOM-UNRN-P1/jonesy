@@ -2198,3 +2198,36 @@ fn definicion_volver_y_esquema() {
     assert_eq!(a.buf().buf.linea_columna().0, 2);
     assert_eq!(a.foco, Foco::Editor);
 }
+
+#[test]
+fn buscar_en_el_proyecto_con_panel_de_resultados() {
+    let dir = proyecto(&[
+        (
+            "main.c",
+            "int total = 0;\nint main(void) { return total; }\n",
+        ),
+        ("libs/a/a.c", "int subtotal(void);\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::F(3), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::Char('u'), KeyModifiers::CONTROL);
+    escribir(&mut a, "total");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.pestana, Pestana::Busqueda);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Búsqueda (3)"), "{p}");
+    assert!(p.contains("libs/a/a.c:1"), "{p}");
+    // Palabra completa: subtotal no cuenta.
+    tecla(&mut a, KeyCode::F(3), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::Char('p'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Búsqueda (2)"), "{p}");
+    // Enter abre el resultado y elige lo encontrado.
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(a.buf().buf.linea_columna().0, 1);
+    assert_eq!(a.buf().buf.texto_seleccionado().as_deref(), Some("total"));
+}
