@@ -2088,6 +2088,8 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         (
             if app.depuracion.is_some() {
                 "[F5 Continuar]"
+            } else if app.ultimo_fallo.is_some() {
+                "[F5 Ver dónde falló]"
             } else {
                 "[F5 Depurar]"
             }

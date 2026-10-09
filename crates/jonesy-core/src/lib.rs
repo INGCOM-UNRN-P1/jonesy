@@ -13,6 +13,7 @@ pub mod entorno;
 pub mod entrega;
 pub mod errores_gcc;
 pub mod estructura;
+pub mod fallos;
 pub mod gdb;
 pub mod integraciones;
 pub mod proceso;

@@ -555,6 +555,13 @@ impl Gdb {
         Ok(())
     }
 
+    /// Pasa al marco `nivel` de la pila (sus variables pasan a ser las locales).
+    pub fn seleccionar_marco(&mut self, nivel: usize) -> std::io::Result<()> {
+        self.enviar(&format!("-stack-select-frame {nivel}"), Pedido::Otro)?;
+        self.enviar("-stack-list-variables --simple-values", Pedido::Variables)?;
+        Ok(())
+    }
+
     /// Comando de consola (`print x`, `info breakpoints`...).
     pub fn consola(&mut self, comando: &str) -> std::io::Result<()> {
         self.enviar(

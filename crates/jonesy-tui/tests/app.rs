@@ -1495,3 +1495,53 @@ fn compacto_con_la_barra_izquierda() {
     assert!(izq.width < 80 && a.areas.editor.is_some());
     assert!(p.contains("otra_funcion"));
 }
+
+#[test]
+#[cfg(unix)] // sh, gcc y gdb
+fn programa_que_revienta_se_explica_y_f5_va_a_la_linea() {
+    for herramienta in ["gcc", "gdb"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    // El NULL llega en tiempo de ejecución y el fallo ocurre dentro de strlen (libc).
+    let codigo = "#include <stdio.h>\n#include <stdlib.h>\n#include <string.h>\n\nsize_t largo(const char *s)\n{\n    return strlen(s);\n}\n\nint main(void)\n{\n    char *s = getenv(\"JONESY_NO_EXISTE\");\n    printf(\"%zu\\n\", largo(s));\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    pantalla(&mut a, 120, 40);
+    a.accion(jonesy_tui::accion::Accion::Ejecutar);
+    esperar(&mut a, &rx, |a| a.ultimo_fallo.is_some());
+    assert_eq!(a.ultimo_fallo.unwrap().senal, "SIGSEGV");
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Violación de segmento"), "{p}");
+    assert!(p.contains("[F5 Ver dónde falló]"), "{p}");
+    // F5 no se detiene en main: corre hasta el fallo y muestra la línea del proyecto
+    // (la 7, dentro de largo), no la de strlen.
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .and_then(|d| d.ubicacion.as_ref())
+            .is_some_and(|(_, l)| *l == 7)
+    });
+    let d = a.depuracion.as_ref().unwrap();
+    assert!(
+        d.estado.contains("SIGSEGV") && d.estado.contains("largo"),
+        "{}",
+        d.estado
+    );
+    assert!(d.consola.iter().any(|l| l.contains("puntero NULL")));
+    assert_eq!(
+        a.buf().buf.linea_columna().0,
+        6,
+        "el editor salta a la línea"
+    );
+    a.accion(jonesy_tui::accion::Accion::Detener);
+}

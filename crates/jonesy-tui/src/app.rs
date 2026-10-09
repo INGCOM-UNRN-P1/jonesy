@@ -420,6 +420,9 @@ pub struct Depuracion {
     pub traza: Option<Traza>,
     pub paso_traza: Option<usize>,
     pub tam_pty: (u16, u16),
+    /// Se detuvo por una señal dentro de código sin fuente (libc): al llegar los marcos se
+    /// salta al primero del proyecto.
+    pub buscar_fuente: bool,
 }
 
 pub struct EstadoExamenUi {
@@ -536,6 +539,12 @@ pub struct App {
 
     pub terminal: Option<Deck>,
     pub ejecucion: Option<Deck>,
+    /// La pestaña Ejecución corre el programa del alumno (Ctrl+F5): al terminar se mira
+    /// si se cortó por una señal.
+    vigilar_programa: bool,
+    /// El último programa se cortó por un error (violación de segmento, abort…): F5 lo
+    /// depura sin detenerse en main, hasta la línea del fallo.
+    pub ultimo_fallo: Option<&'static jonesy_core::fallos::Fallo>,
     pub depuracion: Option<Depuracion>,
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
 
@@ -692,6 +701,8 @@ impl App {
             integraciones_programadas: HashMap::new(),
             terminal: None,
             ejecucion: None,
+            vigilar_programa: false,
+            ultimo_fallo: None,
             depuracion: None,
             breakpoints: BTreeSet::new(),
             repo,
@@ -1958,6 +1969,8 @@ impl App {
             return;
         };
         self.correr_en_deck(cmd);
+        self.vigilar_programa = self.ejecucion.is_some();
+        self.ultimo_fallo = None;
     }
 
     /// Corre un comando de shell en la pestaña Ejecución (con E/S interactiva) y deja la
@@ -1966,8 +1979,13 @@ impl App {
         self.guardar_todo();
         let (interprete, opcion) = proceso::interprete();
         // Con sh se agrega el código de salida al final; cmd sólo corre el comando.
+        // Si se cortó por una señal, se explica en español (y el código se conserva para
+        // que jonesy lo vea).
         let envoltorio = if interprete == "sh" {
-            format!("{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n")
+            format!(
+                "{cmd}\nc=$?\nprintf '\\n\\033[2m[proceso terminado con código %d]\\033[0m\\n' \"$c\"\n{}exit \"$c\"\n",
+                jonesy_core::fallos::explicacion_sh()
+            )
         } else {
             cmd.clone()
         };
@@ -2105,6 +2123,8 @@ impl App {
         let args = self.proyecto.config.depurar.argumentos.clone();
         let gdbinit = jonesy_core::entorno::detectar(&self.proyecto.config.interfaz.entorno)
             .and_then(|e| e.gdbinit);
+        // Después de un corte, sin breakpoints, se corre de largo hasta el fallo.
+        let hasta_el_fallo = self.ultimo_fallo.take().is_some() && self.breakpoints.is_empty();
         let mut gdb = match Gdb::lanzar_con(
             &programa,
             &args,
@@ -2121,7 +2141,7 @@ impl App {
                 return;
             }
         };
-        if self.breakpoints.is_empty() {
+        if self.breakpoints.is_empty() && !hasta_el_fallo {
             let _ = gdb.enviar("-break-insert -t main", jonesy_core::gdb::Pedido::Otro);
         }
         for (archivo, linea) in &self.breakpoints {
@@ -2145,6 +2165,7 @@ impl App {
             traza: None,
             paso_traza: None,
             tam_pty: (filas, cols_pty),
+            buscar_fuente: false,
         });
         self.panel_inferior = true;
         self.pestana = Pestana::Depurador;
@@ -2272,6 +2293,13 @@ impl App {
     }
 
     fn eventos_gdb(&mut self) {
+        let raiz = self.proyecto.raiz.clone();
+        let del_proyecto = |m: &jonesy_core::gdb::Marco| {
+            m.linea.is_some()
+                && m.archivo
+                    .as_ref()
+                    .is_some_and(|a| a.starts_with(&raiz) && a.is_file())
+        };
         let Some(d) = &mut self.depuracion else {
             return;
         };
@@ -2291,11 +2319,30 @@ impl App {
                             significado,
                             marco,
                         } => {
+                            let fallo = jonesy_core::fallos::de_senal(nombre);
                             aviso = Some((
-                                format!("El programa recibió {nombre} ({significado})."),
+                                match fallo {
+                                    Some(f) => format!("{} ({nombre}).", f.titulo),
+                                    None => {
+                                        format!("El programa recibió {nombre} ({significado}).")
+                                    }
+                                },
                                 Nivel::Error,
                             ));
+                            if let Some(f) = fallo.filter(|f| !f.explicacion.is_empty()) {
+                                d.consola.push(String::new());
+                                d.consola.push(format!("{nombre}: {}", f.titulo));
+                                // Sin el marcado de Markdown: la consola es texto plano.
+                                d.consola.extend(
+                                    f.explicacion
+                                        .lines()
+                                        .map(|l| l.replace("**", "").replace('`', "")),
+                                );
+                            }
                             d.estado = format!("señal {nombre}");
+                            // Dentro de libc (strlen(NULL), free…): se busca la línea del
+                            // proyecto que la llamó cuando lleguen los marcos.
+                            d.buscar_fuente = !del_proyecto(marco);
                             Some(marco.clone())
                         }
                         Parada::Termino(c) => {
@@ -2327,6 +2374,15 @@ impl App {
                 EventoGdb::Corriendo => d.estado = "corriendo".into(),
                 EventoGdb::Marcos(m) => {
                     d.marcos = m;
+                    if std::mem::take(&mut d.buscar_fuente) {
+                        if let Some(m) = d.marcos.iter().find(|m| del_proyecto(m)).cloned() {
+                            let (a, l) = (m.archivo.clone().unwrap(), m.linea.unwrap());
+                            d.ubicacion = Some((a.clone(), l));
+                            ir = Some((a, l));
+                            let _ = d.gdb.seleccionar_marco(m.nivel);
+                            d.estado = format!("{} en {}()", d.estado, m.funcion);
+                        }
+                    }
                     if let (Some(t), Some(m0)) = (&d.traza, d.marcos.first()) {
                         if let Some(l) = m0.linea {
                             d.paso_traza = t.alinear(
@@ -4178,6 +4234,7 @@ impl App {
             .hash(&mut h);
         format!("{:?}", self.estado_doc).hash(&mut h);
         self.modal.is_some().hash(&mut h);
+        self.ultimo_fallo.map(|f| f.senal).hash(&mut h);
         self.procesos.len().hash(&mut h);
         self.diagnosticos().len().hash(&mut h);
         self.depuracion
@@ -4229,7 +4286,7 @@ impl App {
                     .max(Duration::from_millis(10)),
             );
         }
-        if !self.procesos.is_empty() {
+        if !self.procesos.is_empty() || self.vigilar_programa {
             espera = espera.min(Duration::from_millis(500));
         }
         espera
@@ -4271,6 +4328,19 @@ impl App {
             self.integraciones_programadas
                 .remove(&(nombre.clone(), archivo.clone()));
             self.lanzar_integracion(&nombre, &archivo);
+        }
+        if self.vigilar_programa && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            self.vigilar_programa = false;
+            let codigo = self.ejecucion.as_mut().and_then(|d| d.codigo_salida());
+            if let Some(f) = codigo.and_then(|c| jonesy_core::fallos::de_codigo_salida(c.into())) {
+                if f.error {
+                    self.ultimo_fallo = Some(f);
+                    self.avisar(
+                        format!("{} ({}). F5: ver la línea donde falló.", f.titulo, f.senal),
+                        Nivel::Error,
+                    );
+                }
+            }
         }
         self.tic_examen();
         self.sondear_git();
