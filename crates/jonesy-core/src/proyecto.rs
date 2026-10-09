@@ -52,6 +52,8 @@ pub struct Formato {
     /// Comando que formatea en el lugar el archivo `{archivo}` (vacío = `gaff format` si
     /// está instalado, si no `clang-format -i`).
     pub comando: String,
+    /// Sacar los espacios y tabs del final de las líneas al guardar (no en Markdown).
+    pub limpiar_espacios: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]

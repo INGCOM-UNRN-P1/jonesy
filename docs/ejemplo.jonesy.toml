@@ -64,6 +64,8 @@ inferior = 10    # filas del panel inferior (problemas, terminal, depurador)
 # en el lugar. Vacío = "gaff format {archivo}" si gaff está instalado, si no
 # "clang-format -i {archivo}".
 comando = ""
+# Sacar los espacios del final de las líneas al guardar (no en Markdown).
+limpiar_espacios = false
 
 [documentacion]
 # Directorio donde «make doc» (corbel proyecto) deja api.json. doc/ no se versiona:

@@ -81,6 +81,11 @@ pub enum Accion {
     ConfigurarPlugins,
     Doctor,
     Bienvenida,
+    Comentar,
+    DuplicarLinea,
+    SubirLinea,
+    BajarLinea,
+    LimpiarEspacios,
 }
 
 pub struct Info {
@@ -164,6 +169,11 @@ impl Accion {
             ConfigurarPlugins => ("Configurar plugins…", ""),
             Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
             Bienvenida => ("Bienvenida", ""),
+            Comentar => ("Comentar / descomentar líneas", "Ctrl+/"),
+            DuplicarLinea => ("Duplicar línea", "Ctrl+D"),
+            SubirLinea => ("Mover línea arriba", "Alt+↑"),
+            BajarLinea => ("Mover línea abajo", "Alt+↓"),
+            LimpiarEspacios => ("Quitar espacios al final de las líneas", ""),
         };
         Info { titulo, atajo }
     }
@@ -242,6 +252,11 @@ impl Accion {
             ConfigurarPlugins,
             Doctor,
             Bienvenida,
+            Comentar,
+            DuplicarLinea,
+            SubirLinea,
+            BajarLinea,
+            LimpiarEspacios,
             Salir,
         ]
     }
@@ -372,7 +387,13 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(BuscarSiguiente),
                 A(IrALinea),
                 SEP,
+                A(Comentar),
+                A(DuplicarLinea),
+                A(SubirLinea),
+                A(BajarLinea),
+                SEP,
                 A(Formatear),
+                A(LimpiarEspacios),
             ],
         ),
         menu(
@@ -541,6 +562,8 @@ pub const AYUDA_ATAJOS: &str = "\
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
 | Ir a línea | Ctrl+G |
+| Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
+| Mover línea arriba / abajo | Alt+↑ / Alt+↓ |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |
 | Diff del archivo contra git (lado a lado; s alterna, n/p cambio) | Alt+Shift+D |
 | Herramientas del ecosistema (gaff fix, tetsuo, motoko…) | Alt+H |

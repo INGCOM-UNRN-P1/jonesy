@@ -891,6 +891,9 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
     let seleccion = b.seleccion();
     let version = b.version;
     let lenguaje = b.lenguaje;
+    let pareja = (foco && lenguaje == Lenguaje::C)
+        .then(|| b.pareja())
+        .flatten();
     let mut estado = {
         let bref = &*b;
         ba.cache.estado_en(version, lenguaje, desp, |i| {
@@ -952,6 +955,20 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         let tramos = resaltado::resaltar(lenguaje, &chars, &mut estado);
         let cols = columnas_visuales(&chars);
         let inicio_linea = b.linea_columna_a_pos(linea, 0);
+        // Espacios al final (salvo donde se está escribiendo) y sangría que mezcla tabs y
+        // espacios: se ven, para poder corregirlos.
+        let util = chars.len()
+            - chars
+                .iter()
+                .rev()
+                .take_while(|c| **c == ' ' || **c == '\t')
+                .count();
+        let marcar_final = lenguaje != Lenguaje::Markdown && !(linea == cl && cc >= util);
+        let sangria = chars
+            .iter()
+            .take_while(|c| **c == ' ' || **c == '\t')
+            .count();
+        let mezclada = chars[..sangria].contains(&' ') && chars[..sangria].contains(&'\t');
         let mut t = 0;
         for (i, &c) in chars.iter().enumerate() {
             let vis = cols[i];
@@ -970,11 +987,27 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 estilo = estilo.patch(estilo_clase(tramos[t].2));
             }
             let pos = inicio_linea + i;
+            // La llave o paréntesis del cursor y su pareja.
+            if pareja.is_some_and(|(a, z)| pos == a || pos == z) {
+                estilo = estilo
+                    .bg(tema::fondo_seleccion())
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+            }
             if seleccion.is_some_and(|(a, z)| pos >= a && pos < z) {
                 estilo = estilo.bg(tema::fondo_seleccion());
             }
             let celda = &mut buf[(texto.x + x as u16, y)];
-            if c == '\t' {
+            if i >= util && util < chars.len() && marcar_final {
+                let marca = if sim.ascii { "." } else { "·" };
+                celda
+                    .set_symbol(marca)
+                    .set_style(estilo.fg(tema::atenuado()).bg(tema::borrado()));
+            } else if c == '\t' && mezclada && i < sangria {
+                let marca = if sim.ascii { ">" } else { "→" };
+                celda
+                    .set_symbol(marca)
+                    .set_style(estilo.fg(tema::advertencia()));
+            } else if c == '\t' {
                 // En Makefiles el TAB importa: se muestra para distinguirlo de los espacios.
                 if lenguaje == Lenguaje::Makefile {
                     let marca = if sim.ascii { ">" } else { "→" };

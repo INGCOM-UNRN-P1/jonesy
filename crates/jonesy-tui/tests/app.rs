@@ -1599,11 +1599,13 @@ fn probar_muestra_los_fallos_en_su_linea() {
         .as_deref()
         .unwrap()
         .ends_with("ejercicios/ej1/prueba.c"));
-    let p = pantalla(&mut a, 140, 40);
-    assert!(
-        p.contains("La prueba falló «resta» — esperado: igual a 1, obtenido: 2"),
-        "{p}"
+    assert_eq!(
+        d.resumen.as_deref(),
+        Some("La prueba falló «resta» — esperado: igual a 1, obtenido: 2")
     );
+    // En pantalla (otras herramientas instaladas pueden sumar hallazgos antes en la lista).
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("La prueba falló «resta»"), "{p}");
     // Sin objetivo test, se avisa en vez de correr nada.
     let vacio = proyecto(&[("main.c", MAIN)]);
     let (mut b, _rx) = app(vacio.path(), false);
@@ -2035,4 +2037,55 @@ fn bienvenida_la_primera_vez_y_desde_ayuda() {
     let (e, _rx) = abrir(true);
     assert!(!matches!(e.modal, Some(Modal::Bienvenida { .. })));
     std::env::set_var("JONESY_ESTADO", &base);
+}
+
+#[test]
+fn edicion_pares_comentarios_lineas_y_espacios() {
+    let dir = proyecto(&[
+        ("main.c", "int a;   \nint b;\n"),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n[formato]\nlimpiar_espacios = true\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Los espacios del final se ven (el cursor está en otra línea).
+    let pos = a.buf().buf.linea_columna_a_pos(1, 0);
+    a.buf_mut().buf.mover_a(pos, false);
+    let p = pantalla(&mut a, 100, 20);
+    assert!(p.contains("int a;···"), "{p}");
+    // Paréntesis que se cierran solos y se saltean.
+    tecla(&mut a, KeyCode::End, KeyModifiers::CONTROL);
+    escribir(&mut a, "f(x)");
+    assert!(a.buf().buf.contenido().ends_with("f(x)"));
+    // La pareja del cursor se resalta.
+    tecla(&mut a, KeyCode::Left, KeyModifiers::NONE);
+    let mut t = Terminal::new(TestBackend::new(100, 20)).unwrap();
+    t.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut a)).unwrap();
+    let z = a.zonas.editor.unwrap();
+    let buf = t.backend().buffer().clone();
+    let fila = z.texto.y + 2;
+    let subrayadas = (z.texto.x..z.texto.x + 10)
+        .filter(|&x| {
+            buf[(x, fila)]
+                .modifier
+                .contains(ratatui::style::Modifier::UNDERLINED)
+        })
+        .count();
+    assert_eq!(subrayadas, 2, "( y ) resaltados");
+    // Ctrl+/ comenta y descomenta; Ctrl+D duplica; Alt+↑ sube la línea.
+    tecla(&mut a, KeyCode::Char('/'), KeyModifiers::CONTROL);
+    assert!(a.buf().buf.contenido().ends_with("// f(x)"));
+    tecla(&mut a, KeyCode::Char('7'), KeyModifiers::CONTROL);
+    assert!(a.buf().buf.contenido().ends_with("\nf(x)"));
+    tecla(&mut a, KeyCode::Char('d'), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::Up, KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.contenido(), "int a;   \nint b;\nf(x)\nf(x)");
+    tecla(&mut a, KeyCode::Up, KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.contenido(), "int a;   \nf(x)\nint b;\nf(x)");
+    // Al guardar se limpian los espacios del final ([formato] limpiar_espacios).
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    let guardado = std::fs::read_to_string(dir.path().join("main.c")).unwrap();
+    assert_eq!(guardado, "int a;\nf(x)\nint b;\nf(x)");
 }

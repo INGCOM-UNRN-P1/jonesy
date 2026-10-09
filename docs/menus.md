@@ -89,7 +89,7 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 10 |
-| Editar | [E]ditar | F10 y E | 10 |
+| Editar | [E]ditar | F10 y E | 15 |
 | Ver | [V]er | Alt+V (o F10 y V) | 12 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 6 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 9 |
@@ -135,7 +135,13 @@ comprueba que esté al día.
 │ Buscar siguiente                               Shift+F3 │
 │ Ir a la línea…                                   Ctrl+G │
 ├─────────────────────────────────────────────────────────┤
+│ Comentar / descomentar líneas                    Ctrl+/ │
+│ Duplicar línea                                   Ctrl+D │
+│ Mover línea arriba                                Alt+↑ │
+│ Mover línea abajo                                 Alt+↓ │
+├─────────────────────────────────────────────────────────┤
 │ Autoformatear código (gaff o clang-format)  Alt+Shift+F │
+│ Quitar espacios al final de las líneas                  │
 └─────────────────────────────────────────────────────────┘
 ```
 

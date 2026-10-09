@@ -1170,6 +1170,17 @@ impl App {
         if b.solo_lectura {
             return false;
         }
+        if self.proyecto.config.formato.limpiar_espacios {
+            if let Some(d) = b.limpiar_espacios_finales() {
+                self.tel(TelemetryEvent::TextDelta {
+                    buffer_id: id.clone(),
+                    offset: d.offset,
+                    inserted: d.insertado,
+                    deleted_len: d.borrados,
+                });
+            }
+        }
+        let b = &mut self.buffers[i].buf;
         match b.guardar() {
             Ok(bytes) => {
                 self.tel(TelemetryEvent::BufferSave {
@@ -4791,6 +4802,11 @@ impl App {
             }
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
+            Accion::Comentar => self.editar(|b| b.alternar_comentario()),
+            Accion::DuplicarLinea => self.editar(|b| b.duplicar_lineas()),
+            Accion::SubirLinea => self.editar(|b| b.mover_lineas(false)),
+            Accion::BajarLinea => self.editar(|b| b.mover_lineas(true)),
+            Accion::LimpiarEspacios => self.editar(|b| b.limpiar_espacios_finales()),
             Accion::Bienvenida => self.mostrar_bienvenida(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
@@ -5690,6 +5706,9 @@ impl App {
             (KeyCode::Char('o'), true, _) => Some(Accion::Abrir),
             (KeyCode::Char('w'), true, _) => Some(Accion::CerrarBuffer),
             (KeyCode::Char('b'), true, _) => Some(Accion::AlternarBreakpoint),
+            // Ctrl+/ llega como Ctrl+/ o como Ctrl+7 según la terminal.
+            (KeyCode::Char('/' | '7' | '_'), true, _) => Some(Accion::Comentar),
+            (KeyCode::Char('d'), true, _) => Some(Accion::DuplicarLinea),
             (KeyCode::Char('p'), true, _) => Some(Accion::PreviewMarkdown),
             (KeyCode::PageDown, true, _) => Some(Accion::SiguienteBuffer),
             (KeyCode::PageUp, true, _) => Some(Accion::AnteriorBuffer),
@@ -5701,6 +5720,11 @@ impl App {
             return;
         }
         if alt {
+            match k.code {
+                KeyCode::Up => self.accion(Accion::SubirLinea),
+                KeyCode::Down => self.accion(Accion::BajarLinea),
+                _ => {}
+            }
             return;
         }
         let b = &mut self.buffers[self.activo].buf;
@@ -5745,11 +5769,8 @@ impl App {
                 b.insertar(t)
             }),
             KeyCode::BackTab => self.editar(desindentar),
-            KeyCode::Char(c) if !ctrl => {
-                let mut s = [0u8; 4];
-                let t = c.encode_utf8(&mut s).to_string();
-                self.editar(|b| b.insertar(&t));
-            }
+            // Lo tipeado (no lo pegado): cierra pares y desindenta `}` (en C).
+            KeyCode::Char(c) if !ctrl => self.editar(|b| b.escribir(c)),
             _ => {}
         }
     }
