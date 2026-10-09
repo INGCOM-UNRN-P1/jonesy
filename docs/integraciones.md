@@ -23,7 +23,7 @@ desactivar = ["spunkmeyer"]   # no correrlas en este proyecto
 activar = ["mi-linter"]       # encender las que un manifiesto trae con activa = false
 ```
 
-Dentro del IDE, *Herramientas → Integraciones* muestra el estado de cada una y permite
+Dentro del IDE, *Archivo → Configuración del entorno* (solapa Integraciones) muestra el estado de cada una y permite
 encenderlas o apagarlas (queda en la sesión). `jonesy doctor` lista cuáles están
 instaladas y cómo instalar las que faltan.
 
@@ -44,7 +44,7 @@ activa = true                              # encendida por defecto
 examen = true                              # permitida en modo examen
 lento = false                              # tarda segundos (se indica en la barra)
 
-  [[integracion.accion]]                   # entradas del menú Herramientas (Alt+H)
+  [[integracion.accion]]                   # acciones de la herramienta (Alt+H y la paleta)
   titulo = "Corregir el estilo automáticamente (gaff fix)"
   comando = "gaff fix {archivo}"
   modo = "recargar"

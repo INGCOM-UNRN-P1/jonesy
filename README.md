@@ -13,12 +13,12 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   PTY real con vt100) y, si se corta (violación de segmento, abort…), explica por
   qué y **F5** lo depura hasta la línea donde falló; **Ctrl+F6** corre las pruebas
   (`make test` con `p1_test`) y deja cada fallo en su línea con lo esperado y lo
-  obtenido; **Construir → Revisar la memoria** corre valgrind (`make memcheck` o
+  obtenido; **Depurar → Revisar memoria con valgrind** corre valgrind (`make memcheck` o
   el programa) y explica cada acceso inválido, uso después de `free`, `free`
   doble y fuga en la línea del alumno, con dónde se pidió o liberó el bloque.
 - **Herramientas del ecosistema** como plugins: ripley, gaff, kaneda y spunkmeyer al
   guardar (texto virtual, panel por tema, **F1** con la explicación y el enlace al
-  apunte) y el resto desde el menú Herramientas.
+  apunte) y sus acciones (gaff fix, tetsuo, motoko…) con Alt+H.
 - **Depurador** visual sobre GDB/MI con breakpoints en el margen, paso a paso,
   pila y variables, y **cat-scan**: stack y heap dibujados con flechas a
   partir de la traza de `mem-trace`, con punteros colgantes en rojo.
@@ -83,11 +83,12 @@ jonesy verificar .jonesy/telemetry.log         # código 1 si la cadena está ro
 | Explorador · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna dentro de la barra) |
 | Diff del archivo contra git, lado a lado | Alt+Shift+D (s alterna con unificado, n/p salta entre cambios) |
 | Paleta de comandos | Ctrl+K o F1 (F1 sobre un diagnóstico explica la regla) |
-| Menú | F10 (fuera de la depuración), Alt+letra o clic |
+| Menú | Alt+letra subrayada, F10 y la letra, o clic ([docs/menus.md](docs/menus.md)) |
+| Configuración del entorno | Archivo → Configuración (integraciones, plugins, compilador, apariencia) |
 | Compilar · ejecutar · probar | F6 · Ctrl+F5 · Ctrl+F6 |
 | Depurar | F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener · Ctrl+B breakpoint |
 | Memoria (cat-scan) | Alt+M |
-| quick-doc | F4 / Alt+D; Shift+F4 alterna derecha ⟷ inferior |
+| quick-doc | F4; Shift+F4 alterna derecha ⟷ inferior |
 | Paneles | Alt+T terminal · Alt+P problemas · Alt+O salida · Alt+G git · Alt+R reglas |
 | Vista previa de Markdown | Ctrl+P |
 | Modo compacto (≤ 89 col.) | F7 consigna · F8 código · F9 terminal · F4 doc |
@@ -106,7 +107,7 @@ En la terminal interna, `Alt+T` o `Esc Esc` devuelven el foco al editor y
 | ≤ 89 col. o ≤ 24 filas | compacto | una vista a pantalla completa (F7/F8/F9/F4) |
 
 La barra izquierda (archivos y proyecto) se abre con Alt+E / Alt+Y. Todos los
-bordes entre paneles se arrastran con el mouse, y *Ver → Tamaños de paneles*
+bordes entre paneles se arrastran con el mouse, y *Configuración del entorno → Apariencia → Tamaños de paneles*
 permite ajustarlos con el teclado; los valores iniciales salen de
 `[interfaz.paneles]` en `.jonesy.toml`. La sesión (archivos, cursores,
 paneles y sus tamaños, carpetas desplegadas, breakpoints) se guarda en
@@ -189,11 +190,11 @@ TOML, ver [`docs/integraciones.md`](docs/integraciones.md)):
   vez.
 - **F1** explica el hallazgo con la herramienta que lo informó (`gaff explain`,
   `kaneda explain`…) y muestra el enlace al apunte.
-- **Herramientas (Alt+H)**: `gaff fix`, `gaff explain-syntax`, `corbel check` y
+- **Acciones de las herramientas (Alt+H)**: `gaff fix`, `gaff explain-syntax`, `corbel check` y
   `corbel scaffold`, hal (segfaults), vasquez (fallos inyectados), holden (mocks),
   daedalus, `tetsuo run` (sanitizers), motoko (opacidad de TDAs) y callahan (contratos
   ACSL), sobre el archivo activo.
-- **Herramientas → Integraciones** muestra cuáles están activas y permite apagarlas; un
+- **Archivo → Configuración del entorno** (solapa Integraciones) muestra cuáles están activas y permite apagarlas; un
   proyecto suma las suyas en `.jonesy/integraciones/` y un usuario en
   `~/.config/jonesy/integraciones/`.
 - `jonesy doctor [--json]` informa qué está instalado con el sobre común del ecosistema.
@@ -252,6 +253,10 @@ pesado la shell del deck domina la cifra; `SHELL=/bin/sh` aísla la del IDE.
 
 ## Desvíos respecto de la especificación
 
+- **Menús reorganizados** según el ciclo de trabajo del alumno
+  ([docs/menus.md](docs/menus.md)): Construir y Depurar separados, el menú Herramientas
+  pasa a *Archivo → Configuración del entorno*, y **Alt+D** abre el menú Depurar (el
+  quick-doc se muestra con F4, no con Alt+D como dice §RF-9).
 - **Hilos y `std::sync::mpsc` en lugar de tokio**: el bucle, la telemetría,
   los procesos, el deck, GDB y los plugins usan hilos dedicados y un canal
   único de avisos. Cumple lo mismo (no bloquear el teclado) sin runtime

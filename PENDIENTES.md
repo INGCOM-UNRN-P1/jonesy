@@ -24,7 +24,8 @@ memoria). Lo de docentes e infraestructura queda en segundo plano.
 | Programas con entrada bajo valgrind | falta | Revisar la memoria corre sin teclado (en el panel): un programa que lee de stdin recibe EOF. Correrlo en el deck y leer la salida al terminar. |
 | Primera vez | falta | una pantalla de bienvenida corta (F6, Ctrl+F5, Ctrl+F6, F5, F1) para quien nunca usó el IDE. |
 | Explicaciones de errores de ripley/gaff | flojo | F1 depende de que cada herramienta tenga `explain`; unificar el formato con el de los errores de gcc. |
-| Alt+letra en los menús | flojo | sólo Archivo (Alt+A), Ver (Alt+V) y Construir (Alt+C) se abren así: Editar, Git y Herramientas chocan con atajos globales (Alt+E, Alt+G, Alt+H) y Ayuda comparte la A con Archivo. Mostrar la letra subrayada y elegir letras libres (ver `docs/menus.md`). |
+| Menús reorganizados | hecho | según `docs/critica_y_propuesta_de_reorganizacion.md`: Construir y Depurar separados, Herramientas pasa a Archivo → Configuración del entorno (integraciones, plugins, compilador y formato, apariencia), separadores, Ver con los modos F7/F8/F9 primero, sin atajos de panel en el menú Git, guía rápida, limpiar compilación, restablecer paneles y estado de la entrega. Letra subrayada en cada menú: F10 y la letra abre cualquiera; Alt+letra directo salvo Editar, Git y Ayuda (Alt+E, Alt+G, Alt+Y son de paneles). |
+| Ctrl+, para la configuración | flojo | sólo llega en terminales con el protocolo de teclado extendido; en el resto se usa Archivo → Configuración del entorno. |
 | Pruebas: salida de otros frameworks | falta | sólo se interpreta `p1_test`; con otro formato se ve la salida cruda. |
 
 ## Lo que queda (fuera del perfil estudiante)
@@ -74,8 +75,8 @@ Queda:
 | Descripciones de objetivos en la barra | — | barra izquierda de 32 columnas por defecto. |
 | Gráfico de velocidad de tipeo | Could | en `jonesy replay` (tipeado y pegado por minuto) y en `--resumen`. |
 | Exportar la traza de memoria | Could | genera `memoria-<programa>.html` y lo abre (o copia la ruta por OSC 52). |
-| Editor de snippets para plugins | Could | Herramientas → Nuevo plugin parte de una plantilla; guardarlo lo recarga y sus errores (sintaxis, excepciones) aparecen en Problemas en su línea. |
-| Temas | Could | oscuro, claro y contraste (16 colores ANSI); `[interfaz] tema` o Ver → Cambiar tema, recordado en la sesión. |
+| Editor de snippets para plugins | Could | Configuración del entorno → Plugins → Nuevo plugin parte de una plantilla; guardarlo lo recarga y sus errores (sintaxis, excepciones) aparecen en Problemas en su línea. |
+| Temas | Could | oscuro, claro y contraste (16 colores ANSI); `[interfaz] tema` o Archivo → Configuración del entorno → Apariencia, recordado en la sesión. |
 | Deshacer el último commit | Could | `z` en el panel de git (`reset --soft HEAD~1`); se niega si el commit ya se subió. |
 | Prueba del corte por SIGHUP | §12.6 | `crates/jonesy-bin/tests/corte.rs`: el binario real en una PTY, con y sin examen. |
 | Estrés de 100 sesiones | §12.5 | `bin/estres-sesiones`: 0,55 GiB y ~0 % de CPU con 100 sesiones en 16 núcleos; la CI lo corre con 20. |

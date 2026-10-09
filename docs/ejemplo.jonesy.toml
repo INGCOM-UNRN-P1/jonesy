@@ -38,7 +38,7 @@ osc52 = true
 # Forzar caracteres ASCII en lugar de los de caja.
 ascii = false
 # Colores: "oscuro" (por defecto), "claro" (terminales de fondo blanco) o "contraste"
-# (sólo los 16 colores ANSI). También desde Ver → Cambiar tema, que queda en la sesión.
+# (sólo los 16 colores ANSI). También desde Archivo → Configuración del entorno → Apariencia, que queda en la sesión.
 tema = "oscuro"
 # Shell del deck (vacío = $SHELL).
 shell = ""
@@ -49,7 +49,7 @@ entorno = ""
 
 [interfaz.paneles]
 # Tamaños iniciales; se cambian arrastrando los bordes con el mouse o desde
-# Ver → Tamaños de paneles, y lo ajustado se recuerda en .jonesy/session.json.
+# Configuración del entorno → Apariencia → Tamaños de paneles, y lo ajustado se recuerda en .jonesy/session.json.
 izquierdo = 32   # barra de archivos/proyecto, en columnas
 consigna = 0     # % del ancho (0 = 25 % en modo espacioso, 35 % en estándar)
 quickdoc = 25    # % del ancho con el quick-doc a la derecha
