@@ -34,59 +34,59 @@ memoria). Lo de docentes e infraestructura queda en segundo plano.
 
 Cincuenta mejoras chicas pensadas para el alumno, tipificadas por área. **Impacto**: cuánto
 cambia el día a día de quien cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día
-o dos), L (más). Por tipo: Edición 10 · Navegación 5 · Compilación 5 · Ejecución 5 · Pruebas 3 · Depuración 5 · Memoria 3 · Git 4 · Aprendizaje 4 · Interfaz 3 · Examen 2 · Mantenimiento 1.
+o dos), L (más). Hechas 28 de 50 (ver el historial de git para cada una). Por tipo: Edición 10 · Navegación 5 · Compilación 5 · Ejecución 5 · Pruebas 3 · Depuración 5 · Memoria 3 · Git 4 · Aprendizaje 4 · Interfaz 3 · Examen 2 · Mantenimiento 1.
 
 | # | Mejora | Tipo | Impacto | Esfuerzo | Estado |
 |---|---|---|---|---|---|
-| 1 | Cerrar solos paréntesis, corchetes, llaves y comillas, y saltar el cierre al escribirlo | Edición | alto | S | falta |
-| 2 | Desindentar sola la línea al escribir `}` (Enter ya copia la sangría y suma un nivel tras `{`) | Edición | alto | S | falta |
-| 3 | Resaltar la llave, paréntesis o corchete que hace pareja con el del cursor | Edición | alto | S | falta |
-| 4 | Comentar o descomentar las líneas elegidas con Ctrl+/ | Edición | medio | S | falta |
-| 5 | Mover la línea arriba/abajo (Alt+↑/↓) y duplicarla (Ctrl+D) | Edición | medio | S | falta |
+| 1 | Cerrar solos paréntesis, corchetes, llaves y comillas, y saltar el cierre al escribirlo | Edición | alto | S | hecho |
+| 2 | Desindentar sola la línea al escribir `}` (Enter ya copia la sangría y suma un nivel tras `{`) | Edición | alto | S | hecho |
+| 3 | Resaltar la llave, paréntesis o corchete que hace pareja con el del cursor | Edición | alto | S | hecho |
+| 4 | Comentar o descomentar las líneas elegidas con Ctrl+/ | Edición | medio | S | hecho |
+| 5 | Mover la línea arriba/abajo (Alt+↑/↓) y duplicarla (Ctrl+D) | Edición | medio | S | hecho |
 | 6 | Autocompletar identificadores del archivo y funciones de la base del quick-doc (Ctrl+Espacio) | Edición | alto | M | falta |
 | 7 | Fragmentos de C con Tab: `for`, `while`, `if/else`, `switch`, `main`, `malloc` con su verificación de NULL | Edición | medio | M | falta |
-| 8 | Buscar y reemplazar (Ctrl+H) con mayúsculas, palabra completa y confirmación una por una | Edición | alto | M | falta |
-| 9 | Mostrar espacios al final y tabs mezclados con espacios, y limpiarlos al guardar (opcional) | Edición | bajo | S | falta |
+| 8 | Buscar y reemplazar (Ctrl+H) con mayúsculas, palabra completa y confirmación una por una | Edición | alto | M | hecho |
+| 9 | Mostrar espacios al final y tabs mezclados con espacios, y limpiarlos al guardar (opcional) | Edición | bajo | S | hecho |
 | 10 | Plegar funciones y bloques | Edición | bajo | M | falta |
-| 11 | Ir a la definición de una función del proyecto (F12 o Ctrl+clic) y volver (Alt+←) | Navegación | alto | M | falta |
-| 12 | Lista de funciones del archivo (esquema) en la barra izquierda, con salto al hacer clic | Navegación | medio | M | falta |
-| 13 | Buscar en todos los archivos del proyecto (Ctrl+Shift+F) con los resultados en un panel | Navegación | alto | M | falta |
-| 14 | Marcadores de línea para volver rápido a un lugar del código (poner, listar, saltar) | Navegación | medio | S | falta |
-| 15 | Teclas para ir al problema siguiente y al anterior sin abrir el panel de Problemas | Navegación | medio | S | falta |
-| 16 | Marcar el primer error de una cascada como «empezá por acá» y atenuar los que dependen de él | Compilación | alto | S | falta |
+| 11 | Ir a la definición de una función del proyecto (F12 o Ctrl+clic) y volver (Alt+←) | Navegación | alto | M | hecho |
+| 12 | Lista de funciones del archivo (esquema) en la barra izquierda, con salto al hacer clic | Navegación | medio | M | hecho |
+| 13 | Buscar en todos los archivos del proyecto (Ctrl+Shift+F) con los resultados en un panel | Navegación | alto | M | hecho |
+| 14 | Marcadores de línea para volver rápido a un lugar del código (poner, listar, saltar) | Navegación | medio | S | hecho |
+| 15 | Teclas para ir al problema siguiente y al anterior sin abrir el panel de Problemas | Navegación | medio | S | hecho |
+| 16 | Marcar el primer error de una cascada como «empezá por acá» y atenuar los que dependen de él | Compilación | alto | S | hecho |
 | 17 | Arreglo rápido de errores simples (falta `;`, falta `#include`, `=` por `==`) con una tecla | Compilación | alto | M | falta |
-| 18 | Subrayar la columna exacta del error en el editor, no sólo marcar la línea | Compilación | medio | S | falta |
+| 18 | Subrayar la columna exacta del error en el editor, no sólo marcar la línea | Compilación | medio | S | hecho |
 | 19 | Compilar al guardar (opcional) para ver los errores sin apretar F6 | Compilación | medio | S | falta |
-| 20 | Reconocer los mensajes de gcc en español sin forzar `LC_MESSAGES=C` | Compilación | bajo | M | falta |
-| 21 | Entrada del programa desde un archivo (`< entrada.txt`) elegible por ejercicio, con varios casos | Ejecución | alto | M | falta |
-| 22 | Comparar la salida del programa con la salida esperada de la consigna (diff línea a línea) | Ejecución | alto | M | falta |
-| 23 | Recordar los argumentos de línea de comandos de cada ejercicio | Ejecución | medio | S | falta |
-| 24 | Avisar si el programa parece colgado (sin salida ni entrada por N segundos) y ofrecer cortarlo | Ejecución | medio | S | falta |
-| 25 | Mostrar el tiempo de ejecución y la memoria máxima al terminar el programa | Ejecución | bajo | S | falta |
-| 26 | Correr sólo la prueba en la que está el cursor | Pruebas | medio | M | falta |
+| 20 | Reconocer los mensajes de gcc en español sin forzar `LC_MESSAGES=C` | Compilación | bajo | M | hecho |
+| 21 | Entrada del programa desde un archivo (`< entrada.txt`) elegible por ejercicio, con varios casos | Ejecución | alto | M | hecho |
+| 22 | Comparar la salida del programa con la salida esperada de la consigna (diff línea a línea) | Ejecución | alto | M | hecho |
+| 23 | Recordar los argumentos de línea de comandos de cada ejercicio | Ejecución | medio | S | hecho |
+| 24 | Avisar si el programa parece colgado (sin salida ni entrada por N segundos) y ofrecer cortarlo | Ejecución | medio | S | hecho |
+| 25 | Mostrar el tiempo de ejecución y la memoria máxima al terminar el programa | Ejecución | bajo | S | hecho |
+| 26 | Correr sólo la prueba en la que está el cursor | Pruebas | medio | M | hecho |
 | 27 | Marcas ✓/✗ en el margen de cada `TEST()` según la última corrida | Pruebas | medio | M | falta |
 | 28 | Crear el esqueleto de una prueba (`TEST` + `RUN_TEST`) para la función bajo el cursor | Pruebas | medio | S | falta |
 | 29 | Expresiones vigiladas en el depurador que se recalculan en cada paso | Depuración | alto | M | falta |
 | 30 | Ver arreglos como tabla y cadenas como texto en el panel de variables | Depuración | alto | M | falta |
 | 31 | Valor de una variable al pasar el mouse o el cursor sobre ella mientras se depura | Depuración | medio | M | falta |
-| 32 | Correr hasta el cursor, sin poner un breakpoint | Depuración | medio | S | falta |
+| 32 | Correr hasta el cursor, sin poner un breakpoint | Depuración | medio | S | hecho |
 | 33 | Breakpoints condicionales (`i == 5`) y por cantidad de pasadas | Depuración | medio | M | falta |
 | 34 | Revisar la memoria de programas que leen de la entrada: valgrind en la terminal y el informe al terminar | Memoria | alto | M | falta |
 | 35 | Memoria en Windows: AddressSanitizer donde esté disponible, o cat-scan como alternativa guiada | Memoria | medio | L | falta |
 | 36 | Para cada fuga, señalar dónde se pierde la última referencia al bloque | Memoria | bajo | L | falta |
 | 37 | Ver el diff de lo que se va a confirmar dentro del diálogo de commit | Git | medio | S | falta |
-| 38 | Revisar el mensaje de commit (no vacío, primera línea corta) con una plantilla | Git | bajo | S | falta |
-| 39 | Push y pull desde el panel de git, con el estado adelante/atrás y qué hacer ante un conflicto | Git | medio | M | falta |
-| 40 | Recordar hacer commit tras un rato con cambios sin confirmar | Git | bajo | S | falta |
+| 38 | Revisar el mensaje de commit (no vacío, primera línea corta) con una plantilla | Git | bajo | S | hecho |
+| 39 | Push y pull desde el panel de git, con el estado adelante/atrás y qué hacer ante un conflicto | Git | medio | M | hecho |
+| 40 | Recordar hacer commit tras un rato con cambios sin confirmar | Git | bajo | S | hecho |
 | 41 | Unificar F1 de ripley, gaff y las demás herramientas con el formato «así no / así sí» de gcc | Aprendizaje | medio | M | falta |
 | 42 | Ejemplos en el quick-doc que se copian al editor con una tecla | Aprendizaje | medio | S | falta |
 | 43 | Glosario de C (puntero, heap, stack, segfault, fuga…) enlazado desde las explicaciones | Aprendizaje | bajo | M | falta |
 | 44 | Recorrido guiado la primera vez (marcar en pantalla dónde está cada panel) | Aprendizaje | bajo | M | falta |
-| 45 | Maximizar temporalmente el panel actual y volver (alternar con una tecla) | Interfaz | medio | S | falta |
+| 45 | Maximizar temporalmente el panel actual y volver (alternar con una tecla) | Interfaz | medio | S | hecho |
 | 46 | Tema apto para daltonismo (sin depender de rojo/verde para errores y aciertos) | Interfaz | medio | S | falta |
 | 47 | Atajos configurables en `.jonesy.toml` (por ejemplo, para terminales que no pasan F-keys) | Interfaz | bajo | M | falta |
-| 48 | Mostrar en la barra cuándo fue el último autoguardado del examen | Examen | medio | S | falta |
-| 49 | Simulacro de examen: modo práctica con cronómetro y entrega sin sellar | Examen | medio | M | falta |
+| 48 | Mostrar en la barra cuándo fue el último autoguardado del examen | Examen | medio | S | hecho |
+| 49 | Simulacro de examen: modo práctica con cronómetro y entrega sin sellar | Examen | medio | M | hecho |
 | 50 | Avisar cuando hay una versión nueva de jonesy y cómo actualizar (`cargo install …`) | Mantenimiento | bajo | S | falta |
 
 ## Lo que queda (fuera del perfil estudiante)

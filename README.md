@@ -17,6 +17,17 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   obtenido; **Depurar → Revisar memoria con valgrind** corre valgrind (`make memcheck` o
   el programa) y explica cada acceso inválido, uso después de `free`, `free`
   doble y fuga en la línea del alumno, con dónde se pidió o liberó el bloque.
+- **Edición y navegación**: pares que se cierran solos, comentar (Ctrl+/), mover y
+  duplicar líneas, buscar y reemplazar (Ctrl+H), ir a la definición (F12 o Ctrl+clic)
+  y volver (Alt+←), esquema del archivo (Alt+S), buscar en el proyecto (Ctrl+Shift+F),
+  marcadores (Ctrl+F2) y problema siguiente (Alt+N). Errores en cascada marcados
+  («empezá por acá») y la columna exacta subrayada.
+- **Ejecución**: casos de entrada y salida esperada (entrada1.txt ↔ salida1.txt) para
+  correr con la entrada desde un archivo o comparar todos; argumentos por ejercicio;
+  tiempo y memoria máxima al terminar; aviso de ciclo infinito (Shift+F5 lo corta);
+  correr sólo la prueba del cursor (Shift+F6) y correr hasta el cursor (Ctrl+F10).
+- **Simulacro de examen** (`--simulacro`), push y pull desde el panel de git con ayuda
+  ante conflictos, y revisión del mensaje de commit.
 - **Herramientas del ecosistema** como plugins: ripley, gaff, kaneda y spunkmeyer al
   guardar (texto virtual, panel por tema, **F1** con la explicación y el enlace al
   apunte) y sus acciones (gaff fix, tetsuo, motoko…) con Alt+H.
