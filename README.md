@@ -7,8 +7,13 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
 - Editor sobre cuerda (`ropey`) con atajos CUA y teclas de función, mouse,
   resaltado de C, Markdown, YAML y TOML, búsqueda, deshacer agrupado y paleta
   de comandos.
-- **F6** compila con el Makefile o gcc y salta a los errores; **Ctrl+F5** corre
-  el programa en la terminal interna (`deck`, PTY real con vt100).
+- **F6** compila con el Makefile o gcc y salta a los errores, **explicados en
+  español** (unos 60 errores y advertencias comunes de gcc y del enlazador, con
+  ejemplo en F1); **Ctrl+F5** corre el programa en la terminal interna (`deck`,
+  PTY real con vt100) y, si se corta (violación de segmento, abort…), explica por
+  qué y **F5** lo depura hasta la línea donde falló; **Ctrl+F6** corre las pruebas
+  (`make test` con `p1_test`) y deja cada fallo en su línea con lo esperado y lo
+  obtenido.
 - **Herramientas del ecosistema** como plugins: ripley, gaff, kaneda y spunkmeyer al
   guardar (texto virtual, panel por tema, **F1** con la explicación y el enlace al
   apunte) y el resto desde el menú Herramientas.
@@ -77,7 +82,7 @@ jonesy verificar .jonesy/telemetry.log         # código 1 si la cadena está ro
 | Diff del archivo contra git, lado a lado | Alt+Shift+D (s alterna con unificado, n/p salta entre cambios) |
 | Paleta de comandos | Ctrl+K o F1 (F1 sobre un diagnóstico explica la regla) |
 | Menú | F10 (fuera de la depuración), Alt+letra o clic |
-| Compilar · ejecutar | F6 · Ctrl+F5 |
+| Compilar · ejecutar · probar | F6 · Ctrl+F5 · Ctrl+F6 |
 | Depurar | F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener · Ctrl+B breakpoint |
 | Memoria (cat-scan) | Alt+M |
 | quick-doc | F4 / Alt+D; Shift+F4 alterna derecha ⟷ inferior |

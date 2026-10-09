@@ -1,0 +1,32 @@
+
+=== INICIANDO SUITE: Suma ===
+
+  [CORRIENDO] suma_basica                         ... PASÓ (0.01 ms)
+  [CORRIENDO] suma_con_dos                        ... 
+  [FALLO] prueba.c:13: ASSERT_INT_EQ(5, suma(2, 3))
+    en test: suma_con_dos
+    esperado: igual a 5
+    obtenido: 6
+  [RESULTADO] FALLÓ (0.02 ms)
+  [CORRIENDO] cadena_nula                         ... 
+  [CRASH: SIGSEGV (Violación de segmento / Puntero inválido)]
+    en test: cadena_nula
+  [RESULTADO] FALLÓ (0.02 ms)
+  [CORRIENDO] cadenas                             ... 
+  [FALLO] prueba.c:24: ASSERT_STR_EQ("hola", "chau")
+    en test: cadenas
+    esperado: igual a "hola"
+    obtenido: "chau"
+  [RESULTADO] FALLÓ (0.02 ms)
+
+============================================================
+Resultados de la Suite: Suma
+============================================================
+  Total de tests ejecutados : 4
+  Tests aprobados           : 1
+  Tests desaprobados        : 3
+  Tests salteados           : 0
+  Aserciones evaluadas      : 4 (falladas: 3)
+============================================================
+>>> ESTADO: SE DETECTARON FALLOS EN LAS PRUEBAS <<<
+

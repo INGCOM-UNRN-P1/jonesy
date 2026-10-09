@@ -311,6 +311,22 @@ impl Proyecto {
         Some(format!("{compilar} && ./{}", shell_quote(&stem)))
     }
 
+    /// Pruebas del archivo activo: el objetivo `test` de su módulo o, si no, el de la raíz.
+    /// Usa la estructura ya leída (se puede llamar al dibujar).
+    pub fn comando_probar(&self, activo: Option<&Path>) -> Option<String> {
+        use crate::estructura::TipoModulo;
+        activo
+            .and_then(|a| self.estructura.modulo_de(a))
+            .filter(|m| m.tiene("test"))
+            .or_else(|| {
+                self.estructura
+                    .modulos
+                    .iter()
+                    .find(|m| m.tipo == TipoModulo::Raiz && m.tiene("test"))
+            })
+            .map(|m| m.comando("test"))
+    }
+
     /// Módulo con Makefile que contiene al archivo activo (no la raíz).
     pub fn modulo_activo(&self, activo: Option<&Path>) -> Option<&crate::estructura::Modulo> {
         let m = self.estructura.modulo_de(activo?)?;

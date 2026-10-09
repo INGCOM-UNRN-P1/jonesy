@@ -105,7 +105,7 @@ pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
 }
 
 /// Directorio de una línea `make[1]: Entering directory '/ruta'` (comillas ' ` « o ").
-fn directorio_de_make(linea: &str, frase: &str) -> Option<PathBuf> {
+pub(crate) fn directorio_de_make(linea: &str, frase: &str) -> Option<PathBuf> {
     if !linea.starts_with("make") {
         return None;
     }

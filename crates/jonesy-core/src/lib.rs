@@ -18,6 +18,7 @@ pub mod gdb;
 pub mod integraciones;
 pub mod proceso;
 pub mod proyecto;
+pub mod pruebas;
 pub mod sesion;
 
 pub use buffer::{Buffer, Delta, Lenguaje};

@@ -1464,7 +1464,7 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                     Style::default().fg(tema::estilo()).bg(fondo),
                 ),
                 Span::styled(
-                    if d.resumen.is_some() {
+                    if d.resumen.is_some() && d.origen == jonesy_core::Origen::Compilador {
                         format!(" ({origen} · F1 explica)")
                     } else {
                         format!(" ({origen})")
@@ -2098,6 +2098,14 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         ),
         ("[Terminal]".into(), Accion::Terminal),
     ];
+    // Pruebas del ejercicio, si su Makefile (o el de la raíz) tiene objetivo test.
+    if app
+        .proyecto
+        .comando_probar(app.activo_ruta().as_deref())
+        .is_some()
+    {
+        botones.insert(2, ("[^F6 Probar]".into(), Accion::Probar));
+    }
     // Documentación del proyecto ausente o vieja: botón para regenerarla (no se versiona).
     if let Some(aviso) = app.aviso_doc() {
         botones.insert(

@@ -36,6 +36,7 @@ pub enum Accion {
     // Construir
     Compilar,
     Ejecutar,
+    Probar,
     Depurar,
     Paso,
     Entrar,
@@ -112,6 +113,7 @@ impl Accion {
             VistaDoc => ("Ver documentación", "F4"),
             Compilar => ("Compilar", "F6"),
             Ejecutar => ("Compilar y ejecutar", "Ctrl+F5"),
+            Probar => ("Correr las pruebas (make test)", "Ctrl+F6"),
             Depurar => ("Depurar / continuar", "F5"),
             Paso => ("Paso (siguiente línea)", "F10"),
             Entrar => ("Entrar en la función", "F11"),
@@ -163,6 +165,7 @@ impl Accion {
         &[
             Compilar,
             Ejecutar,
+            Probar,
             Depurar,
             Paso,
             Entrar,
@@ -286,6 +289,7 @@ pub fn menus(examen: bool) -> Vec<(&'static str, Vec<Accion>)> {
                 GenerarDoc,
                 Compilar,
                 Ejecutar,
+                Probar,
                 Depurar,
                 Paso,
                 Entrar,
@@ -350,6 +354,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Quick-doc | F4, Alt+D (Shift+F4 cambia la orientación) |
 | Compilar | F6 |
 | Compilar y ejecutar en el deck | Ctrl+F5 |
+| Correr las pruebas (make test) | Ctrl+F6 |
 | Depurar / continuar | F5 (Shift+F5 detiene) |
 | Paso / entrar / salir | F10 / F11 / Shift+F11 |
 | Breakpoint | Ctrl+B o clic en el margen |

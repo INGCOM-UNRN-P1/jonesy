@@ -363,6 +363,8 @@ enum Tarea {
     /// Objetivo de make lanzado desde la vista de proyecto o la paleta.
     Objetivo {
         comando: String,
+        /// Son las pruebas (Construir → Probar): se interpreta la salida de p1_test.
+        pruebas: bool,
     },
     /// Autoformato sobre una copia temporal del buffer.
     Formatear {
@@ -1920,7 +1922,7 @@ impl App {
 
     // ------------------------------------------------------------ construir
 
-    fn activo_ruta(&self) -> Option<PathBuf> {
+    pub fn activo_ruta(&self) -> Option<PathBuf> {
         self.buf().buf.ruta.clone()
     }
 
@@ -2782,12 +2784,19 @@ impl App {
             } => {
                 self.fin_formateo(archivo, temporal, version, codigo, salida);
             }
-            Tarea::Objetivo { comando } => {
+            Tarea::Objetivo { comando, pruebas } => {
                 self.cargar_doc();
                 self.tel(TelemetryEvent::CommandExec {
                     command: comando.clone(),
                     exit_code: codigo,
                 });
+                if pruebas {
+                    let r = jonesy_core::pruebas::interpretar(&salida, &self.proyecto.raiz);
+                    if r.reconocida {
+                        self.fin_pruebas(r, codigo);
+                        return;
+                    }
+                }
                 self.diag_compilador = diagnostico::parsear_gcc(&salida, &self.proyecto.raiz);
                 if codigo == Some(0) {
                     self.salida
@@ -3380,6 +3389,10 @@ impl App {
     /// Corre un comando no interactivo con la salida en vivo en el panel y los errores de
     /// gcc y del enlazador en Problemas.
     pub fn correr_en_panel(&mut self, comando: String) {
+        self.correr_en_panel_con(comando, false);
+    }
+
+    fn correr_en_panel_con(&mut self, comando: String, pruebas: bool) {
         if self
             .procesos
             .values()
@@ -3399,8 +3412,50 @@ impl App {
             &comando,
             Tarea::Objetivo {
                 comando: comando.clone(),
+                pruebas,
             },
         );
+    }
+
+    /// Construir → Probar (Ctrl+F6): `make test` del módulo activo, con los fallos de
+    /// cada prueba en Problemas.
+    pub fn probar(&mut self) {
+        let activo = self.activo_ruta();
+        let Some(comando) = self.proyecto.comando_probar(activo.as_deref()) else {
+            self.avisar(
+                "No hay pruebas: el Makefile de este ejercicio (o el de la raíz) no tiene un objetivo «test».",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        self.correr_en_panel_con(comando, true);
+    }
+
+    fn fin_pruebas(&mut self, r: jonesy_core::pruebas::Resultado, codigo: Option<i32>) {
+        self.diag_compilador = r.diagnosticos;
+        let compila = !self.diag_compilador.iter().any(|d| {
+            d.origen == jonesy_core::Origen::Compilador && d.severidad == Severidad::Error
+        });
+        let (texto, nivel) = if !compila {
+            (
+                "Las pruebas no compilan: mirá Problemas.".to_string(),
+                Nivel::Error,
+            )
+        } else if r.fallan == 0 && codigo == Some(0) {
+            (format!("Pruebas: pasan las {}.", r.pasan), Nivel::Ok)
+        } else {
+            (
+                format!("Pruebas: {} pasan, {} fallan.", r.pasan, r.fallan),
+                Nivel::Error,
+            )
+        };
+        self.salida
+            .push((format!("[{texto}]"), nivel == Nivel::Error));
+        self.avisar(texto, nivel);
+        if nivel == Nivel::Error && !self.diag_compilador.is_empty() {
+            self.pestana = Pestana::Problemas;
+            self.sel_problema = 0;
+        }
     }
 
     /// Comando de tp.sh: si pide argumentos se preguntan antes; corre en el deck.
@@ -3949,6 +4004,7 @@ impl App {
             }
             Accion::Compilar => self.compilar(Luego::Nada),
             Accion::Ejecutar => self.compilar(Luego::Ejecutar),
+            Accion::Probar => self.probar(),
             Accion::Depurar => self.depurar(),
             Accion::Paso | Accion::Entrar | Accion::SalirFuncion => self.depurador_paso(a),
             Accion::Detener => self.detener_depuracion(),
@@ -4546,6 +4602,7 @@ impl App {
             (KeyCode::F(11), _, _, true) => Some(Accion::SalirFuncion),
             (KeyCode::F(11), _, _, _) => Some(Accion::Entrar),
             (KeyCode::F(10), _, _, _) => Some(Accion::Paso),
+            (KeyCode::F(6), true, _, _) => Some(Accion::Probar),
             (KeyCode::F(6), _, _, _) => Some(Accion::Compilar),
             (KeyCode::F(7), _, _, _) => Some(Accion::VistaConsigna),
             (KeyCode::F(8), _, _, _) => Some(Accion::VistaCodigo),

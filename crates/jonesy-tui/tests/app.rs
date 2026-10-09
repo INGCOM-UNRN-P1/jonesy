@@ -1545,3 +1545,54 @@ fn programa_que_revienta_se_explica_y_f5_va_a_la_linea() {
     );
     a.accion(jonesy_tui::accion::Accion::Detener);
 }
+
+#[test]
+#[cfg(unix)] // make y sh
+fn probar_muestra_los_fallos_en_su_linea() {
+    if std::process::Command::new("make")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    // Un ejercicio cuyo «make test» imprime lo que imprime p1_test.
+    let receta = "test:\n\t@printf '  [CORRIENDO] suma ... PASÓ (0.01 ms)\\n  [CORRIENDO] resta ... \\n  [FALLO] prueba.c:4: ASSERT_INT_EQ(1, resta(3, 1))\\n    en test: resta\\n    esperado: igual a 1\\n    obtenido: 2\\n  [RESULTADO] FALLÓ (0.01 ms)\\n'; exit 1\n";
+    let dir = proyecto(&[
+        ("ejercicios/ej1/Makefile", receta),
+        (
+            "ejercicios/ej1/prueba.c",
+            "#include \"p1_test.h\"\n\nTEST(resta)\n{\n    ASSERT_INT_EQ(1, resta(3, 1));\n}\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/prueba.c"), true);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("[^F6 Probar]"), "{p}");
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Pruebas:"))
+    });
+    assert_eq!(a.mensaje.as_ref().unwrap().0, "Pruebas: 1 pasan, 1 fallan.");
+    assert_eq!(a.pestana, Pestana::Problemas);
+    let d = &a.diag_compilador[0];
+    assert_eq!(d.linea, 4);
+    assert!(d
+        .archivo
+        .as_deref()
+        .unwrap()
+        .ends_with("ejercicios/ej1/prueba.c"));
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("La prueba falló «resta» — esperado: igual a 1, obtenido: 2"),
+        "{p}"
+    );
+    // Sin objetivo test, se avisa en vez de correr nada.
+    let vacio = proyecto(&[("main.c", MAIN)]);
+    let (mut b, _rx) = app(vacio.path(), false);
+    b.accion(jonesy_tui::accion::Accion::Probar);
+    assert!(b.mensaje.as_ref().unwrap().0.starts_with("No hay pruebas"));
+}
