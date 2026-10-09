@@ -27,6 +27,8 @@ pub struct Sesion {
     pub expandidos: Vec<String>,
     /// Integraciones encendidas o apagadas a mano (Herramientas → Integraciones).
     pub integraciones: Vec<(String, bool)>,
+    /// Tema de colores elegido desde Ver → Cambiar tema.
+    pub tema: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -149,6 +151,7 @@ mod tests {
             izquierdo: Some("proyecto".into()),
             expandidos: vec!["src".into()],
             integraciones: vec![("kaneda".into(), false)],
+            tema: Some("claro".into()),
         };
         s.guardar(dir.path()).unwrap();
         assert_eq!(Sesion::cargar(dir.path()).unwrap(), s);

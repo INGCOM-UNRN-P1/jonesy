@@ -3,7 +3,7 @@
 //! caja, bloques de código resaltados y enlaces navegables.
 
 use pulldown_cmark::{Alignment, CodeBlockKind, Event, HeadingLevel, Options, Parser, Tag, TagEnd};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use unicode_width::UnicodeWidthStr;
 
@@ -76,9 +76,9 @@ impl R<'_> {
         if !p.is_empty() {
             self.col = UnicodeWidthStr::width(p.as_str());
             let estilo = if p.contains(self.sim.cita.trim()) {
-                Style::default().fg(tema::ATENUADO)
+                Style::default().fg(tema::atenuado())
             } else {
-                Style::default().fg(tema::ACENTO)
+                Style::default().fg(tema::acento())
             };
             self.actual.push(Span::styled(p, estilo));
         } else {
@@ -100,7 +100,7 @@ impl R<'_> {
             let pre = self.prefijos.concat();
             self.doc.lineas.push(Line::from(Span::styled(
                 pre.trim_end().to_string(),
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             )));
         }
     }
@@ -178,7 +178,7 @@ impl R<'_> {
 
     fn bloque_codigo(&mut self, etiqueta: &str, codigo: &str) {
         let pre = self.prefijos.concat();
-        let fondo = Style::default().bg(tema::FONDO_CODIGO);
+        let fondo = Style::default().bg(tema::fondo_codigo());
         let interior = self
             .ancho
             .saturating_sub(UnicodeWidthStr::width(pre.as_str()) + 2)
@@ -189,8 +189,8 @@ impl R<'_> {
                 Span::styled(
                     format!(" {etiqueta} "),
                     Style::default()
-                        .fg(tema::ATENUADO)
-                        .bg(tema::FONDO_CODIGO)
+                        .fg(tema::atenuado())
+                        .bg(tema::fondo_codigo())
                         .add_modifier(Modifier::ITALIC),
                 ),
             ]));
@@ -224,7 +224,7 @@ impl R<'_> {
                     &mut spans,
                     a,
                     b,
-                    tema::estilo_clase(clase).bg(tema::FONDO_CODIGO),
+                    tema::estilo_clase(clase).bg(tema::fondo_codigo()),
                     &mut usado,
                 );
                 i = b;
@@ -265,7 +265,7 @@ impl R<'_> {
             anchos[i] -= 1;
         }
         let s = self.sim;
-        let borde = Style::default().fg(tema::ATENUADO);
+        let borde = Style::default().fg(tema::atenuado());
         let separador = |izq: char, medio: char, der: char| {
             let mut x = String::new();
             x.push(izq);
@@ -302,7 +302,7 @@ impl R<'_> {
                 let estilo = if n < t.encabezado {
                     Style::default()
                         .add_modifier(Modifier::BOLD)
-                        .fg(tema::ACENTO)
+                        .fg(tema::acento())
                 } else {
                     Style::default()
                 };
@@ -343,7 +343,7 @@ impl R<'_> {
                     tabla.celda.push_str(&t);
                     return;
                 }
-                self.empujar_estilo(|s| s.fg(tema::OK).bg(tema::FONDO_CODIGO));
+                self.empujar_estilo(|s| s.fg(tema::ok()).bg(tema::fondo_codigo()));
                 self.texto(&t);
                 self.estilos.pop();
             }
@@ -353,14 +353,14 @@ impl R<'_> {
             }
             Event::Rule => {
                 self.linea_en_blanco();
-                self.regla(self.sim.h, Style::default().fg(tema::ATENUADO));
+                self.regla(self.sim.h, Style::default().fg(tema::atenuado()));
             }
             Event::TaskListMarker(hecho) => {
                 let marca = self.sim.tarea[hecho as usize];
                 let estilo = if hecho {
-                    Style::default().fg(tema::OK)
+                    Style::default().fg(tema::ok())
                 } else {
-                    Style::default().fg(tema::ATENUADO)
+                    Style::default().fg(tema::atenuado())
                 };
                 self.prefijo();
                 self.actual.push(Span::styled(marca.to_string(), estilo));
@@ -368,7 +368,7 @@ impl R<'_> {
             }
             Event::Html(t) | Event::InlineHtml(t) => {
                 if !t.trim_start().starts_with("<!--") {
-                    self.empujar_estilo(|s| s.fg(tema::ATENUADO));
+                    self.empujar_estilo(|s| s.fg(tema::atenuado()));
                     self.texto(t.trim_end());
                     self.estilos.pop();
                 }
@@ -392,9 +392,9 @@ impl R<'_> {
             Tag::Heading { level, .. } => {
                 self.linea_en_blanco();
                 let color = match level {
-                    HeadingLevel::H1 => tema::ACENTO,
-                    HeadingLevel::H2 => tema::NOTA,
-                    _ => Color::Rgb(229, 192, 123),
+                    HeadingLevel::H1 => tema::acento(),
+                    HeadingLevel::H2 => tema::nota(),
+                    _ => tema::advertencia(),
                 };
                 self.empujar_estilo(|s| s.fg(color).add_modifier(Modifier::BOLD));
                 self.encabezado = Some((level, String::new()));
@@ -442,11 +442,11 @@ impl R<'_> {
             Tag::Strong => self.empujar_estilo(|s| s.add_modifier(Modifier::BOLD)),
             Tag::Strikethrough => self.empujar_estilo(|s| s.add_modifier(Modifier::CROSSED_OUT)),
             Tag::Link { dest_url, .. } => {
-                self.empujar_estilo(|s| s.fg(tema::NOTA).add_modifier(Modifier::UNDERLINED));
+                self.empujar_estilo(|s| s.fg(tema::nota()).add_modifier(Modifier::UNDERLINED));
                 self.enlace = Some((dest_url.to_string(), usize::MAX, 0));
             }
             Tag::Image { dest_url, .. } => {
-                self.empujar_estilo(|s| s.fg(tema::ATENUADO));
+                self.empujar_estilo(|s| s.fg(tema::atenuado()));
                 self.texto("[imagen: ");
                 self.enlace = Some((dest_url.to_string(), usize::MAX, 0));
             }
@@ -492,9 +492,9 @@ impl R<'_> {
                 }
                 match level {
                     HeadingLevel::H1 => {
-                        self.regla(self.sim.h_grueso, Style::default().fg(tema::ACENTO))
+                        self.regla(self.sim.h_grueso, Style::default().fg(tema::acento()))
                     }
-                    HeadingLevel::H2 => self.regla(self.sim.h, Style::default().fg(tema::NOTA)),
+                    HeadingLevel::H2 => self.regla(self.sim.h, Style::default().fg(tema::nota())),
                     _ => {}
                 }
             }

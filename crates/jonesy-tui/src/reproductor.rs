@@ -37,9 +37,9 @@ pub fn describir(e: &TelemetryEvent) -> (String, Color) {
                 "inicio de sesión de {user}{}",
                 if *exam_mode { " (examen)" } else { "" }
             ),
-            tema::ACENTO,
+            tema::acento(),
         ),
-        TelemetryEvent::KeyPress { key, .. } => (format!("tecla {key}"), tema::ATENUADO),
+        TelemetryEvent::KeyPress { key, .. } => (format!("tecla {key}"), tema::atenuado()),
         TelemetryEvent::TextDelta {
             inserted,
             deleted_len,
@@ -51,39 +51,39 @@ pub fn describir(e: &TelemetryEvent) -> (String, Color) {
                 .map(|c| if c == '\n' { '↵' } else { c })
                 .collect();
             if inserted.is_empty() {
-                (format!("borra {deleted_len}"), tema::ADVERTENCIA)
+                (format!("borra {deleted_len}"), tema::advertencia())
             } else if *deleted_len > 0 {
                 (
                     format!("reemplaza {deleted_len} por «{mostrar}»"),
-                    Color::White,
+                    tema::fuerte(),
                 )
             } else {
-                (format!("escribe «{mostrar}»"), Color::White)
+                (format!("escribe «{mostrar}»"), tema::fuerte())
             }
         }
         TelemetryEvent::BracketedPaste { length, .. } => {
-            (format!("PEGADO de {length} caracteres"), tema::PELIGRO)
+            (format!("PEGADO de {length} caracteres"), tema::peligro())
         }
         TelemetryEvent::CursorMove { line, col, .. } => {
-            (format!("cursor {line}:{col}"), tema::ATENUADO)
+            (format!("cursor {line}:{col}"), tema::atenuado())
         }
         TelemetryEvent::BufferSave {
             buffer_id,
             total_bytes,
-        } => (format!("guarda {buffer_id} ({total_bytes} B)"), tema::OK),
+        } => (format!("guarda {buffer_id} ({total_bytes} B)"), tema::ok()),
         TelemetryEvent::CommandExec { command, exit_code } => (
             format!(
                 "ejecuta {command}{}",
                 exit_code.map(|c| format!(" → {c}")).unwrap_or_default()
             ),
-            tema::NOTA,
+            tema::nota(),
         ),
         TelemetryEvent::FocusChange { panel, focused } => (
             format!("{} {panel}", if *focused { "foco en" } else { "deja" }),
-            tema::ATENUADO,
+            tema::atenuado(),
         ),
         TelemetryEvent::SessionEnd { reason } => {
-            (format!("fin de sesión ({reason})"), tema::ACENTO)
+            (format!("fin de sesión ({reason})"), tema::acento())
         }
     }
 }
@@ -189,8 +189,8 @@ impl Reproductor {
             Span::styled(
                 " cadena SHA-256 íntegra ",
                 Style::default()
-                    .bg(tema::OK)
-                    .fg(Color::Black)
+                    .bg(tema::ok())
+                    .fg(tema::sobre_acento())
                     .add_modifier(Modifier::BOLD),
             )
         } else {
@@ -198,8 +198,8 @@ impl Reproductor {
             Span::styled(
                 format!(" CADENA ROTA en la línea {l}: {m} "),
                 Style::default()
-                    .bg(tema::PELIGRO)
-                    .fg(Color::Black)
+                    .bg(tema::peligro())
+                    .fg(tema::sobre_acento())
                     .add_modifier(Modifier::BOLD),
             )
         };
@@ -236,7 +236,7 @@ impl Reproductor {
                         },
                         self.velocidad
                     ),
-                    Style::default().fg(tema::ATENUADO),
+                    Style::default().fg(tema::atenuado()),
                 ),
             ]),
             cab,
@@ -251,7 +251,7 @@ impl Reproductor {
         self.dibujar_resumen(f, resumen);
         f.render_widget(
             Paragraph::new(" ←/→ paso · RePág/AvPág ±50 · Inicio/Fin · Espacio reproducir · +/- velocidad · p próximo pegado · Tab archivo · q salir")
-                .style(Style::default().bg(tema::FONDO_BARRA).fg(tema::ATENUADO)),
+                .style(Style::default().bg(tema::fondo_barra()).fg(tema::atenuado())),
             pie,
         );
     }
@@ -265,7 +265,7 @@ impl Reproductor {
         let b = Block::default()
             .borders(Borders::ALL)
             .title(titulo)
-            .border_style(Style::default().fg(tema::ACENTO));
+            .border_style(Style::default().fg(tema::acento()));
         let i = b.inner(r);
         f.render_widget(b, r);
         let Some(d) = id.and_then(|id| self.rep.documentos.get(&id)) else {
@@ -289,9 +289,7 @@ impl Reproductor {
         let cerrar = |actual: &mut Vec<Span<'static>>, tramo: &mut String, pegado: bool| {
             if !tramo.is_empty() {
                 let estilo = if pegado {
-                    Style::default()
-                        .bg(Color::Rgb(110, 50, 20))
-                        .fg(Color::White)
+                    Style::default().bg(tema::pegado()).fg(tema::fuerte())
                 } else {
                     Style::default()
                 };
@@ -333,9 +331,9 @@ impl Reproductor {
             .take(alto)
             .map(|(n, mut l)| {
                 let estilo = if n == linea_cursor {
-                    Style::default().fg(tema::ADVERTENCIA)
+                    Style::default().fg(tema::advertencia())
                 } else {
-                    Style::default().fg(tema::ATENUADO)
+                    Style::default().fg(tema::atenuado())
                 };
                 l.spans
                     .insert(0, Span::styled(format!("{:>4} ", n + 1), estilo));
@@ -349,7 +347,7 @@ impl Reproductor {
         let b = Block::default()
             .borders(Borders::ALL)
             .title(" Eventos ")
-            .border_style(Style::default().fg(tema::ATENUADO));
+            .border_style(Style::default().fg(tema::atenuado()));
         let i = b.inner(r);
         f.render_widget(b, r);
         let alto = i.height as usize;
@@ -370,18 +368,18 @@ impl Reproductor {
                 let futuro = k >= pos;
                 let estilo = if actual {
                     Style::default()
-                        .bg(tema::FONDO_SELECCION)
+                        .bg(tema::fondo_seleccion())
                         .fg(color)
                         .add_modifier(Modifier::BOLD)
                 } else if futuro {
-                    Style::default().fg(tema::ATENUADO)
+                    Style::default().fg(tema::atenuado())
                 } else {
                     Style::default().fg(color)
                 };
                 Line::from(vec![
                     Span::styled(
                         format!("{:>6} {:>8.1}s ", reg.seq, s),
-                        Style::default().fg(tema::ATENUADO),
+                        Style::default().fg(tema::atenuado()),
                     ),
                     Span::styled(texto, estilo),
                 ])
@@ -394,7 +392,7 @@ impl Reproductor {
         let b = Block::default()
             .borders(Borders::ALL)
             .title(" Resumen de la sesión ")
-            .border_style(Style::default().fg(tema::ATENUADO));
+            .border_style(Style::default().fg(tema::atenuado()));
         let i = b.inner(r);
         f.render_widget(b, r);
         // Abajo, el ritmo de escritura por minuto (verde) y los pegados (▲ rojo).
@@ -419,26 +417,26 @@ impl Reproductor {
                 i.x,
                 y,
                 "Escritura por minuto (▲ pegados):",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             );
             let maximo = tipeado.iter().copied().max().unwrap_or(0);
             buf.set_string(
                 i.x,
                 y + 1,
                 jonesy_telemetry::replay::sparkline(&tipeado),
-                Style::default().fg(tema::OK),
+                Style::default().fg(tema::ok()),
             );
             let marcas: String = pegado
                 .iter()
                 .map(|&p| if p > 0 { '▲' } else { ' ' })
                 .collect();
-            buf.set_string(i.x, y + 2, marcas, Style::default().fg(tema::PELIGRO));
+            buf.set_string(i.x, y + 2, marcas, Style::default().fg(tema::peligro()));
             let minutos = self.resumen.tipeado_por_minuto.len();
             buf.set_string(
                 i.x,
                 y + 3,
                 format!("{minutos} min · máximo {maximo} car. por columna"),
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             );
         }
     }
@@ -468,9 +466,9 @@ pub fn lineas_resumen(r: &Resumen, v: &Verificacion) -> Vec<Line<'static>> {
     ];
     let pegado = Style::default()
         .fg(if r.pegados.is_empty() {
-            tema::OK
+            tema::ok()
         } else {
-            tema::PELIGRO
+            tema::peligro()
         })
         .add_modifier(Modifier::BOLD);
     l.push(Line::styled(
@@ -490,7 +488,7 @@ pub fn lineas_resumen(r: &Resumen, v: &Verificacion) -> Vec<Line<'static>> {
                 p.buffer_id,
                 &p.content_hash[..12.min(p.content_hash.len())]
             ),
-            Style::default().fg(tema::ATENUADO),
+            Style::default().fg(tema::atenuado()),
         ));
     }
     l.push(Line::raw(format!(

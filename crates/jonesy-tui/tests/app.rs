@@ -1348,3 +1348,25 @@ fn nuevo_plugin_python_desde_el_ide() {
     e.accion(jonesy_tui::accion::Accion::NuevoPlugin);
     assert!(e.modal.is_none());
 }
+
+#[test]
+fn tema_se_elige_desde_la_config_y_se_cambia_y_recuerda() {
+    use jonesy_tui::tema::{self, Tema};
+    let d = proyecto(&[
+        ("main.c", "int main(void) { return 0; }\n"),
+        (".jonesy.toml", "[interfaz]\ntema = \"claro\"\n"),
+    ]);
+    let (mut a, _rx) = app(d.path(), false);
+    assert_eq!(tema::actual(), Tema::Claro);
+    assert_eq!(tema::fuerte(), ratatui::style::Color::Black);
+    pantalla(&mut a, 120, 40);
+    a.accion(jonesy_tui::accion::Accion::CambiarTema);
+    assert_eq!(tema::actual(), Tema::Contraste);
+    // Contraste sólo usa los 16 colores ANSI.
+    assert!(!matches!(tema::acento(), ratatui::style::Color::Rgb(..)));
+    drop(a);
+    // La sesión recuerda el elegido por encima de la config.
+    let (_b, _rx) = app(d.path(), false);
+    assert_eq!(tema::actual(), Tema::Contraste);
+    tema::usar(Tema::Oscuro);
+}

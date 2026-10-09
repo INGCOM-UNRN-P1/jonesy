@@ -589,6 +589,9 @@ impl App {
         } else {
             Simbolos::unicode()
         };
+        tema::usar(
+            tema::Tema::de_nombre(&proyecto.config.interfaz.tema).unwrap_or(tema::Tema::Oscuro),
+        );
         let dir_estado = proyecto.dir_estado();
         let examen = op.examen.then(|| {
             let estado = EstadoExamen::cargar(&dir_estado).unwrap_or_else(|| EstadoExamen {
@@ -773,6 +776,9 @@ impl App {
                 self.paneles = p.acotar();
             }
             self.navegador = s.izquierdo.as_deref().and_then(PestanaNav::de_nombre);
+            if let Some(t) = s.tema.as_deref().and_then(tema::Tema::de_nombre) {
+                tema::usar(t);
+            }
             for rel in &s.expandidos {
                 self.explorador
                     .expandidos
@@ -874,6 +880,7 @@ impl App {
                 .iter()
                 .map(|x| (x.nombre.clone(), x.activa))
                 .collect(),
+            tema: Some(tema::actual().nombre().into()),
         };
         let _ = s.guardar(&dir);
     }
@@ -2700,7 +2707,7 @@ impl App {
                         0,
                         Line::styled(
                             format!("Apunte: {e}"),
-                            ratatui::style::Style::default().fg(tema::NOTA),
+                            ratatui::style::Style::default().fg(tema::nota()),
                         ),
                     );
                 }
@@ -3934,6 +3941,12 @@ impl App {
             }
             Accion::Paleta => self.abrir_paleta(),
             Accion::TamanosPaneles => self.modal = Some(Modal::Paneles { sel: 0 }),
+            Accion::CambiarTema => {
+                let t = tema::actual().siguiente();
+                tema::usar(t);
+                self.guardar_sesion();
+                self.avisar(format!("Tema {}", t.nombre()), Nivel::Info);
+            }
             Accion::Explorador => self.alternar_navegador(PestanaNav::Archivos),
             Accion::Formatear => self.formatear(),
             Accion::GenerarDoc => self.generar_doc(),
@@ -6175,14 +6188,14 @@ pub fn lineas_diff(texto: &str) -> Vec<Line<'static>> {
             {
                 Style::default().add_modifier(Modifier::BOLD)
             } else if l.starts_with('+') {
-                Style::default().fg(tema::OK)
+                Style::default().fg(tema::ok())
             } else if l.starts_with('-') {
-                Style::default().fg(tema::ERROR)
+                Style::default().fg(tema::error())
             } else if l.starts_with("@@") {
-                Style::default().fg(tema::NOTA)
+                Style::default().fg(tema::nota())
             } else if l.starts_with("commit ") {
                 Style::default()
-                    .fg(tema::ADVERTENCIA)
+                    .fg(tema::advertencia())
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()

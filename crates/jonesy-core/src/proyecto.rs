@@ -92,6 +92,9 @@ pub struct Interfaz {
     pub osc52: bool,
     /// Forzar caracteres ASCII en lugar de los de caja.
     pub ascii: bool,
+    /// Tema de colores: "oscuro" (por defecto), "claro" o "contraste" (16 colores ANSI).
+    /// El elegido desde Ver → Cambiar tema queda en la sesión y tiene prioridad.
+    pub tema: String,
     /// Shell de la terminal interna (vacío = $SHELL o bash).
     pub shell: String,
     /// Instalación del entorno de la cátedra (vacío = buscarla en P1_ENTORNO o
@@ -157,6 +160,7 @@ impl Default for Interfaz {
             quickdoc: PosicionDoc::Derecha,
             osc52: true,
             ascii: false,
+            tema: String::new(),
             shell: String::new(),
             entorno: String::new(),
             paneles: TamPaneles::default(),

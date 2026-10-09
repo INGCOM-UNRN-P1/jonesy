@@ -37,6 +37,9 @@ quickdoc = "derecha"
 osc52 = true
 # Forzar caracteres ASCII en lugar de los de caja.
 ascii = false
+# Colores: "oscuro" (por defecto), "claro" (terminales de fondo blanco) o "contraste"
+# (sólo los 16 colores ANSI). También desde Ver → Cambiar tema, que queda en la sesión.
+tema = "oscuro"
 # Shell del deck (vacío = $SHELL).
 shell = ""
 # Entorno de la cátedra (INGCOM-UNRN-P1/entorno): vacío = buscarlo en P1_ENTORNO o

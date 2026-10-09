@@ -83,7 +83,11 @@ fn bloque<'a>(titulo: impl Into<Line<'a>>, foco: bool) -> Block<'a> {
     Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Plain)
-        .border_style(Style::default().fg(if foco { tema::ACENTO } else { tema::ATENUADO }))
+        .border_style(Style::default().fg(if foco {
+            tema::acento()
+        } else {
+            tema::atenuado()
+        }))
         .title(titulo)
 }
 
@@ -108,7 +112,7 @@ fn bloque_app<'a>(app: &App, titulo: impl Into<Line<'a>>, foco: bool) -> Block<'
 // ------------------------------------------------------------------ barra de menú
 
 fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
-    let fondo = Style::default().bg(tema::FONDO_BARRA);
+    let fondo = Style::default().bg(tema::fondo_barra());
     f.render_widget(Block::default().style(fondo), r);
     let menus = accion::menus(app.examen.is_some());
     let abierto = match app.modal {
@@ -122,7 +126,7 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             break;
         }
         let estilo = if abierto == Some(i) {
-            Style::default().bg(tema::ACENTO).fg(Color::Black)
+            Style::default().bg(tema::acento()).fg(tema::sobre_acento())
         } else {
             fondo
         };
@@ -139,19 +143,19 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             derecha.push(Span::styled(
                 " ENTREGADO ",
                 Style::default()
-                    .bg(tema::OK)
-                    .fg(Color::Black)
+                    .bg(tema::ok())
+                    .fg(tema::sobre_acento())
                     .add_modifier(Modifier::BOLD),
             ));
         } else {
             if let Some(s) = e.estado.restante_s(jonesy_core::ahora_unix()) {
                 let (h, m, seg) = (s.max(0) / 3600, (s.max(0) % 3600) / 60, s.max(0) % 60);
                 let color = if s <= 300 {
-                    tema::ERROR
+                    tema::error()
                 } else if s <= 900 {
-                    tema::ADVERTENCIA
+                    tema::advertencia()
                 } else {
-                    tema::OK
+                    tema::ok()
                 };
                 derecha.push(Span::styled(
                     format!(" {} {h}:{m:02}:{seg:02} ", app.sim.reloj),
@@ -176,7 +180,7 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             .unwrap_or_default();
         derecha.push(Span::styled(
             format!(" jonesy · {nombre} "),
-            fondo.fg(tema::ATENUADO),
+            fondo.fg(tema::atenuado()),
         ));
     }
     let ancho_boton = boton
@@ -192,8 +196,8 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
             f.render_widget(
                 Paragraph::new(t).style(
                     Style::default()
-                        .bg(tema::ADVERTENCIA)
-                        .fg(Color::Black)
+                        .bg(tema::advertencia())
+                        .fg(tema::sobre_acento())
                         .add_modifier(Modifier::BOLD),
                 ),
                 zb,
@@ -228,15 +232,19 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
         }
         let estilo = if app.navegador == Some(p) {
             Style::default()
-                .fg(if foco { Color::Black } else { Color::White })
-                .bg(if foco {
-                    tema::ACENTO
+                .fg(if foco {
+                    tema::sobre_acento()
                 } else {
-                    tema::FONDO_SELECCION
+                    tema::fuerte()
+                })
+                .bg(if foco {
+                    tema::acento()
+                } else {
+                    tema::fondo_seleccion()
                 })
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().fg(tema::ATENUADO)
+            Style::default().fg(tema::atenuado())
         };
         let zona = Rect::new(x, r.y, w, 1);
         f.render_widget(Paragraph::new(t).style(estilo), zona);
@@ -276,7 +284,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 .map(|(n, fila)| {
                     let sel = n == e.sel;
                     let fondo = if sel && foco {
-                        tema::FONDO_SELECCION
+                        tema::fondo_seleccion()
                     } else {
                         Color::Reset
                     };
@@ -292,17 +300,17 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                     let es_activo = activo.as_deref() == Some(fila.ruta.as_path());
                     let mut estilo = Style::default().bg(fondo);
                     if fila.es_dir {
-                        estilo = estilo.fg(tema::ACENTO);
+                        estilo = estilo.fg(tema::acento());
                     }
                     if es_activo {
-                        estilo = estilo.add_modifier(Modifier::BOLD).fg(Color::White);
+                        estilo = estilo.add_modifier(Modifier::BOLD).fg(tema::fuerte());
                     }
                     let marca = marcas.get(&fila.ruta).copied();
                     let color_marca = match marca {
-                        Some('?') => tema::OK,
-                        Some('M') | Some('•') => tema::ADVERTENCIA,
-                        Some('D') | Some('!') => tema::ERROR,
-                        _ => tema::NOTA,
+                        Some('?') => tema::ok(),
+                        Some('M') | Some('•') => tema::advertencia(),
+                        Some('D') | Some('!') => tema::error(),
+                        _ => tema::nota(),
                     };
                     let nombre = format!(
                         "{}{} {}{}",
@@ -331,7 +339,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 i.x,
                 i.y + i.height - 1,
                 "n nuevo · m carpeta · F2 renombrar · Supr borrar · r relee",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             );
         }
         Some(PestanaNav::Proyecto) => {
@@ -339,7 +347,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
             if est.vacia() {
                 f.render_widget(
                     Paragraph::new("No encontré Makefiles ni tp.sh en el proyecto. F6 compila el archivo activo con gcc.")
-                        .style(Style::default().fg(tema::ATENUADO))
+                        .style(Style::default().fg(tema::atenuado()))
                         .wrap(Wrap { trim: true }),
                     i,
                 );
@@ -400,7 +408,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 .take(alto)
                 .map(|(n, fila)| {
                     let fondo = if n == v.sel && foco {
-                        tema::FONDO_SELECCION
+                        tema::fondo_seleccion()
                     } else {
                         Color::Reset
                     };
@@ -408,7 +416,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                     let spans: Vec<Span> = match fila {
                         FilaProyecto::Grupo(t) => vec![Span::styled(
                             t.titulo().to_uppercase(),
-                            st.fg(tema::ATENUADO).add_modifier(Modifier::BOLD),
+                            st.fg(tema::atenuado()).add_modifier(Modifier::BOLD),
                         )],
                         FilaProyecto::Modulo(m) => {
                             let md = &est.modulos[*m];
@@ -430,9 +438,9 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                             vec![
                                 Span::styled(
                                     format!("{icono} {nombre}"),
-                                    st.fg(tema::ACENTO).add_modifier(Modifier::BOLD),
+                                    st.fg(tema::acento()).add_modifier(Modifier::BOLD),
                                 ),
-                                Span::styled(extra, st.fg(tema::ATENUADO)),
+                                Span::styled(extra, st.fg(tema::atenuado())),
                             ]
                         }
                         FilaProyecto::Objetivo(m, o) => {
@@ -440,20 +448,20 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                             vec![
                                 Span::styled(
                                     format!("   {} ", if ascii { ">" } else { "▶" }),
-                                    st.fg(tema::OK),
+                                    st.fg(tema::ok()),
                                 ),
                                 Span::styled(
                                     format!("{:<9}", obj.nombre),
                                     st.add_modifier(Modifier::BOLD),
                                 ),
-                                Span::styled(obj.descripcion.clone(), st.fg(tema::ATENUADO)),
+                                Span::styled(obj.descripcion.clone(), st.fg(tema::atenuado())),
                             ]
                         }
                         FilaProyecto::TpSh => {
                             let icono = if v.tp_desplegado { despl } else { pleg };
                             vec![Span::styled(
                                 format!("{icono} tp.sh"),
-                                st.fg(tema::ESTILO).add_modifier(Modifier::BOLD),
+                                st.fg(tema::estilo()).add_modifier(Modifier::BOLD),
                             )]
                         }
                         FilaProyecto::ComandoTp(c) => {
@@ -461,7 +469,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                             vec![
                                 Span::styled(
                                     format!("   {} ", if ascii { ">" } else { "▶" }),
-                                    st.fg(tema::ESTILO),
+                                    st.fg(tema::estilo()),
                                 ),
                                 Span::styled(cmd.uso.clone(), st),
                             ]
@@ -491,10 +499,10 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
             };
             f.render_widget(
                 Paragraph::new(vec![
-                    Line::styled(descripcion, Style::default().fg(tema::NOTA)),
+                    Line::styled(descripcion, Style::default().fg(tema::nota())),
                     Line::styled(
                         "Enter corre · →← despliega · r relee",
-                        Style::default().fg(tema::ATENUADO),
+                        Style::default().fg(tema::atenuado()),
                     ),
                 ])
                 .wrap(Wrap { trim: true }),
@@ -619,7 +627,7 @@ fn titulos_pestanas(app: &App) -> Vec<String> {
 
 fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
     f.render_widget(
-        Block::default().style(Style::default().bg(tema::FONDO_LINEA)),
+        Block::default().style(Style::default().bg(tema::fondo_linea())),
         r,
     );
     let ascii = app.sim.ascii;
@@ -653,7 +661,8 @@ fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
     if app.primera_pestana > 0 {
         let zona = Rect::new(x, r.y, 2, 1);
         f.render_widget(
-            Paragraph::new(if ascii { "<" } else { "‹" }).style(Style::default().fg(tema::ACENTO)),
+            Paragraph::new(if ascii { "<" } else { "‹" })
+                .style(Style::default().fg(tema::acento())),
             zona,
         );
         app.zonas.desborde_pestanas.push((zona, -1));
@@ -669,11 +678,13 @@ fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
         let activa = i == app.activo;
         let estilo = if activa {
             Style::default()
-                .bg(tema::FONDO_SELECCION)
-                .fg(Color::White)
+                .bg(tema::fondo_seleccion())
+                .fg(tema::fuerte())
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().bg(tema::FONDO_LINEA).fg(tema::ATENUADO)
+            Style::default()
+                .bg(tema::fondo_linea())
+                .fg(tema::atenuado())
         };
         let ancho_texto = w - 3;
         let zona = Rect::new(x, r.y, ancho_texto, 1);
@@ -681,9 +692,9 @@ fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
         let zona_cierre = Rect::new(x + ancho_texto, r.y, 2, 1);
         f.render_widget(
             Paragraph::new(cierre).style(estilo.remove_modifier(Modifier::BOLD).fg(if activa {
-                tema::ERROR
+                tema::error()
             } else {
-                tema::ATENUADO
+                tema::atenuado()
             })),
             zona_cierre,
         );
@@ -695,7 +706,8 @@ fn dibujar_pestanas_buffers(f: &mut Frame, app: &mut App, r: Rect) {
     if ultima + 1 < app.buffers.len() {
         let zona = Rect::new(r.x + r.width - 2, r.y, 2, 1);
         f.render_widget(
-            Paragraph::new(if ascii { ">" } else { "›" }).style(Style::default().fg(tema::ACENTO)),
+            Paragraph::new(if ascii { ">" } else { "›" })
+                .style(Style::default().fg(tema::acento())),
             zona,
         );
         app.zonas.desborde_pestanas.push((zona, 1));
@@ -801,9 +813,9 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         let es_actual = linea == cl;
         let es_depurador = linea_depurador == Some(linea);
         let fondo = if es_depurador {
-            Color::Rgb(70, 60, 20)
+            tema::linea_depurador()
         } else if es_actual && foco {
-            tema::FONDO_LINEA
+            tema::fondo_linea()
         } else {
             Color::Reset
         };
@@ -815,25 +827,25 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         if linea >= lineas_total {
             buf[(gutter.x + 1, y)]
                 .set_symbol("~")
-                .set_fg(tema::ATENUADO);
+                .set_fg(tema::atenuado());
             continue;
         }
         // Gutter: breakpoint, número, marca de diagnóstico.
         if bps.contains(&linea) {
             buf[(gutter.x, y)]
                 .set_symbol(sim.breakpoint)
-                .set_fg(tema::ERROR);
+                .set_fg(tema::error());
         }
         if es_depurador {
             buf[(gutter.x, y)]
                 .set_symbol(sim.linea_actual)
-                .set_fg(tema::ADVERTENCIA);
+                .set_fg(tema::advertencia());
         }
         let num = format!("{:>w$}", linea + 1, w = digitos as usize);
         let estilo_num = if es_actual {
-            Style::default().fg(Color::White)
+            Style::default().fg(tema::fuerte())
         } else {
-            Style::default().fg(tema::ATENUADO)
+            Style::default().fg(tema::atenuado())
         };
         buf.set_string(gutter.x + 1, y, &num, estilo_num);
         let peor = diags.iter().filter(|d| d.0 == linea).map(|d| d.1).min();
@@ -866,14 +878,16 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             }
             let pos = inicio_linea + i;
             if seleccion.is_some_and(|(a, z)| pos >= a && pos < z) {
-                estilo = estilo.bg(tema::FONDO_SELECCION);
+                estilo = estilo.bg(tema::fondo_seleccion());
             }
             let celda = &mut buf[(texto.x + x as u16, y)];
             if c == '\t' {
                 // En Makefiles el TAB importa: se muestra para distinguirlo de los espacios.
                 if lenguaje == Lenguaje::Makefile {
                     let marca = if sim.ascii { ">" } else { "→" };
-                    celda.set_symbol(marca).set_style(estilo.fg(tema::ATENUADO));
+                    celda
+                        .set_symbol(marca)
+                        .set_style(estilo.fg(tema::atenuado()));
                 } else {
                     celda.set_symbol(" ").set_style(estilo);
                 }
@@ -888,7 +902,7 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         {
             let vis = cols[chars.len()];
             if vis >= desp_h && vis - desp_h < texto.width as usize {
-                buf[(texto.x + (vis - desp_h) as u16, y)].set_bg(tema::FONDO_SELECCION);
+                buf[(texto.x + (vis - desp_h) as u16, y)].set_bg(tema::fondo_seleccion());
             }
         }
         // Texto virtual: el diagnóstico más grave al final de la línea (RF-3.2).
@@ -1026,7 +1040,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
             " quick-doc ".into(),
             vec![Line::styled(
                 "Ayuda de funciones de C: abrí un archivo .c o .h.",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             )],
         );
     }
@@ -1053,7 +1067,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
         Contexto::Identificador(id) => (id.clone(), None),
         Contexto::Nada => (String::new(), None),
     };
-    let atenuado = Style::default().fg(tema::ATENUADO);
+    let atenuado = Style::default().fg(tema::atenuado());
     if nombre.is_empty() {
         return (
             " quick-doc ".into(),
@@ -1072,7 +1086,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
             (Some(p), Some(a), Some(z)) if a < z && !func.parametros.is_empty() => {
                 firma.push(Span::styled(
                     texto[..=a].to_string(),
-                    Style::default().fg(tema::ACENTO),
+                    Style::default().fg(tema::acento()),
                 ));
                 let partes: Vec<&str> = texto[a + 1..z].split(',').collect();
                 for (i, parte) in partes.iter().enumerate() {
@@ -1080,7 +1094,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                         && !(texto.contains("...") && p >= partes.len() && i != partes.len() - 1);
                     let estilo = if es_activo {
                         Style::default()
-                            .fg(tema::ADVERTENCIA)
+                            .fg(tema::advertencia())
                             .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
                     } else {
                         Style::default()
@@ -1092,13 +1106,13 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                 }
                 firma.push(Span::styled(
                     texto[z..].to_string(),
-                    Style::default().fg(tema::ACENTO),
+                    Style::default().fg(tema::acento()),
                 ));
             }
             _ => firma.push(Span::styled(
                 texto.clone(),
                 Style::default()
-                    .fg(tema::ACENTO)
+                    .fg(tema::acento())
                     .add_modifier(Modifier::BOLD),
             )),
         }
@@ -1122,7 +1136,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
             let activo = activo_param.is_some_and(|a| a == i);
             let estilo = if activo {
                 Style::default()
-                    .fg(tema::ADVERTENCIA)
+                    .fg(tema::advertencia())
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
@@ -1142,13 +1156,13 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
         for t in &func.trampas {
             l.push(Line::styled(
                 format!("{} {t}", if app.sim.ascii { "!" } else { "⚠" }),
-                Style::default().fg(tema::ADVERTENCIA),
+                Style::default().fg(tema::advertencia()),
             ));
         }
         if !func.reglas.is_empty() {
             l.push(Line::styled(
                 format!("Reglas: {}", func.reglas.join(", ")),
-                Style::default().fg(tema::ESTILO),
+                Style::default().fg(tema::estilo()),
             ));
         }
         // Origen y vigencia de la documentación del proyecto.
@@ -1157,13 +1171,13 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                 for p in &f.pre {
                     l.push(Line::styled(
                         format!("Pre: {p}"),
-                        Style::default().fg(tema::NOTA),
+                        Style::default().fg(tema::nota()),
                     ));
                 }
                 for p in &f.post {
                     l.push(Line::styled(
                         format!("Post: {p}"),
-                        Style::default().fg(tema::NOTA),
+                        Style::default().fg(tema::nota()),
                     ));
                 }
                 if !f.ver.is_empty() {
@@ -1172,7 +1186,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                 if !f.documentada {
                     l.push(Line::styled(
                         format!("Sin documentar: corbel scaffold {}", f.cabecera),
-                        Style::default().fg(tema::ADVERTENCIA),
+                        Style::default().fg(tema::advertencia()),
                     ));
                 }
                 let archivo = f.cabecera.rsplit('/').next().unwrap_or(&f.cabecera);
@@ -1188,7 +1202,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
                             "{} Puede estar desactualizada ({motivo}): corré make doc",
                             if app.sim.ascii { "!" } else { "⚠" }
                         ),
-                        Style::default().fg(tema::ADVERTENCIA),
+                        Style::default().fg(tema::advertencia()),
                     ));
                 }
             }
@@ -1201,7 +1215,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
             Line::styled(
                 t.nombre.clone(),
                 Style::default()
-                    .fg(tema::ACENTO)
+                    .fg(tema::acento())
                     .add_modifier(Modifier::BOLD),
             ),
             Line::styled(
@@ -1213,7 +1227,7 @@ pub fn lineas_quickdoc(app: &mut App, ancho: u16) -> (String, Vec<Line<'static>>
         for tr in &t.trampas {
             l.push(Line::styled(
                 format!("{} {tr}", if app.sim.ascii { "!" } else { "⚠" }),
-                Style::default().fg(tema::ADVERTENCIA),
+                Style::default().fg(tema::advertencia()),
             ));
         }
         return (format!(" {} ", t.nombre), l);
@@ -1243,7 +1257,7 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
     // Pestañas en la fila superior (sobre el borde).
     let fila = Rect { height: 1, ..r };
     f.render_widget(
-        Block::default().style(Style::default().bg(tema::FONDO_BARRA)),
+        Block::default().style(Style::default().bg(tema::fondo_barra())),
         fila,
     );
     let mut x = r.x + 1;
@@ -1267,14 +1281,20 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
         let estilo = if p == app.pestana {
             Style::default()
                 .bg(if foco {
-                    tema::ACENTO
+                    tema::acento()
                 } else {
-                    tema::FONDO_SELECCION
+                    tema::fondo_seleccion()
                 })
-                .fg(if foco { Color::Black } else { Color::White })
+                .fg(if foco {
+                    tema::sobre_acento()
+                } else {
+                    tema::fuerte()
+                })
                 .add_modifier(Modifier::BOLD)
         } else {
-            Style::default().bg(tema::FONDO_BARRA).fg(tema::ATENUADO)
+            Style::default()
+                .bg(tema::fondo_barra())
+                .fg(tema::atenuado())
         };
         let zona = Rect::new(x, r.y, w, 1);
         f.render_widget(Paragraph::new(format!(" {titulo} ")).style(estilo), zona);
@@ -1303,7 +1323,7 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
                     Line::styled(
                         t.clone(),
                         if *e {
-                            Style::default().fg(tema::ERROR)
+                            Style::default().fg(tema::error())
                         } else {
                             Style::default()
                         },
@@ -1324,7 +1344,7 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
             let Some(d) = deck else {
                 f.render_widget(
                     Paragraph::new("Alt+T abre la terminal.")
-                        .style(Style::default().fg(tema::ATENUADO)),
+                        .style(Style::default().fg(tema::atenuado())),
                     cuerpo,
                 );
                 return None;
@@ -1353,7 +1373,9 @@ fn dibujar_inferior(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)>
                         cuerpo.x + cuerpo.width - w,
                         r.y,
                         aviso,
-                        Style::default().fg(tema::ATENUADO).bg(tema::FONDO_BARRA),
+                        Style::default()
+                            .fg(tema::atenuado())
+                            .bg(tema::fondo_barra()),
                     );
                 }
             }
@@ -1381,7 +1403,7 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
     if diags.is_empty() {
         f.render_widget(
             Paragraph::new(" Sin problemas. F6 compila; al guardar corre ripley.")
-                .style(Style::default().fg(tema::ATENUADO)),
+                .style(Style::default().fg(tema::atenuado())),
             r,
         );
         return;
@@ -1403,7 +1425,7 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
             };
             let sugerencia = d.sugerencia.as_deref().filter(|_| d.archivo.is_none());
             let fondo = if i == app.sel_problema {
-                tema::FONDO_SELECCION
+                tema::fondo_seleccion()
             } else {
                 Color::Reset
             };
@@ -1423,23 +1445,23 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                 ),
                 Span::styled(
                     format!("{ubic} "),
-                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                    Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
                 Span::styled(d.mensaje.clone(), Style::default().bg(fondo)),
                 Span::styled(
                     sugerencia.map(|t| format!(" — {t}")).unwrap_or_default(),
-                    Style::default().fg(tema::NOTA).bg(fondo),
+                    Style::default().fg(tema::nota()).bg(fondo),
                 ),
                 Span::styled(
                     d.codigo
                         .as_deref()
                         .map(|c| format!(" [{c}]"))
                         .unwrap_or_default(),
-                    Style::default().fg(tema::ESTILO).bg(fondo),
+                    Style::default().fg(tema::estilo()).bg(fondo),
                 ),
                 Span::styled(
                     format!(" ({origen})"),
-                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                    Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
             ])
         })
@@ -1471,7 +1493,7 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
         f.render_widget(
             Paragraph::new(t).style(
                 Style::default()
-                    .fg(tema::ACENTO)
+                    .fg(tema::acento())
                     .add_modifier(Modifier::BOLD),
             ),
             zona,
@@ -1482,7 +1504,7 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
     let estado = format!(" {} ", d.estado);
     if x + estado.chars().count() as u16 <= r.x + r.width {
         f.buffer_mut()
-            .set_string(x, r.y, &estado, Style::default().fg(tema::ATENUADO));
+            .set_string(x, r.y, &estado, Style::default().fg(tema::atenuado()));
     }
     let cuerpo = Rect {
         y: r.y + 1,
@@ -1516,7 +1538,7 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
         None => {
             f.render_widget(
                 Paragraph::new("En esta plataforma la E/S del programa aparece en la consola de GDB (a la derecha).")
-                    .style(Style::default().fg(tema::ATENUADO))
+                    .style(Style::default().fg(tema::atenuado()))
                     .wrap(Wrap { trim: true }),
                 ip,
             );
@@ -1542,7 +1564,7 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
     let entrada = format!("(gdb) {}", d.entrada);
     let y = ic.y + ic.height.saturating_sub(1);
     f.buffer_mut()
-        .set_string(ic.x, y, &entrada, Style::default().fg(tema::ACENTO));
+        .set_string(ic.x, y, &entrada, Style::default().fg(tema::acento()));
     if foco && d.foco_consola {
         Some((
             ic.x + (UnicodeWidthStr::width(entrada.as_str()) as u16)
@@ -1574,7 +1596,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let Some(e) = app.git_estado.clone() else {
         f.render_widget(
             Paragraph::new("El proyecto no está en un repositorio git.")
-                .style(Style::default().fg(tema::ATENUADO))
+                .style(Style::default().fg(tema::atenuado()))
                 .wrap(Wrap { trim: true }),
             i,
         );
@@ -1601,7 +1623,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 e.rama.clone().unwrap_or("(sin rama)".into())
             ),
             Style::default()
-                .fg(tema::ACENTO)
+                .fg(tema::acento())
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -1618,7 +1640,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                     String::new()
                 }
             ),
-            Style::default().fg(tema::ADVERTENCIA),
+            Style::default().fg(tema::advertencia()),
         ),
     ])];
     let ayuda = if app.git.log.is_some() {
@@ -1626,7 +1648,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     } else {
         "Espacio stage · a/u todo · c commit · l log · Enter diff"
     };
-    cabecera.push(Line::styled(ayuda, Style::default().fg(tema::ATENUADO)));
+    cabecera.push(Line::styled(ayuda, Style::default().fg(tema::atenuado())));
     let alto_cab = cabecera.len() as u16;
     f.render_widget(
         Paragraph::new(cabecera).wrap(Wrap { trim: true }),
@@ -1668,7 +1690,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             .take(alto)
             .map(|(n, c)| {
                 let fondo = if n == sel {
-                    tema::FONDO_SELECCION
+                    tema::fondo_seleccion()
                 } else {
                     Color::Reset
                 };
@@ -1678,15 +1700,15 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                     "  "
                 };
                 Line::from(vec![
-                    Span::styled(marca, Style::default().fg(tema::ACENTO).bg(fondo)),
+                    Span::styled(marca, Style::default().fg(tema::acento()).bg(fondo)),
                     Span::styled(
                         format!("{} ", c.hash),
-                        Style::default().fg(tema::ADVERTENCIA).bg(fondo),
+                        Style::default().fg(tema::advertencia()).bg(fondo),
                     ),
                     Span::styled(c.resumen.clone(), Style::default().bg(fondo)),
                     Span::styled(
                         format!(" · {}", c.cuando),
-                        Style::default().fg(tema::ATENUADO).bg(fondo),
+                        Style::default().fg(tema::atenuado()).bg(fondo),
                     ),
                 ])
             })
@@ -1696,7 +1718,7 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     }
     if e.entradas.is_empty() {
         f.render_widget(
-            Paragraph::new("Árbol de trabajo limpio.").style(Style::default().fg(tema::OK)),
+            Paragraph::new("Árbol de trabajo limpio.").style(Style::default().fg(tema::ok())),
             lista,
         );
         return;
@@ -1712,22 +1734,22 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         .take(alto)
         .map(|(n, en)| {
             let fondo = if n == sel {
-                tema::FONDO_SELECCION
+                tema::fondo_seleccion()
             } else {
                 Color::Reset
             };
             let (marca, color) = if en.en_stage() && !en.sin_stage() {
-                ("[S]", tema::OK)
+                ("[S]", tema::ok())
             } else if en.en_stage() {
-                ("[±]", tema::ADVERTENCIA)
+                ("[±]", tema::advertencia())
             } else {
-                ("[ ]", tema::ATENUADO)
+                ("[ ]", tema::atenuado())
             };
             Line::from(vec![
                 Span::styled(format!("{marca} "), Style::default().fg(color).bg(fondo)),
                 Span::styled(
                     format!("{:<10} ", en.describir()),
-                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                    Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
                 Span::styled(en.ruta.clone(), Style::default().bg(fondo)),
             ])
@@ -1753,7 +1775,7 @@ fn botones_fila(
         }
         let zona = Rect::new(x, y, w, 1);
         f.render_widget(
-            Paragraph::new(*t).style(Style::default().fg(tema::ACENTO)),
+            Paragraph::new(*t).style(Style::default().fg(tema::acento())),
             zona,
         );
         app.zonas.botones.push((zona, *a));
@@ -1773,7 +1795,7 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     if grupos.is_empty() {
         f.render_widget(
             Paragraph::new("Sin observaciones. Las herramientas del ecosistema (ripley, gaff, kaneda…) corren al guardar; F1 sobre un hallazgo lo explica y Herramientas → Integraciones muestra cuáles están activas.")
-                .style(Style::default().fg(tema::ATENUADO))
+                .style(Style::default().fg(tema::atenuado()))
                 .wrap(Wrap { trim: true }),
             i,
         );
@@ -1789,12 +1811,12 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         lineas.push(Line::styled(
             format!("▾ {cat} ({})", v.len()),
             Style::default()
-                .fg(tema::ACENTO)
+                .fg(tema::acento())
                 .add_modifier(Modifier::BOLD),
         ));
         for d in v {
             let fondo = if n == app.sel_regla {
-                tema::FONDO_SELECCION
+                tema::fondo_seleccion()
             } else {
                 Color::Reset
             };
@@ -1816,11 +1838,11 @@ fn dibujar_reglas(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 ),
                 Span::styled(
                     format!("{archivo}:{} ", d.linea),
-                    Style::default().fg(tema::ATENUADO).bg(fondo),
+                    Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
                 Span::styled(
                     d.codigo.clone().unwrap_or_default(),
-                    Style::default().fg(tema::ESTILO).bg(fondo),
+                    Style::default().fg(tema::estilo()).bg(fondo),
                 ),
                 Span::styled(format!(" {}", d.mensaje), Style::default().bg(fondo)),
             ]));
@@ -1847,7 +1869,7 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     f.render_widget(b, r);
     let Some(d) = &app.depuracion else {
         f.render_widget(
-            Paragraph::new("F5 inicia la depuración.").style(Style::default().fg(tema::ATENUADO)),
+            Paragraph::new("F5 inicia la depuración.").style(Style::default().fg(tema::atenuado())),
             i,
         );
         return;
@@ -1855,7 +1877,7 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let mut l: Vec<Line> = vec![Line::styled(
         "Pila",
         Style::default()
-            .fg(tema::ACENTO)
+            .fg(tema::acento())
             .add_modifier(Modifier::BOLD),
     )];
     for m in &d.marcos {
@@ -1871,27 +1893,27 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         l.push(Line::from(vec![
             Span::styled(
                 format!(" #{} ", m.nivel),
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             ),
             Span::styled(
                 format!("{}()", m.funcion),
-                Style::default().fg(tema::ACENTO),
+                Style::default().fg(tema::acento()),
             ),
-            Span::styled(format!(" {ubic}"), Style::default().fg(tema::ATENUADO)),
+            Span::styled(format!(" {ubic}"), Style::default().fg(tema::atenuado())),
         ]));
     }
     l.push(Line::raw(""));
     l.push(Line::styled(
         "Variables",
         Style::default()
-            .fg(tema::ACENTO)
+            .fg(tema::acento())
             .add_modifier(Modifier::BOLD),
     ));
     for v in &d.variables {
         l.push(Line::from(vec![
             Span::styled(
                 if v.argumento { " ⇢ " } else { "   " },
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             ),
             Span::styled(format!("{} ", v.tipo), estilo_clase(resaltado::Clase::Tipo)),
             Span::styled(
@@ -1906,7 +1928,7 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         l.push(Line::raw(""));
         l.push(Line::styled(
             "Alt+M: vista de memoria (cat-scan)",
-            Style::default().fg(tema::ATENUADO),
+            Style::default().fg(tema::atenuado()),
         ));
     }
     f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), i);
@@ -1925,7 +1947,7 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             "Esta parada no figura en la traza de mem-trace."
         };
         f.render_widget(
-            Paragraph::new(msg).style(Style::default().fg(tema::ATENUADO)),
+            Paragraph::new(msg).style(Style::default().fg(tema::atenuado())),
             i,
         );
         return;
@@ -1976,7 +1998,7 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             r.x + r.width - pie.len() as u16 - 1,
             r.y + r.height - 1,
             &pie,
-            Style::default().fg(tema::ATENUADO),
+            Style::default().fg(tema::atenuado()),
         );
     }
 }
@@ -1984,7 +2006,7 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
 // ------------------------------------------------------------------ barra de estado
 
 fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
-    let fondo = Style::default().bg(tema::FONDO_BARRA);
+    let fondo = Style::default().bg(tema::fondo_barra());
     f.render_widget(Block::default().style(fondo), r);
     let b = &app.buf().buf;
     let (l, c) = b.linea_columna();
@@ -1993,8 +2015,8 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         izq.push(Span::styled(
             " EXAMEN ",
             Style::default()
-                .bg(tema::ERROR)
-                .fg(Color::Black)
+                .bg(tema::error())
+                .fg(tema::sobre_acento())
                 .add_modifier(Modifier::BOLD),
         ));
     }
@@ -2008,7 +2030,7 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         };
         izq.push(Span::styled(
             format!(" {vista} "),
-            Style::default().bg(tema::FONDO_SELECCION),
+            Style::default().bg(tema::fondo_seleccion()),
         ));
     }
     izq.push(Span::styled(
@@ -2017,28 +2039,28 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     ));
     izq.push(Span::styled(
         format!("Ln {}, Col {} ", l + 1, c + 1),
-        fondo.fg(tema::ATENUADO),
+        fondo.fg(tema::atenuado()),
     ));
     // Módulo (biblioteca o ejercicio) del archivo activo: ahí actúan F6, Ctrl+F5 y F5.
     if let Some(m) = app.proyecto.modulo_activo(app.buf().buf.ruta.as_deref()) {
         izq.push(Span::styled(
             format!("[{}] ", m.nombre),
-            fondo.fg(tema::ACENTO),
+            fondo.fg(tema::acento()),
         ));
     }
     let tareas = app.tareas_en_curso();
     if !tareas.is_empty() {
         izq.push(Span::styled(
             format!(" {}… ", tareas.join(", ")),
-            fondo.fg(tema::NOTA).add_modifier(Modifier::ITALIC),
+            fondo.fg(tema::nota()).add_modifier(Modifier::ITALIC),
         ));
     }
     if let Some((m, n, _)) = &app.mensaje {
         let color = match n {
-            Nivel::Info => tema::NOTA,
-            Nivel::Ok => tema::OK,
-            Nivel::Aviso => tema::ADVERTENCIA,
-            Nivel::Error => tema::ERROR,
+            Nivel::Info => tema::nota(),
+            Nivel::Ok => tema::ok(),
+            Nivel::Aviso => tema::advertencia(),
+            Nivel::Error => tema::error(),
         };
         izq.push(Span::styled(format!(" {m}"), fondo.fg(color)));
     }
@@ -2102,7 +2124,7 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         for (t, a) in botones {
             let w = UnicodeWidthStr::width(t.as_str()) as u16;
             let zona = Rect::new(x, r.y, w, 1);
-            f.render_widget(Paragraph::new(t).style(fondo.fg(tema::ACENTO)), zona);
+            f.render_widget(Paragraph::new(t).style(fondo.fg(tema::acento())), zona);
             app.zonas.botones.push((zona, a));
             x += w + 1;
         }
@@ -2112,11 +2134,6 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
 // ------------------------------------------------------------------ modales
 
 // ------------------------------------------------------------------ diff
-
-const FONDO_BORRADO: Color = Color::Rgb(62, 28, 30);
-const FONDO_BORRADO_FUERTE: Color = Color::Rgb(125, 40, 45);
-const FONDO_AGREGADO: Color = Color::Rgb(26, 56, 34);
-const FONDO_AGREGADO_FUERTE: Color = Color::Rgb(40, 110, 55);
 
 /// Escribe una celda de diff (número + texto) en `x..x+ancho` de la fila `y`.
 /// Cómo dibujar las celdas de un diff: lenguaje (para el resaltado) y desplazamiento
@@ -2138,16 +2155,16 @@ fn celda_diff(
     use jonesy_core::diff::Tipo;
     let (x, y, ancho) = (area.x, area.y, area.width);
     let (fondo, fuerte) = if izquierda {
-        (FONDO_BORRADO, FONDO_BORRADO_FUERTE)
+        (tema::borrado(), tema::borrado_fuerte())
     } else {
-        (FONDO_AGREGADO, FONDO_AGREGADO_FUERTE)
+        (tema::agregado(), tema::agregado_fuerte())
     };
     let Some(c) = celda else {
         // Sin línea de este lado: relleno tenue.
         for i in 0..ancho {
             buf[(x + i, y)]
                 .set_symbol("╱")
-                .set_style(Style::default().fg(Color::Rgb(55, 58, 64)));
+                .set_style(Style::default().fg(tema::relleno()));
         }
         return;
     };
@@ -2161,14 +2178,14 @@ fn celda_diff(
         buf[(x + i, y)].set_symbol(" ").set_style(base);
     }
     let num = format!("{:>4} ", c.num);
-    buf.set_string(x, y, &num, base.fg(tema::ATENUADO));
+    buf.set_string(x, y, &num, base.fg(tema::atenuado()));
     let mut col = x + 5;
     if let Some(m) = marca {
         buf.set_string(
             col,
             y,
             m.to_string(),
-            base.fg(if izquierda { tema::ERROR } else { tema::OK }),
+            base.fg(if izquierda { tema::error() } else { tema::ok() }),
         );
         col += 2;
     }
@@ -2177,7 +2194,7 @@ fn celda_diff(
     let tramos = resaltado::resaltar(ctx.lenguaje, &chars, &mut resaltado::Estado::default());
     let fin = x + ancho;
     if ctx.desp_h > 0 && !chars.is_empty() {
-        buf.set_string(col.saturating_sub(1), y, "‹", base.fg(tema::ATENUADO));
+        buf.set_string(col.saturating_sub(1), y, "‹", base.fg(tema::atenuado()));
     }
     let mut t = 0;
     for (i, ch) in chars.iter().enumerate().skip(ctx.desp_h) {
@@ -2185,7 +2202,7 @@ fn celda_diff(
             .unwrap_or(1)
             .max(1) as u16;
         if col + w > fin {
-            buf.set_string(fin.saturating_sub(1), y, "›", base.fg(tema::ATENUADO));
+            buf.set_string(fin.saturating_sub(1), y, "›", base.fg(tema::atenuado()));
             break;
         }
         while t < tramos.len() && tramos[t].1 <= i {
@@ -2251,11 +2268,11 @@ fn dibujar_diff(
     let b = bloque(
         Line::from(vec![
             Span::raw(format!(" {titulo} ")),
-            Span::styled(format!("+{agregadas} "), Style::default().fg(tema::OK)),
-            Span::styled(format!("−{borradas} "), Style::default().fg(tema::ERROR)),
+            Span::styled(format!("+{agregadas} "), Style::default().fg(tema::ok())),
+            Span::styled(format!("−{borradas} "), Style::default().fg(tema::error())),
             Span::styled(
                 format!("· {vista} · s alterna · n/p cambio · ←→ desplaza · Esc cierra "),
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             ),
         ]),
         true,
@@ -2297,20 +2314,20 @@ fn dibujar_diff(
                     i.x,
                     y,
                     "━".repeat(i.width as usize),
-                    Style::default().fg(tema::ACENTO),
+                    Style::default().fg(tema::acento()),
                 );
                 buf.set_string(
                     i.x + 2,
                     y,
                     &t,
                     Style::default()
-                        .fg(tema::ACENTO)
+                        .fg(tema::acento())
                         .add_modifier(Modifier::BOLD),
                 );
             }
             FilaDiff::Bloque(b) => {
                 let t: String = b.chars().take(i.width as usize).collect();
-                buf.set_string(i.x, y, t, Style::default().fg(tema::NOTA));
+                buf.set_string(i.x, y, t, Style::default().fg(tema::nota()));
             }
             FilaDiff::Par { izq, der } if lado_a_lado => {
                 celda_diff(
@@ -2323,7 +2340,7 @@ fn dibujar_diff(
                 );
                 buf[(i.x + mitad - 1, y)]
                     .set_symbol("│")
-                    .set_style(Style::default().fg(tema::ATENUADO));
+                    .set_style(Style::default().fg(tema::atenuado()));
                 celda_diff(
                     buf,
                     Rect::new(i.x + mitad, y, i.width - mitad, 1),
@@ -2367,7 +2384,7 @@ fn dibujar_diff(
             r.x + r.width.saturating_sub(pie.chars().count() as u16 + 2),
             r.y + r.height - 1,
             pie,
-            Style::default().fg(tema::ATENUADO),
+            Style::default().fg(tema::atenuado()),
         );
     }
 }
@@ -2442,14 +2459,14 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             f.render_widget(b, r);
             f.render_widget(
                 Paragraph::new(titulo.clone())
-                    .style(Style::default().fg(tema::ATENUADO))
+                    .style(Style::default().fg(tema::atenuado()))
                     .wrap(Wrap { trim: true }),
                 Rect { height: 2, ..i },
             );
             let y = i.y + i.height.saturating_sub(1);
             let linea = format!("> {texto}");
             f.buffer_mut()
-                .set_string(i.x, y, &linea, Style::default().fg(tema::ACENTO));
+                .set_string(i.x, y, &linea, Style::default().fg(tema::acento()));
             Some((
                 i.x + (UnicodeWidthStr::width(linea.as_str()) as u16)
                     .min(i.width.saturating_sub(1)),
@@ -2517,7 +2534,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let r = centrado(area, 64, 7);
             f.render_widget(Clear, r);
             let b = bloque(format!(" {titulo} "), true)
-                .border_style(Style::default().fg(tema::ADVERTENCIA));
+                .border_style(Style::default().fg(tema::advertencia()));
             let i = b.inner(r);
             f.render_widget(b, r);
             f.render_widget(Paragraph::new(mensaje.clone()).wrap(Wrap { trim: true }), i);
@@ -2543,7 +2560,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     i.x,
                     i.y + i.height - 1,
                     a,
-                    Style::default().fg(tema::ADVERTENCIA),
+                    Style::default().fg(tema::advertencia()),
                 );
             }
             let n = lineas.len();
@@ -2582,7 +2599,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     r.x + r.width.saturating_sub(pie.len() as u16 + 2),
                     r.y + r.height - 1,
                     pie,
-                    Style::default().fg(tema::ATENUADO),
+                    Style::default().fg(tema::atenuado()),
                 );
             }
             None
@@ -2613,9 +2630,11 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 let y = i.y + n as u16 * 2;
                 let activo = n == *campo;
                 f.buffer_mut()
-                    .set_string(i.x, y, etiqueta, Style::default().fg(tema::ATENUADO));
+                    .set_string(i.x, y, etiqueta, Style::default().fg(tema::atenuado()));
                 let estilo = if activo {
-                    Style::default().fg(tema::ACENTO).bg(tema::FONDO_SELECCION)
+                    Style::default()
+                        .fg(tema::acento())
+                        .bg(tema::fondo_seleccion())
                 } else {
                     Style::default()
                 };
@@ -2638,13 +2657,13 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.x,
                 i.y + 4,
                 format!("Se crea: {carpeta}"),
-                Style::default().fg(tema::NOTA),
+                Style::default().fg(tema::nota()),
             );
             f.buffer_mut().set_string(
                 i.x,
                 i.y + 5,
                 "Corre en la terminal interna: ahí podés escribir usuario, token o la clave SSH.",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             );
             cursor
         }
@@ -2711,20 +2730,20 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             let mut lineas: Vec<Line> = vec![];
             for (k, x) in app.integraciones.iter().enumerate() {
                 let (estado, color) = if !x.disponible() {
-                    ("no instalada", tema::ATENUADO)
+                    ("no instalada", tema::atenuado())
                 } else if examen && !x.examen {
-                    ("no en examen", tema::ATENUADO)
+                    ("no en examen", tema::atenuado())
                 } else if x.activa {
-                    ("activa", tema::OK)
+                    ("activa", tema::ok())
                 } else {
-                    ("apagada", tema::ADVERTENCIA)
+                    ("apagada", tema::advertencia())
                 };
                 let cuando = match x.cuando {
                     jonesy_core::integraciones::Cuando::Guardar => "al guardar",
                     jonesy_core::integraciones::Cuando::Manual => "a mano",
                 };
                 let fondo = if k == sel {
-                    tema::FONDO_SELECCION
+                    tema::fondo_seleccion()
                 } else {
                     Color::Reset
                 };
@@ -2740,7 +2759,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                         st.add_modifier(Modifier::BOLD),
                     ),
                     Span::styled(format!("{estado:<13}"), st.fg(color)),
-                    Span::styled(format!("{cuando:<11}"), st.fg(tema::NOTA)),
+                    Span::styled(format!("{cuando:<11}"), st.fg(tema::nota())),
                     Span::styled(format!("{}{acciones}", x.descripcion), st),
                 ]));
             }
@@ -2757,16 +2776,16 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 ),
                 None => String::new(),
             };
-            lineas.push(Line::styled(ayuda, Style::default().fg(tema::ATENUADO)));
+            lineas.push(Line::styled(ayuda, Style::default().fg(tema::atenuado())));
             for e in &app.errores_integraciones {
                 lineas.push(Line::styled(
                     format!(" ⚠ {e}"),
-                    Style::default().fg(tema::ERROR),
+                    Style::default().fg(tema::error()),
                 ));
             }
             lineas.push(Line::styled(
                 " Agregá o reemplazá integraciones en .jonesy/integraciones/*.toml o ~/.config/jonesy/integraciones/ (ver docs/integraciones.md).",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             ));
             f.render_widget(Paragraph::new(lineas).wrap(Wrap { trim: false }), i);
             None
@@ -2785,22 +2804,22 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                     let v = crate::app::valor_panel(&app.paneles, n);
                     let estilo = if n == sel {
                         Style::default()
-                            .bg(tema::FONDO_SELECCION)
+                            .bg(tema::fondo_seleccion())
                             .add_modifier(Modifier::BOLD)
                     } else {
                         Style::default()
                     };
                     Line::from(vec![
                         Span::styled(format!(" {titulo:<48}"), estilo),
-                        Span::styled(format!("◂ {v:>3} ▸ "), estilo.fg(tema::ACENTO)),
-                        Span::styled(unidad.to_string(), estilo.fg(tema::ATENUADO)),
+                        Span::styled(format!("◂ {v:>3} ▸ "), estilo.fg(tema::acento())),
+                        Span::styled(unidad.to_string(), estilo.fg(tema::atenuado())),
                     ])
                 })
                 .collect();
             lineas.push(Line::raw(""));
             lineas.push(Line::styled(
                 " ↑↓ elegir · ←→ ajustar · r valores de .jonesy.toml · Enter cerrar · también se arrastran con el mouse",
-                Style::default().fg(tema::ATENUADO),
+                Style::default().fg(tema::atenuado()),
             ));
             f.render_widget(Paragraph::new(lineas).wrap(Wrap { trim: false }), i);
             None
@@ -2836,7 +2855,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 let info = a.info();
                 let fila = Rect::new(i.x, i.y + n as u16, i.width, 1);
                 let estilo = if n == sel {
-                    Style::default().bg(tema::ACENTO).fg(Color::Black)
+                    Style::default().bg(tema::acento()).fg(tema::sobre_acento())
                 } else {
                     Style::default()
                 };
@@ -2868,7 +2887,7 @@ fn lista_modal(
     f.render_widget(b, r);
     let entrada = format!("> {filtro}");
     f.buffer_mut()
-        .set_string(i.x, i.y, &entrada, Style::default().fg(tema::ACENTO));
+        .set_string(i.x, i.y, &entrada, Style::default().fg(tema::acento()));
     let lista = Rect {
         y: i.y + 1,
         height: i.height.saturating_sub(1),
@@ -2882,7 +2901,7 @@ fn lista_modal(
         let fila = Rect::new(lista.x, lista.y + (n - base) as u16, lista.width, 1);
         let estilo = if n == sel {
             Style::default()
-                .bg(tema::FONDO_SELECCION)
+                .bg(tema::fondo_seleccion())
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
@@ -2892,7 +2911,7 @@ fn lista_modal(
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(format!(" {t}{}", " ".repeat(relleno)), estilo),
-                Span::styled(format!("{atajo} "), estilo.fg(tema::ATENUADO)),
+                Span::styled(format!("{atajo} "), estilo.fg(tema::atenuado())),
             ])),
             fila,
         );
