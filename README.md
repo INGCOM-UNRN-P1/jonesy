@@ -45,12 +45,29 @@ La especificación completa está en [`jonesy_spec.md`](jonesy_spec.md).
 
 ## Instalación
 
+Con Cargo, directo desde el repositorio (queda en `~/.cargo/bin`, que rustup agrega al
+`PATH`):
+
+```bash
+cargo install --locked --git https://github.com/INGCOM-UNRN-P1/jonesy jonesy-bin
+```
+
+Desde una copia local del repositorio:
+
+```bash
+cargo install --locked --path crates/jonesy-bin
+```
+
+El paquete se llama `jonesy-bin` y el ejecutable, `jonesy`. Para actualizar se repite el
+mismo comando (con `--force` si la versión no cambió); `cargo uninstall jonesy-bin` lo
+quita. Sin `cargo install`, compilando a mano:
+
 ```bash
 cargo build --release
 install -m 755 target/release/jonesy ~/.local/bin/
 ```
 
-Requiere Rust ≥ 1.80. En tiempo de ejecución usa lo que haya en el `PATH`:
+Requiere Rust ≥ 1.85. En tiempo de ejecución usa lo que haya en el `PATH`:
 `gcc`/`make` para compilar, `gdb` para depurar, `git`, `ripley` y `mem-trace`
 (si faltan, esas funciones se desactivan solas) y `python3` sólo si el
 proyecto tiene plugins.
