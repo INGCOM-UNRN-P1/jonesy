@@ -108,6 +108,7 @@ pub enum Accion {
     TerminarSimulacro,
     Glosario,
     Tablas,
+    CatalogoReglas,
 }
 
 pub struct Info {
@@ -221,6 +222,7 @@ impl Accion {
             TerminarSimulacro => ("Terminar el simulacro", "F12"),
             Glosario => ("Glosario de C…", ""),
             Tablas => ("Tablas de consulta (tipos, printf, ASCII, precedencia)", ""),
+            CatalogoReglas => ("Reglas de la cátedra (catálogo con ejemplos)…", ""),
         };
         Info { titulo, atajo }
     }
@@ -326,6 +328,7 @@ impl Accion {
             TerminarSimulacro,
             Glosario,
             Tablas,
+            CatalogoReglas,
             Salir,
         ]
     }
@@ -580,6 +583,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(GuiaRapida),
             A(Glosario),
             A(Tablas),
+            A(CatalogoReglas),
             A(Atajos),
             A(Doctor),
             A(AcercaDe),

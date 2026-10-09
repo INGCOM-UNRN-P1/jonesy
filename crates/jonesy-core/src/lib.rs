@@ -6,6 +6,7 @@
 pub mod buffer;
 pub mod busqueda;
 pub mod casos;
+pub mod catalogo;
 pub mod catscan;
 pub mod diagnostico;
 pub mod diff;

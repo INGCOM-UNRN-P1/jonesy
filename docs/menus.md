@@ -103,7 +103,7 @@ comprueba que esté al día.
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
-| Ayuda | A[y]uda | F10 y Y | 9 |
+| Ayuda | A[y]uda | F10 y Y | 10 |
 
 ## Archivo
 
@@ -283,6 +283,7 @@ Sólo en modo examen (`--exam`).
 │ Guía rápida para estudiantes de C                              │
 │ Glosario de C…                                                 │
 │ Tablas de consulta (tipos, printf, ASCII, precedencia)         │
+│ Reglas de la cátedra (catálogo con ejemplos)…                  │
 │ Atajos de teclado                                              │
 │ Diagnóstico del entorno (jonesy doctor)                        │
 │ Acerca de jonesy                                               │

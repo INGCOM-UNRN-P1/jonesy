@@ -23,6 +23,8 @@ pub enum Aviso {
     Doctor(String),
     /// Terminaron los casos de Construir → Comparar con las salidas esperadas.
     Casos(Vec<jonesy_core::casos::ResultadoCaso>),
+    /// Se cargaron los catálogos de reglas de las herramientas.
+    Catalogo(Vec<jonesy_core::catalogo::Regla>),
 }
 
 pub fn preparar() -> std::io::Result<()> {

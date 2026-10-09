@@ -2723,3 +2723,56 @@ fn glosario_desde_las_explicaciones_y_tablas() {
     let p = pantalla(&mut a, 120, 60);
     assert!(p.contains("Tablas de consulta") && p.contains("%zu"), "{p}");
 }
+
+#[test]
+#[cfg(unix)] // sh
+fn catalogo_de_reglas_y_f1_unificado() {
+    let json = r#"{"reglas": [{"codigo": "X001", "titulo": "Nombres descriptivos", "descripcion": "Las variables se llaman por lo que guardan.", "sugerencia": "Renombrá la variable.", "ejemplo_incorrecto": "int a;", "ejemplo_correcto": "int cantidad;", "categoria": "Nomenclatura"}]}"#;
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("catalogo.json", json),
+        (
+            ".jonesy/integraciones/falsa.toml",
+            "[[integracion]]\nnombre = \"falsa\"\ndescripcion = \"Herramienta de prueba\"\nbinario = \"\"\ncuando = \"manual\"\ncatalogo = \"cat catalogo.json\"\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Ayuda → Reglas de la cátedra: se carga en segundo plano y se lista.
+    a.accion(jonesy_tui::accion::Accion::CatalogoReglas);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Paleta { .. }))
+    });
+    // (Si gaff y compañía están instalados, sus catálogos también aparecen: se filtra.)
+    escribir(&mut a, "X001");
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("X001 · Nombres descriptivos"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(p.contains("Así no") && p.contains("int cantidad;"), "{p}");
+    a.modal = None;
+    // F1 sobre un hallazgo de esa herramienta usa la misma ficha.
+    a.diag_herramientas.insert(
+        ("falsa".into(), dir.path().join("main.c")),
+        vec![jonesy_core::Diagnostico {
+            archivo: Some(dir.path().join("main.c")),
+            linea: 1,
+            columna: 1,
+            mensaje: "nombre poco descriptivo".into(),
+            codigo: Some("X001".into()),
+            herramienta: Some("falsa".into()),
+            origen: jonesy_core::Origen::Herramienta,
+            enlace: Some("https://apunte/x001".into()),
+            ..Default::default()
+        }],
+    );
+    a.buf_mut().buf.mover_a(0, false);
+    a.foco = Foco::Editor;
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 50);
+    assert!(
+        p.contains("Regla X001") && p.contains("Qué hacer") && p.contains("Apunte"),
+        "{p}"
+    );
+}

@@ -27,6 +27,7 @@ cuando = "guardar"
 archivos = ["*.c", "*.h"]
 comando = "gaff check {archivo} --json"
 formato = "hallazgos"
+catalogo = "gaff rules --json"
 explicar = "gaff explain {codigo}"
 
   [[integracion.accion]]
@@ -47,6 +48,7 @@ cuando = "guardar"
 archivos = ["*.c", "*.h"]
 comando = "kaneda audit {archivo} --json"
 formato = "hallazgos"
+catalogo = "kaneda rules --json"
 explicar = "kaneda explain {codigo}"
 
 [[integracion]]
@@ -57,6 +59,7 @@ cuando = "guardar"
 archivos = ["*.c", "*.h"]
 comando = "spunkmeyer detect {archivo} --json"
 formato = "hallazgos"
+catalogo = "spunkmeyer catalog --json"
 explicar = "spunkmeyer explain {codigo}"
 # spunkmeyer marca los hallazgos que gaff ya informa: no se repiten.
 omitir_si = "tambien_en_gaff"

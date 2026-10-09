@@ -39,6 +39,7 @@ archivos = ["*.c", "*.h"]                  # globs del nombre del archivo
 comando = "kaneda audit {archivo} --json"  # lo que corre al guardar
 formato = "hallazgos"                      # cómo leer la salida (ver abajo)
 explicar = "kaneda explain {codigo}"       # F1 sobre uno de sus hallazgos
+catalogo = "kaneda rules --json"           # catálogo de reglas (Ayuda y F1 unificado)
 omitir_si = ""                             # campo booleano que descarta un hallazgo
 activa = true                              # encendida por defecto
 examen = true                              # permitida en modo examen
@@ -85,6 +86,18 @@ resuelven contra la raíz del proyecto; un hallazgo sin archivo se asigna al ana
 | `visor` | ventana con la salida, con sus colores |
 | `recargar` | la herramienta modifica el archivo en disco; el buffer toma el contenido nuevo como una edición que Ctrl+Z deshace |
 | `diagnosticos` | interpreta la salida con el `formato` de la integración y la muestra en Problemas |
+
+## Catálogo de reglas
+
+Con `catalogo`, jonesy lee una vez (en segundo plano, la primera vez que hace falta) las
+reglas de la herramienta: una lista `reglas`, `patrones` o `rules` con `codigo`,
+`titulo` o `nombre`, `descripcion` o `explicacion`, `sugerencia`, `ejemplo_incorrecto`,
+`ejemplo_correcto`, `categoria` y, si hay, `alias`, `cwe` y `regla_catedra`. Con eso:
+
+- *Ayuda → Reglas de la cátedra* las lista y muestra cada una con sus ejemplos;
+- F1 sobre un hallazgo muestra la regla con el mismo formato que los errores de gcc
+  (qué es, qué hacer, «así no», «así sí» y el apunte). Si la regla no está en el
+  catálogo, se usa el comando `explicar`.
 
 ## Modo examen
 

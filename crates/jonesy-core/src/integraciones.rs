@@ -97,6 +97,9 @@ pub struct Integracion {
     pub formato: Formato,
     /// Comando para explicar un código con F1 (`gaff explain {codigo}`).
     pub explicar: String,
+    /// Comando que emite el catálogo de reglas en JSON (`gaff rules --json`): alimenta el
+    /// catálogo navegable y la explicación unificada de F1 (ver `catalogo`).
+    pub catalogo: String,
     /// Campo booleano de cada hallazgo que, si es true, lo descarta (duplicados entre
     /// herramientas, como `tambien_en_gaff` de spunkmeyer).
     pub omitir_si: String,
@@ -124,6 +127,7 @@ impl Default for Integracion {
             comando: String::new(),
             formato: Formato::Hallazgos,
             explicar: String::new(),
+            catalogo: String::new(),
             omitir_si: String::new(),
             activa: true,
             examen: true,

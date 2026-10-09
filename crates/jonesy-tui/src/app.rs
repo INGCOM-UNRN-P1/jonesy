@@ -145,6 +145,8 @@ pub enum QuePaleta {
     Entrada(Option<PathBuf>),
     /// Un término del glosario (índice).
     Glosario(usize),
+    /// Una regla del catálogo de las herramientas (índice).
+    Regla(usize),
 }
 
 #[derive(Debug, Clone)]
@@ -517,6 +519,13 @@ pub struct Simulacro {
     pruebas: Option<(usize, usize)>,
 }
 
+/// Lo que espera a que se cargue el catálogo de reglas.
+#[derive(Debug, Clone)]
+enum PendienteCatalogo {
+    Explicar(Box<Diagnostico>),
+    Lista,
+}
+
 /// Operación con el repositorio remoto (corre en la terminal, por la autenticación).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OpRemota {
@@ -691,6 +700,11 @@ pub struct App {
     pub maximizado: bool,
     /// Términos del glosario que menciona la explicación abierta (g los ofrece).
     glosario_visor: Vec<usize>,
+    /// Catálogo de reglas de las herramientas (se carga la primera vez que hace falta).
+    pub catalogo: Option<Vec<jonesy_core::catalogo::Regla>>,
+    cargando_catalogo: bool,
+    /// Qué hacer cuando llegue el catálogo.
+    pendiente_catalogo: Option<PendienteCatalogo>,
     /// Simulacro de examen en curso.
     pub simulacro: Option<Simulacro>,
     /// Último recordatorio de hacer commit.
@@ -872,6 +886,9 @@ impl App {
             git_remoto: None,
             maximizado: false,
             glosario_visor: vec![],
+            catalogo: None,
+            cargando_catalogo: false,
+            pendiente_catalogo: None,
             simulacro: None,
             ultimo_recordatorio_commit: Instant::now(),
             depuracion: None,
@@ -3438,6 +3455,129 @@ impl App {
             self.abrir_paleta();
             return;
         };
+        // Primero el catálogo de la herramienta (mismo formato que los errores de gcc).
+        match &self.catalogo {
+            Some(_) => {
+                if self.explicar_desde_catalogo(&d) {
+                    return;
+                }
+            }
+            None if self.hay_catalogos() => {
+                self.pendiente_catalogo = Some(PendienteCatalogo::Explicar(Box::new(d)));
+                self.cargar_catalogo();
+                self.avisar("Buscando la regla en el catálogo…", Nivel::Info);
+                return;
+            }
+            None => {}
+        }
+        self.explicar_con_herramienta(d);
+    }
+
+    fn resolver_pendiente_catalogo(&mut self, p: PendienteCatalogo) {
+        match p {
+            PendienteCatalogo::Lista => self.abrir_catalogo(),
+            PendienteCatalogo::Explicar(d) => {
+                let explicada = self.explicar_desde_catalogo(&d);
+                if !explicada {
+                    self.explicar_con_herramienta(*d);
+                }
+            }
+        }
+    }
+
+    /// F1 desde el catálogo cargado; false si la regla no está.
+    fn explicar_desde_catalogo(&mut self, d: &Diagnostico) -> bool {
+        let codigo = d.codigo.clone().unwrap_or_default();
+        let Some(r) = self.catalogo.as_ref().and_then(|c| {
+            jonesy_core::catalogo::buscar(c, d.herramienta.as_deref(), &codigo).cloned()
+        }) else {
+            return false;
+        };
+        let texto = jonesy_core::catalogo::markdown(&r, d.enlace.as_deref());
+        self.visor_explicacion(format!("Regla {}", r.codigo), &texto);
+        true
+    }
+
+    /// ¿Alguna integración disponible declara un catálogo?
+    fn hay_catalogos(&self) -> bool {
+        self.integraciones
+            .iter()
+            .any(|x| !x.catalogo.is_empty() && x.disponible())
+    }
+
+    /// Carga en otro hilo los catálogos de las integraciones disponibles.
+    fn cargar_catalogo(&mut self) {
+        if self.cargando_catalogo || self.catalogo.is_some() {
+            return;
+        }
+        self.cargando_catalogo = true;
+        let comandos: Vec<(String, String)> = self
+            .integraciones
+            .iter()
+            .filter(|x| !x.catalogo.is_empty() && x.disponible())
+            .map(|x| (x.nombre.clone(), x.catalogo.clone()))
+            .collect();
+        let raiz = self.proyecto.raiz.clone();
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let mut reglas = vec![];
+            for (nombre, cmd) in comandos {
+                let (prog, op) = proceso::interprete();
+                if let Ok(o) = std::process::Command::new(prog)
+                    .arg(op)
+                    .arg(&cmd)
+                    .current_dir(&raiz)
+                    .env("NO_COLOR", "1")
+                    .stdin(std::process::Stdio::null())
+                    .output()
+                {
+                    reglas.extend(jonesy_core::catalogo::desde_json(
+                        &nombre,
+                        &String::from_utf8_lossy(&o.stdout),
+                    ));
+                }
+            }
+            let _ = tx.send(Aviso::Catalogo(reglas));
+        });
+    }
+
+    /// Ayuda → Reglas de la cátedra: el catálogo navegable.
+    pub fn abrir_catalogo(&mut self) {
+        let Some(c) = &self.catalogo else {
+            if !self.hay_catalogos() {
+                self.avisar(
+                    "No hay herramientas con catálogo instaladas (gaff, kaneda, spunkmeyer).",
+                    Nivel::Aviso,
+                );
+                return;
+            }
+            self.pendiente_catalogo = Some(PendienteCatalogo::Lista);
+            self.cargar_catalogo();
+            self.avisar("Cargando el catálogo de reglas…", Nivel::Info);
+            return;
+        };
+        if c.is_empty() {
+            self.avisar("Las herramientas no devolvieron su catálogo.", Nivel::Aviso);
+            return;
+        }
+        let opciones = c
+            .iter()
+            .enumerate()
+            .map(|(i, r)| OpcionPaleta {
+                titulo: format!("{} · {}", r.codigo, r.titulo),
+                atajo: r.herramienta.clone(),
+                que: QuePaleta::Regla(i),
+            })
+            .collect();
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
+    }
+
+    /// F1 con el comando `explain` de la herramienta (o lo que trae el hallazgo).
+    fn explicar_con_herramienta(&mut self, d: Diagnostico) {
         let codigo = d.codigo.clone().unwrap_or_default();
         let herramienta = d.herramienta.clone().unwrap_or_else(|| "ripley".into());
         let plantilla = self
@@ -5654,6 +5794,7 @@ impl App {
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::Glosario => self.abrir_glosario(),
+            Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Tablas => {
                 self.glosario_visor.clear();
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
@@ -6172,6 +6313,13 @@ impl App {
                     if bien == con { Nivel::Ok } else { Nivel::Error },
                 );
                 self.modal = Some(Modal::Casos { resultados, sel: 0 });
+            }
+            Aviso::Catalogo(reglas) => {
+                self.cargando_catalogo = false;
+                self.catalogo = Some(reglas);
+                if let Some(p) = self.pendiente_catalogo.take() {
+                    self.resolver_pendiente_catalogo(p);
+                }
             }
             Aviso::Doctor(texto) => {
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
@@ -7753,6 +7901,12 @@ impl App {
                     },
                     Nivel::Ok,
                 );
+            }
+            QuePaleta::Regla(i) => {
+                if let Some(r) = self.catalogo.as_ref().and_then(|c| c.get(i)).cloned() {
+                    let texto = jonesy_core::catalogo::markdown(&r, None);
+                    self.visor_explicacion(format!("Regla {}", r.codigo), &texto);
+                }
             }
             QuePaleta::Glosario(i) => {
                 let t = jonesy_core::glosario::terminos()[i].termino.clone();
