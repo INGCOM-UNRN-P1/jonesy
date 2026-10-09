@@ -199,6 +199,34 @@ mod tests {
     }
 }
 
+/// Pantalla de bienvenida: se muestra al primer inicio; después, sólo si se pidió
+/// verla siempre. La marca vive junto a los recientes (`…/jonesy/bienvenida-vista`).
+pub mod bienvenida {
+    use std::path::PathBuf;
+
+    fn marca() -> Option<PathBuf> {
+        Some(super::recientes::archivo()?.with_file_name("bienvenida-vista"))
+    }
+
+    /// Ya se vio y no se pidió verla siempre.
+    pub fn vista() -> bool {
+        marca().is_some_and(|m| m.is_file())
+    }
+
+    /// Al cerrarla: con `siempre` se vuelve a mostrar en cada inicio.
+    pub fn recordar(siempre: bool) {
+        let Some(m) = marca() else { return };
+        if siempre {
+            let _ = std::fs::remove_file(&m);
+        } else {
+            if let Some(d) = m.parent() {
+                let _ = std::fs::create_dir_all(d);
+            }
+            let _ = std::fs::write(&m, "");
+        }
+    }
+}
+
 /// Proyectos abiertos recientemente (los más nuevos primero), guardados fuera del
 /// proyecto: `$XDG_STATE_HOME/jonesy/recientes.txt` (o `~/.local/state/…`; en Windows
 /// `%LOCALAPPDATA%\jonesy\recientes.txt`).

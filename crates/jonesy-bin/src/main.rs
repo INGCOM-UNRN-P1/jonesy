@@ -255,6 +255,7 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
         examen,
         ascii: tiene("--ascii"),
         telemetria: tiene("--telemetria"),
+        bienvenida: true,
     })?;
     Ok(ExitCode::SUCCESS)
 }

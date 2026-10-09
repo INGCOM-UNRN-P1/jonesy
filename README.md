@@ -73,7 +73,9 @@ Requiere Rust ≥ 1.85. En tiempo de ejecución usa lo que haya en el `PATH`:
 (si faltan, esas funciones se desactivan solas) y `python3` sólo si el
 proyecto tiene plugins.
 
-Después de instalar, `jonesy doctor` dice si falta algo en el entorno.
+Después de instalar, `jonesy doctor` dice si falta algo en el entorno. La primera vez que se abre,
+jonesy muestra una pantalla de bienvenida con las teclas del ciclo de trabajo (después,
+en *Ayuda → Bienvenida*).
 
 ## Uso
 

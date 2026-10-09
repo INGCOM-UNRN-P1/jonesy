@@ -80,6 +80,7 @@ pub enum Accion {
     EstadoEntrega,
     ConfigurarPlugins,
     Doctor,
+    Bienvenida,
 }
 
 pub struct Info {
@@ -162,6 +163,7 @@ impl Accion {
             EstadoEntrega => ("Verificar estado de entrega", ""),
             ConfigurarPlugins => ("Configurar plugins…", ""),
             Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
+            Bienvenida => ("Bienvenida", ""),
         };
         Info { titulo, atajo }
     }
@@ -239,6 +241,7 @@ impl Accion {
             EstadoEntrega,
             ConfigurarPlugins,
             Doctor,
+            Bienvenida,
             Salir,
         ]
     }
@@ -461,6 +464,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(Paleta),
             A(ExplicarRegla),
             SEP,
+            A(Bienvenida),
             A(GuiaRapida),
             A(Atajos),
             A(Doctor),

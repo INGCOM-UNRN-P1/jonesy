@@ -55,6 +55,9 @@ pub struct Opciones {
     pub ascii: bool,
     /// Telemetría fuera del modo examen (en examen siempre está activa).
     pub telemetria: bool,
+    /// Mostrar la bienvenida si es la primera vez (el binario; no las pruebas ni el
+    /// examen).
+    pub bienvenida: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -308,6 +311,12 @@ pub enum Modal {
         desplazamiento_h: usize,
         /// Lenguaje para el resaltado (en diffs de varios archivos, el de cada uno).
         lenguaje: Lenguaje,
+    },
+    /// Ayuda → Bienvenida (y al primer inicio): si se muestra en cada inicio y qué falta
+    /// del entorno (nombre, para qué, cómo instalarlo).
+    Bienvenida {
+        siempre: bool,
+        faltan: Vec<(String, String, String)>,
     },
     /// Archivo → Configuración del entorno: solapa (ver `PESTANAS_CONFIG`) y fila.
     Configuracion {
@@ -788,6 +797,14 @@ impl App {
         app.cargar_integraciones();
         app.restaurar_sesion(&op.archivos);
         app.ofrecer_recuperacion();
+        // La primera vez (fuera del examen, y si no hay que recuperar nada antes).
+        if op.bienvenida
+            && !op.examen
+            && app.modal.is_none()
+            && !jonesy_core::sesion::bienvenida::vista()
+        {
+            app.mostrar_bienvenida();
+        }
         app.cargar_doc();
         app.refrescar_git();
         if let Some(e) = app.proyecto.error_config.clone() {
@@ -3127,6 +3144,7 @@ impl App {
         let op = Opciones {
             raiz: raiz.clone(),
             archivos: vec![],
+            bienvenida: false,
             ..self.opciones.clone()
         };
         let tam = self.tam;
@@ -3872,6 +3890,48 @@ impl App {
                 Nivel::Aviso,
             ),
         }
+    }
+
+    /// La pantalla de bienvenida, con lo que falta del entorno para lo básico (sólo mira
+    /// el PATH: es instantáneo; el diagnóstico completo está a una tecla).
+    pub fn mostrar_bienvenida(&mut self) {
+        let esenciales = [
+            (
+                "gcc",
+                "compilar (F6)",
+                "sudo dnf install gcc / sudo apt install gcc",
+            ),
+            (
+                "make",
+                "los Makefiles de los TP",
+                "sudo dnf install make / sudo apt install make",
+            ),
+            (
+                "gdb",
+                "depurar (F5)",
+                "sudo dnf install gdb / sudo apt install gdb",
+            ),
+            (
+                "valgrind",
+                "revisar la memoria",
+                "sudo dnf install valgrind / sudo apt install valgrind",
+            ),
+            (
+                "git",
+                "guardar versiones",
+                "sudo dnf install git / sudo apt install git",
+            ),
+        ];
+        let faltan = esenciales
+            .iter()
+            .filter(|(b, _, _)| jonesy_core::doctor::buscar(b).is_none())
+            .map(|(b, p, s)| (b.to_string(), p.to_string(), s.to_string()))
+            .collect();
+        // Por omisión no se repite: la casilla empieza destildada.
+        self.modal = Some(Modal::Bienvenida {
+            siempre: false,
+            faltan,
+        });
     }
 
     /// Ayuda → Diagnóstico del entorno: el informe de `jonesy doctor` (con las pruebas
@@ -4731,6 +4791,7 @@ impl App {
             }
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
+            Accion::Bienvenida => self.mostrar_bienvenida(),
             Accion::GitClonar => {
                 if self.examen.is_some() {
                     self.avisar("En modo examen no se puede clonar.", Nivel::Aviso);
@@ -6096,6 +6157,26 @@ impl App {
                     lenguaje,
                 });
             }
+            Modal::Bienvenida { siempre, faltan } => match k.code {
+                KeyCode::Char(' ') => {
+                    self.modal = Some(Modal::Bienvenida {
+                        siempre: !siempre,
+                        faltan,
+                    })
+                }
+                KeyCode::Char('g' | 'G') => {
+                    jonesy_core::sesion::bienvenida::recordar(siempre);
+                    self.accion(Accion::GuiaRapida);
+                }
+                KeyCode::Char('d' | 'D') => {
+                    jonesy_core::sesion::bienvenida::recordar(siempre);
+                    self.accion(Accion::Doctor);
+                }
+                KeyCode::Enter | KeyCode::Esc => jonesy_core::sesion::bienvenida::recordar(siempre),
+                _ => {
+                    self.modal = Some(Modal::Bienvenida { siempre, faltan });
+                }
+            },
             Modal::Configuracion {
                 mut pestana,
                 mut sel,

@@ -29,6 +29,7 @@ fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
         examen,
         ascii: false,
         telemetria: false,
+        bienvenida: false,
     };
     (App::nueva(op, tx), rx)
 }
@@ -1973,4 +1974,51 @@ fn diagnostico_del_entorno_desde_ayuda() {
     let p = pantalla(&mut a, 130, 60);
     assert!(p.contains("Diagnóstico del entorno"), "{p}");
     assert!(p.contains("Compilación") && p.contains("Proyecto"), "{p}");
+}
+
+#[test]
+fn bienvenida_la_primera_vez_y_desde_ayuda() {
+    // El estado del usuario (marca de «ya vista») en un directorio propio de la prueba.
+    let estado = tempfile::tempdir().unwrap();
+    std::env::set_var("JONESY_ESTADO", estado.path());
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let abrir = |examen: bool| {
+        let (tx, rx) = channel();
+        let op = Opciones {
+            raiz: dir.path().to_path_buf(),
+            archivos: vec![],
+            examen,
+            ascii: false,
+            telemetria: false,
+            bienvenida: true,
+        };
+        (App::nueva(op, tx), rx)
+    };
+    let (mut a, _rx) = abrir(false);
+    assert!(
+        matches!(a.modal, Some(Modal::Bienvenida { .. })),
+        "primera vez"
+    );
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Te damos la bienvenida a jonesy"), "{p}");
+    assert!(p.contains("Ctrl+F6") && p.contains("Tu entorno"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.modal.is_none());
+    // Ya vista: no vuelve a aparecer…
+    let (b, _rx) = abrir(false);
+    assert!(b.modal.is_none());
+    // …salvo que se pida verla siempre (Espacio), y queda en Ayuda.
+    let (mut c, _rx) = abrir(false);
+    c.accion(jonesy_tui::accion::Accion::Bienvenida);
+    tecla(&mut c, KeyCode::Char(' '), KeyModifiers::NONE);
+    assert!(matches!(
+        c.modal,
+        Some(Modal::Bienvenida { siempre: true, .. })
+    ));
+    tecla(&mut c, KeyCode::Enter, KeyModifiers::NONE);
+    let (d, _rx) = abrir(false);
+    assert!(matches!(d.modal, Some(Modal::Bienvenida { .. })));
+    // En examen nunca.
+    let (e, _rx) = abrir(true);
+    assert!(!matches!(e.modal, Some(Modal::Bienvenida { .. })));
 }

@@ -2850,6 +2850,92 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             dibujar_diff(f, area, &titulo, &filas, desplazamiento, lado_a_lado, ctx);
             None
         }
+        Modal::Bienvenida { siempre, faltan } => {
+            let alto = (24 + faltan.len() as u16).min(area.height.saturating_sub(2));
+            let r = centrado(area, 78, alto);
+            limpiar(f, r);
+            let b = bloque(" Bienvenida ", true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let titulo = Style::default()
+                .fg(tema::acento())
+                .add_modifier(Modifier::BOLD);
+            let tecla = Style::default()
+                .fg(tema::advertencia())
+                .add_modifier(Modifier::BOLD);
+            let normal = Style::default().fg(tema::texto());
+            let tenue = Style::default().fg(tema::atenuado());
+            let mut l: Vec<Line> = vec![
+                Line::styled(" Te damos la bienvenida a jonesy", titulo),
+                Line::styled(
+                    " El IDE de Programación I: escribir, compilar, probar y depurar C en la terminal.",
+                    normal,
+                ),
+                Line::raw(""),
+                Line::styled(" El ciclo de un ejercicio", titulo),
+            ];
+            let filas = [
+                ("F7 · F8", "leer la consigna · volver al código"),
+                (
+                    "Ctrl+S",
+                    "guardar (las herramientas revisan el estilo al guardar)",
+                ),
+                ("F6", "compilar: los errores aparecen explicados en español"),
+                ("Ctrl+F5", "compilar y ejecutar en la terminal de abajo"),
+                ("Ctrl+F6", "correr las pruebas del ejercicio"),
+                ("F5", "depurar paso a paso (Ctrl+B pone un breakpoint)"),
+                ("F1", "explicar el error o la regla donde está el cursor"),
+                ("Ctrl+K", "buscar cualquier acción por su nombre"),
+                ("F10 / Alt", "los menús (la letra subrayada abre cada uno)"),
+            ];
+            for (t, d) in filas {
+                l.push(Line::from(vec![
+                    Span::styled(format!("   {t:<10}"), tecla),
+                    Span::styled(d, normal),
+                ]));
+            }
+            l.push(Line::raw(""));
+            l.push(Line::styled(" Tu entorno", titulo));
+            if faltan.is_empty() {
+                l.push(Line::styled(
+                    "   ✓ Están gcc, make, gdb, valgrind y git.",
+                    Style::default().fg(tema::ok()),
+                ));
+            } else {
+                for (b, para, como) in faltan.iter() {
+                    l.push(Line::from(vec![
+                        Span::styled(
+                            format!("   ✗ falta {b}"),
+                            Style::default().fg(tema::error()),
+                        ),
+                        Span::styled(format!(" (para {para}): "), normal),
+                        Span::styled(como.clone(), tenue),
+                    ]));
+                }
+            }
+            l.push(Line::raw(""));
+            l.push(Line::from(vec![
+                Span::styled(format!(" [{}] ", if *siempre { "x" } else { " " }), tecla),
+                Span::styled(
+                    "mostrar esta pantalla cada vez que abro jonesy (Espacio)",
+                    normal,
+                ),
+            ]));
+            l.push(Line::raw(""));
+            l.push(Line::from(vec![
+                Span::styled(" Enter", tecla),
+                Span::styled(" empezar · ", tenue),
+                Span::styled("G", tecla),
+                Span::styled(" guía rápida · ", tenue),
+                Span::styled("D", tecla),
+                Span::styled(
+                    " diagnóstico completo · siempre en Ayuda → Bienvenida",
+                    tenue,
+                ),
+            ]));
+            f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), i);
+            None
+        }
         Modal::Configuracion { pestana, sel } => {
             let (pestana, sel) = (*pestana, *sel);
             let filas = app.filas_configuracion(pestana);

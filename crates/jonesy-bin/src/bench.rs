@@ -53,6 +53,7 @@ fn app_sin_terminal(dir: &Path) -> (App, std::sync::mpsc::Receiver<jonesy_tui::s
         examen: false,
         ascii: false,
         telemetria: false,
+        bienvenida: false,
     };
     (App::nueva(op, tx), rx)
 }
