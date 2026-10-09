@@ -1864,3 +1864,47 @@ fn menu_plugins_lista_y_ejecuta_los_comandos() {
     let p = pantalla(&mut b, 140, 40);
     assert!(p.contains("(ninguno en .jonesy/plugins)"), "{p}");
 }
+
+#[test]
+fn atajos_de_la_barra_izquierda_se_ven_completos() {
+    use jonesy_tui::navegador::PestanaNav;
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (
+            "Makefile",
+            "## Compila todo el trabajo práctico con sus bibliotecas y ejercicios\nall:\n\t@true\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::Explorador);
+    let p = pantalla(&mut a, 120, 30);
+    let ancho = a.areas.izquierdo.unwrap().width;
+    assert!(ancho <= 34, "barra angosta: {ancho}");
+    for atajo in [
+        "n nuevo",
+        "m carpeta",
+        "F2 renombrar",
+        "Supr borrar",
+        "r relee",
+    ] {
+        assert!(p.contains(atajo), "falta «{atajo}»:\n{p}");
+    }
+    a.navegador = Some(PestanaNav::Proyecto);
+    let p = pantalla(&mut a, 120, 30);
+    for atajo in ["Enter corre", "→← despliega", "r relee"] {
+        assert!(p.contains(atajo), "falta «{atajo}»:\n{p}");
+    }
+    // Y el pie entra en una barra todavía más angosta, con más líneas.
+    let lineas = jonesy_tui::dibujo::pie_atajos(
+        &[
+            "n nuevo",
+            "m carpeta",
+            "F2 renombrar",
+            "Supr borrar",
+            "r relee",
+        ],
+        20,
+    );
+    assert!(lineas.iter().all(|l| l.chars().count() <= 20), "{lineas:?}");
+    assert_eq!(lineas.join(" · ").matches(" · ").count(), 4);
+}

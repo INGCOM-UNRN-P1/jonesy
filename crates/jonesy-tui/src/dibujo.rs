@@ -240,6 +240,48 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
 
 // ------------------------------------------------------------------ barra izquierda
 
+/// Reparte atajos («n nuevo», «F2 renombrar»…) en líneas de `ancho` columnas, separados
+/// por « · », sin cortar ninguno a la mitad.
+pub fn pie_atajos(atajos: &[&str], ancho: usize) -> Vec<String> {
+    let mut lineas: Vec<String> = vec![];
+    let mut actual = String::new();
+    for a in atajos {
+        let largo = UnicodeWidthStr::width(actual.as_str());
+        if !actual.is_empty() && largo + 3 + UnicodeWidthStr::width(*a) > ancho {
+            lineas.push(std::mem::take(&mut actual));
+        }
+        if !actual.is_empty() {
+            actual.push_str(" · ");
+        }
+        actual.push_str(a);
+    }
+    if !actual.is_empty() {
+        lineas.push(actual);
+    }
+    lineas
+}
+
+/// Envuelve un texto por palabras en líneas de `ancho` columnas.
+fn envolver(texto: &str, ancho: usize) -> Vec<String> {
+    let mut lineas: Vec<String> = vec![];
+    let mut actual = String::new();
+    for p in texto.split_whitespace() {
+        if !actual.is_empty()
+            && UnicodeWidthStr::width(actual.as_str()) + 1 + UnicodeWidthStr::width(p) > ancho
+        {
+            lineas.push(std::mem::take(&mut actual));
+        }
+        if !actual.is_empty() {
+            actual.push(' ');
+        }
+        actual.push_str(p);
+    }
+    if !actual.is_empty() {
+        lineas.push(actual);
+    }
+    lineas
+}
+
 fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
     use crate::navegador::{FilaProyecto, PestanaNav};
     use jonesy_core::estructura::TipoModulo;
@@ -289,7 +331,18 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
             if app.explorador.filas.is_empty() {
                 app.explorador.reconstruir(&app.proyecto.raiz);
             }
-            let pie = 1u16;
+            // Los atajos al pie, en tantas líneas como hagan falta (la barra es angosta).
+            let atajos = pie_atajos(
+                &[
+                    "n nuevo",
+                    "m carpeta",
+                    "F2 renombrar",
+                    "Supr borrar",
+                    "r relee",
+                ],
+                i.width as usize,
+            );
+            let pie = (atajos.len() as u16).min(i.height / 2);
             let lista = Rect {
                 height: i.height.saturating_sub(pie),
                 ..i
@@ -366,11 +419,18 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 })
                 .collect();
             f.render_widget(Paragraph::new(lineas), lista);
-            f.buffer_mut().set_string(
-                i.x,
-                i.y + i.height - 1,
-                "n nuevo · m carpeta · F2 renombrar · Supr borrar · r relee",
-                Style::default().fg(tema::atenuado()),
+            f.render_widget(
+                Paragraph::new(
+                    atajos
+                        .into_iter()
+                        .map(|l| Line::styled(l, Style::default().fg(tema::atenuado())))
+                        .collect::<Vec<_>>(),
+                ),
+                Rect {
+                    y: lista.y + lista.height,
+                    height: pie,
+                    ..i
+                },
             );
         }
         Some(PestanaNav::Proyecto) => {
@@ -422,7 +482,19 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 Some(FilaProyecto::TpSh) => "Gestor del TP: bibliotecas y ejercicios".into(),
                 _ => String::new(),
             };
-            let pie = 3u16.min(i.height.saturating_sub(1));
+            // Pie: la descripción completa de la fila y los atajos, sin cortar (hasta la
+            // mitad del alto).
+            let ancho_pie = i.width as usize;
+            let mut texto_pie: Vec<Line> = envolver(&descripcion, ancho_pie)
+                .into_iter()
+                .map(|l| Line::styled(l, Style::default().fg(tema::nota())))
+                .collect();
+            texto_pie.extend(
+                pie_atajos(&["Enter corre", "→← despliega", "r relee"], ancho_pie)
+                    .into_iter()
+                    .map(|l| Line::styled(l, Style::default().fg(tema::atenuado()))),
+            );
+            let pie = (texto_pie.len() as u16).min(i.height / 2);
             let lista = Rect {
                 height: i.height - pie,
                 ..i
@@ -528,17 +600,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                 height: pie,
                 ..i
             };
-            f.render_widget(
-                Paragraph::new(vec![
-                    Line::styled(descripcion, Style::default().fg(tema::nota())),
-                    Line::styled(
-                        "Enter corre · →← despliega · r relee",
-                        Style::default().fg(tema::atenuado()),
-                    ),
-                ])
-                .wrap(Wrap { trim: true }),
-                zona_pie,
-            );
+            f.render_widget(Paragraph::new(texto_pie), zona_pie);
         }
         None => {}
     }
