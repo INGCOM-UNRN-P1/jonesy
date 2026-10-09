@@ -195,7 +195,7 @@ fn compila_y_salta_al_error() {
     assert_eq!(a.buf().buf.linea_columna().0, 2);
     let p = pantalla(&mut a, 120, 30);
     assert!(p.contains("Problemas ("), "{p}");
-    // El error de gcc llega en inglés (LC_MESSAGES=C) y se muestra explicado en español,
+    // El error de gcc (en inglés o en español, según el locale) se muestra explicado,
     // en Problemas y al final de la línea.
     assert!(p.contains("«x» no está declarada"), "{p}");
     assert!(p.contains("F1 explica"), "{p}");
@@ -2284,4 +2284,52 @@ fn marcadores_problemas_y_lineas_que_se_corren() {
     );
     assert_eq!(a.buf().buf.linea_columna().0, 1);
     assert!(!a.panel_inferior || a.pestana != Pestana::Problemas || a.foco == Foco::Editor);
+}
+
+#[test]
+fn cascada_de_errores_y_columna_subrayada() {
+    if std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    // Falta un «;»: gcc se queja de esa línea y además de la variable que no llegó a
+    // declararse.
+    let codigo = "int main(void)\n{\n    int v[3]\n    v[0] = 1;\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| !a.diag_compilador.is_empty());
+    assert!(
+        a.mensaje
+            .as_ref()
+            .unwrap()
+            .0
+            .contains("Empezá por el primero: main.c:"),
+        "{:?}",
+        a.mensaje
+    );
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("▶ empezá por acá"), "{p}");
+    assert!(p.contains("(¿consecuencia del primero?)"), "{p}");
+    // La columna del error se subraya en el editor.
+    let mut t = Terminal::new(TestBackend::new(160, 40)).unwrap();
+    t.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut a)).unwrap();
+    let z = a.zonas.editor.unwrap();
+    let buf = t.backend().buffer().clone();
+    let subrayadas = (0..4u16)
+        .flat_map(|fila| (z.texto.x..z.texto.x + 20).map(move |x| (x, z.texto.y + fila)))
+        .filter(|&(x, y)| {
+            buf[(x, y)]
+                .modifier
+                .contains(ratatui::style::Modifier::UNDERLINED)
+        })
+        .count();
+    assert!(subrayadas > 0, "algún token subrayado");
 }

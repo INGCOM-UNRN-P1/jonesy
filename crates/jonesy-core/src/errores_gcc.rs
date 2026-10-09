@@ -2,8 +2,8 @@
 //!
 //! El catálogo está en [`data/errores_gcc.toml`](../data/errores_gcc.toml): cada entrada
 //! reconoce mensajes de gcc con patrones simples (`{}` captura hasta el texto siguiente) y
-//! da un resumen de una línea, una explicación y un ejemplo mal/bien. jonesy compila con
-//! `LC_MESSAGES=C` para que los mensajes lleguen en inglés y coincidan.
+//! da un resumen de una línea, una explicación y un ejemplo mal/bien. Reconoce los mensajes
+//! en inglés y en español (gcc localizado traduce una parte).
 
 use std::sync::OnceLock;
 
@@ -231,7 +231,7 @@ mod tests {
         assert!(coincidir("expected ';' before", "expected ')' before ';'").is_none());
     }
 
-    /// Mensajes reales de gcc 16 (LC_MESSAGES=C) y el id que les corresponde.
+    /// Mensajes reales de gcc 16 en inglés (LC_MESSAGES=C) y el id que les corresponde.
     #[test]
     fn mensajes_reales() {
         let casos = [
@@ -312,6 +312,75 @@ mod tests {
             }
         }
         assert!(fallas.is_empty(), "{}", fallas.join("\n"));
+    }
+
+    /// Los mismos errores con gcc 16 en es_AR.UTF-8 (parte de los mensajes quedan en inglés).
+    #[test]
+    fn mensajes_reales_en_espanol() {
+        let casos = [
+            ("se pasa el argumento 1 de ‘f’ desde un tipo de puntero incompatible [-Wincompatible-pointer-types]", "puntero-incompatible"),
+            ("el paso del argumento 1 de ‘strlen’ crea un puntero desde un entero sin una conversión [-Wint-conversion]", "puntero-desde-entero"),
+            ("asignación a expresión con tipo matriz", "asignar-arreglo"),
+            ("se define la variable ‘s’ pero no se usa [-Wunused-but-set-variable=]", "asignada-sin-usar"),
+            ("se sugieren paréntesis alrededor de la asignación usada como valor verdadero [-Wparentheses]", "asignacion-en-condicion"),
+            ("la declaración break no está dentro de un bucle o switch", "break-fuera"),
+            ("falta el carácter terminando \"", "comilla-sin-cerrar"),
+            ("la comparación con una literal de cadena resulta en una conducta no especificada [-Waddress]", "comparar-cadenas"),
+            ("asignación de la variable de sólo lectura ‘a’", "solo-lectura"),
+            ("división por cero [-Wdiv-by-zero]", "division-cero"),
+            ("‘else’ sin un ‘if’ previo", "else-sin-if"),
+            ("exceso de elementos en el inicializador de matriz", "exceso-inicializador"),
+            ("formato ‘%d’ expects argument of type ‘int’, but argument 2 has type ‘double’ [-Wformat=]", "formato-tipo"),
+            ("formato ‘%d’ expects argument of type ‘int *’, but argument 2 has type ‘int’ [-Wformat=]", "formato-espera-puntero"),
+            ("formato ‘%s’ expects argument of type ‘char *’, but argument 2 has type ‘char (*)[10]’ [-Wformat=]", "formato-arreglo-con-ampersand"),
+            ("declaración implícita de la función ‘malloc’ [-Wimplicit-function-declaration]", "declaracion-implicita"),
+            ("declaración implícita incompatible de la función interna ‘malloc’ [-Wbuiltin-declaration-mismatch]", "builtin-incompatible"),
+            ("incluya ‘<stdlib.h>’ o proporcione una declaración de ‘malloc’", "nota-include"),
+            ("lista.h: No existe el fichero o el directorio", "include-no-encontrado"),
+            ("uso no válido del tipo indefinido ‘struct nodo’", "tipo-incompleto"),
+            ("se requiere un l-valor como operando izquierdo de la asignación", "lvalue"),
+            ("‘q’ es un puntero; ¿pretendía utilizar ‘->’?", "flecha"),
+            ("argumento de tipo no válido de ‘->’ (se tiene ‘struct p’)", "punto"),
+            ("‘x’ no se declaró aquí (primer uso en esta función)", "no-declarada"),
+            ("cada identificador sin declarar se reporta sólo una vez para cada función en el que aparece", "no-declarada-ruido"),
+            ("variable ‘x’ sin usar [-Wunused-variable]", "variable-sin-uso"),
+            ("parámetro ‘b’ sin uso [-Wunused-parameter]", "parametro-sin-uso"),
+            ("comparación entre puntero y entero", "puntero-con-entero"),
+            ("la inicialización de ‘int *’ desde ‘int’ crea un puntero desde un entero sin una conversión [-Wint-conversion]", "puntero-desde-entero"),
+            ("la inicialización de ‘int’ desde ‘int *’ crea un entero desde un puntero sin una conversión [-Wint-conversion]", "entero-desde-puntero"),
+            ("se sugieren llaves alrededor del cuerpo vacío en una declaración ‘if’ [-Wempty-body]", "cuerpo-vacio"),
+            ("redefinición de ‘a’", "redefinicion"),
+            ("la función devuelve la dirección de una variable local [-Wreturn-local-addr]", "direccion-local"),
+            ("‘return’ con valor, en una función que devuelve void [-Wreturn-mismatch]", "return-con-valor"),
+            ("‘return’ sin valores, en una función que no devuelve void [-Wreturn-mismatch]", "return-sin-valor"),
+            ("demasiados argumentos para el formato [-Wformat-extra-args]", "formato-muchos-argumentos"),
+            ("declaración sin efecto [-Wunused-value]", "sin-efecto"),
+            ("el control alcanza el final de una función que no es void [-Wreturn-type]", "sin-return"),
+            ("el argumento de ‘sizeof’ en la llamada ‘memset’ es la misma expresión que el destino; ¿pretendía proporcionar una longitud explícita? [-Wsizeof-pointer-memaccess]", "sizeof-puntero"),
+            ("‘a’ redeclarado como un tipo diferente de símbolo", "redefinicion"),
+            ("‘\\342’ parásito en el programa", "caracter-extrano"),
+            ("el valor del subíndice no es ni matriz ni puntero ni vector", "subindice"),
+            ("esta sentencia puede fracasar [-Wimplicit-fallthrough=]", "caida-switch"),
+            ("nombre de tipo ‘bool’ desconocido", "tipo-desconocido"),
+            ("el tipo de devolución por defecto es ‘int’ [-Wimplicit-int]", "tipo-de-retorno"),
+            ("enlazador: referencia a `f' sin definir", "referencia-indefinida"),
+            ("enlazador: referencia a `main' sin definir", "sin-main"),
+            ("enlazador: definiciones múltiples de `comun'; /tmp/x.o:a.c:(.text+0x0): primero se definió aquí", "definicion-multiple"),
+            ("enlazador: no se puede encontrar -lnoexiste: No existe el fichero o el directorio", "biblioteca-no-encontrada"),
+        ];
+        let mut fallas = vec![];
+        for (m, id) in casos {
+            match explicar(m) {
+                Some(e) if e.id == id => {}
+                otro => fallas.push(format!(
+                    "{m:?}: esperaba {id}, dio {:?}",
+                    otro.map(|e| e.id)
+                )),
+            }
+        }
+        assert!(fallas.is_empty(), "{}", fallas.join("\n"));
+        let e = explicar("declaración implícita de la función ‘printf’").unwrap();
+        assert!(e.resumen.contains("«printf»") && e.resumen.contains("<stdio.h>"));
     }
 
     #[test]

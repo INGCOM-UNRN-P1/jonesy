@@ -126,6 +126,8 @@ fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
     let mensaje = if let Some(i) = l
         .find("undefined reference to")
         .or_else(|| l.find("multiple definition of"))
+        .or_else(|| l.find("referencia a "))
+        .or_else(|| l.find("definiciones múltiples de"))
     {
         // «main.c:(.text+0x1a): undefined reference to `f'» o «/usr/bin/ld: main.o: in function…»
         l[i..].to_string()
@@ -137,7 +139,12 @@ fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
             || prefijo.ends_with("ld.lld")
             || prefijo.ends_with("ld.exe");
         // «ld: main.o: in function `main':» es contexto de la línea siguiente.
-        if !es_ld || resto.starts_with("warning") || resto.contains(": in function") {
+        if !es_ld
+            || resto.starts_with("warning")
+            || resto.starts_with("aviso")
+            || resto.contains(": in function")
+            || resto.contains(": en la función")
+        {
             return None;
         }
         resto.to_string()
@@ -177,7 +184,13 @@ fn parsear_linea_gcc(linea: &str, dir: &Path) -> Option<Diagnostico> {
             (1, tercero.trim().to_string(), resto.join(":"))
         }
     };
-    let tipo_l = tipo.to_ascii_lowercase();
+    // gcc localizado puede traducir el tipo (aviso, nota, error fatal).
+    let tipo_l = match tipo.to_lowercase().as_str() {
+        "aviso" | "advertencia" => "warning".to_string(),
+        "nota" => "note".to_string(),
+        "error fatal" => "fatal error".to_string(),
+        t => t.to_string(),
+    };
     if !["error", "warning", "note", "fatal error"].contains(&tipo_l.as_str()) {
         return None;
     }
@@ -335,6 +348,27 @@ mod tests {
             .as_deref()
             .unwrap()
             .contains("definida dos veces"));
+    }
+
+    #[test]
+    fn salida_de_gcc_y_ld_localizados() {
+        let salida = "main.c:3:5: aviso: variable ‘x’ sin usar [-Wunused-variable]\n\
+                      main.c:4:5: error: ‘y’ no se declaró aquí (primer uso en esta función)\n\
+                      main.c:4:5: nota: cada identificador sin declarar se reporta sólo una vez para cada función en el que aparece\n\
+                      /usr/bin/ld.bfd: /tmp/a.o: en la función `main':\n\
+                      a.c:(.text+0x15): referencia a `f' sin definir\n\
+                      /usr/bin/ld.bfd: no se puede encontrar -llista: No existe el fichero o el directorio\n\
+                      collect2: error: ld devolvió el estado de salida 1\n";
+        let d = parsear_gcc(salida, Path::new("/tp"));
+        assert_eq!(d.len(), 4, "{d:#?}");
+        assert_eq!(d[0].severidad, Severidad::Advertencia);
+        assert!(d[1]
+            .resumen
+            .as_deref()
+            .unwrap()
+            .starts_with("«y» no está declarada"));
+        assert!(d[2].resumen.as_deref().unwrap().contains("«f»"));
+        assert!(d[3].resumen.as_deref().unwrap().contains("«lista»"));
     }
 
     #[test]

@@ -39,19 +39,6 @@ pub fn interprete() -> (&'static str, &'static str) {
 
 /// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
 /// `Fin` incluye toda la salida combinada, para parsear diagnósticos o JSON.
-/// Mensajes de gcc, make y ld en inglés (`LC_MESSAGES=C`) para reconocerlos y explicarlos
-/// en español (`errores_gcc`). El resto del locale (UTF-8) se respeta: si `LC_ALL` está
-/// fijado, pasa a `LC_CTYPE`.
-pub fn mensajes_en_ingles(cmd: &mut Command) {
-    if let Some(todo) = std::env::var_os("LC_ALL").filter(|v| !v.is_empty()) {
-        cmd.env_remove("LC_ALL");
-        if std::env::var_os("LC_CTYPE").is_none() {
-            cmd.env("LC_CTYPE", todo);
-        }
-    }
-    cmd.env("LC_MESSAGES", "C").env_remove("LANGUAGE");
-}
-
 pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: Sender<Salida>) {
     let comando = comando.to_string();
     let dir = dir.to_path_buf();
@@ -73,7 +60,6 @@ pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: 
             .env("TERM", "dumb")
             .env_remove("FORCE_COLOR")
             .env("COLUMNS", "120");
-        mensajes_en_ingles(&mut cmd);
         for (k, v) in &entorno {
             cmd.env(k, v);
         }

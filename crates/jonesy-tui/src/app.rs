@@ -2856,7 +2856,16 @@ impl App {
                         true,
                     ));
                     if errores > 0 {
-                        self.avisar(format!("La compilación falló: {errores} error(es). Enter en Problemas salta al error."), Nivel::Error);
+                        let primero = self
+                            .primer_error()
+                            .map(|(a, l, _)| {
+                                format!(
+                                    " Empezá por el primero: {}:{l}.",
+                                    self.proyecto.relativa(&a)
+                                )
+                            })
+                            .unwrap_or_default();
+                        self.avisar(format!("La compilación falló: {errores} error(es).{primero} Enter en Problemas salta."), Nivel::Error);
                         self.pestana = Pestana::Problemas;
                         self.sel_problema = 0;
                     } else {
@@ -6012,6 +6021,47 @@ impl App {
                     }
                 }
             }
+        }
+    }
+
+    /// Cascada de errores de gcc: el primero de la compilación (archivo y línea) y si hay
+    /// más errores en ese archivo después de él (que suelen ser su consecuencia).
+    pub fn primer_error(&self) -> Option<(PathBuf, usize, bool)> {
+        let errores: Vec<&Diagnostico> = self
+            .diag_compilador
+            .iter()
+            .filter(|d| d.severidad == Severidad::Error && d.archivo.is_some())
+            .collect();
+        let p = errores.first()?;
+        let a = p.archivo.clone()?;
+        let mas = errores[1..]
+            .iter()
+            .any(|d| d.archivo.as_ref() == Some(&a) && d.linea >= p.linea);
+        Some((a, p.linea, mas))
+    }
+
+    /// Papel de un diagnóstico en una cascada de errores de gcc: `Some(false)` es el
+    /// primero («empezá por acá»), `Some(true)` uno posterior en el mismo archivo (puede
+    /// ser consecuencia del primero), `None` si no aplica (un solo error, otra fuente…).
+    pub fn papel_en_cascada(&self, d: &Diagnostico) -> Option<bool> {
+        let (a, l, mas) = self.primer_error()?;
+        if !mas
+            || d.origen != jonesy_core::Origen::Compilador
+            || d.severidad != Severidad::Error
+            || d.archivo.as_ref() != Some(&a)
+        {
+            return None;
+        }
+        let primero = self
+            .diag_compilador
+            .iter()
+            .find(|x| x.severidad == Severidad::Error && x.archivo.is_some())?;
+        if d == primero {
+            Some(false)
+        } else if d.linea >= l {
+            Some(true)
+        } else {
+            None
         }
     }
 

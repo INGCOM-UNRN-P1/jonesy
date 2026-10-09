@@ -948,7 +948,8 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         .filter(|(a, _)| ruta.as_ref().is_some_and(|r| mismo_archivo(a, r)))
         .map(|(_, l)| l - 1)
         .collect();
-    let diags: Vec<(usize, Severidad, String)> = match &ruta {
+    // (línea, columna 0-based, gravedad, texto) de los diagnósticos de este archivo.
+    let diags_col: Vec<(usize, usize, Severidad, String)> = match &ruta {
         Some(p) => app
             .diagnosticos()
             .into_iter()
@@ -959,15 +960,28 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                     .as_deref()
                     .map(|c| format!(" [{c}]"))
                     .unwrap_or_default();
+                let primero = if app.papel_en_cascada(d) == Some(false) {
+                    "▶ empezá por acá: "
+                } else {
+                    ""
+                };
                 (
                     d.linea.saturating_sub(1),
+                    d.columna.saturating_sub(1),
                     d.severidad,
-                    format!("{}{codigo}", d.resumen.as_deref().unwrap_or(&d.mensaje)),
+                    format!(
+                        "{primero}{}{codigo}",
+                        d.resumen.as_deref().unwrap_or(&d.mensaje)
+                    ),
                 )
             })
             .collect(),
         None => vec![],
     };
+    let diags: Vec<(usize, Severidad, String)> = diags_col
+        .iter()
+        .map(|(l, _, s, t)| (*l, *s, t.clone()))
+        .collect();
     let mouse = app.desplazado_por_mouse;
     let sim = app.sim.clone();
     let ba = &mut app.buffers[activo];
@@ -1077,6 +1091,22 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
             .iter()
             .take_while(|c| **c == ' ' || **c == '\t')
             .count();
+        // La columna exacta de cada diagnóstico de la línea: se subraya el token entero.
+        let subrayar: Vec<(usize, usize, Severidad)> = diags_col
+            .iter()
+            .filter(|(l, c, _, _)| *l == linea && *c > 0 && *c < chars.len())
+            .map(|(_, c, s, _)| {
+                let es_id = |x: char| x.is_alphanumeric() || x == '_';
+                let fin = if es_id(chars[*c]) {
+                    (*c..chars.len())
+                        .find(|&k| !es_id(chars[k]))
+                        .unwrap_or(chars.len())
+                } else {
+                    c + 1
+                };
+                (*c, fin, *s)
+            })
+            .collect();
         let mezclada = chars[..sangria].contains(&' ') && chars[..sangria].contains(&'\t');
         let mut t = 0;
         for (i, &c) in chars.iter().enumerate() {
@@ -1101,6 +1131,11 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 estilo = estilo
                     .bg(tema::fondo_seleccion())
                     .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
+            }
+            if let Some((_, _, sev)) = subrayar.iter().find(|(a, z, _)| i >= *a && i < *z) {
+                estilo = estilo
+                    .fg(tema::color_severidad(*sev))
+                    .add_modifier(Modifier::UNDERLINED);
             }
             if seleccion.is_some_and(|(a, z)| pos >= a && pos < z) {
                 estilo = estilo.bg(tema::fondo_seleccion());
@@ -1753,10 +1788,33 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                     format!("{ubic} "),
                     Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
+                // Cascada de errores: el primero se marca, los siguientes se atenúan.
+                Span::styled(
+                    match app.papel_en_cascada(d) {
+                        Some(false) => "▶ empezá por acá: ",
+                        _ => "",
+                    },
+                    Style::default()
+                        .fg(tema::acento())
+                        .bg(fondo)
+                        .add_modifier(Modifier::BOLD),
+                ),
                 // Los de gcc reconocidos: en español (el original va al final).
                 Span::styled(
                     d.resumen.clone().unwrap_or_else(|| d.mensaje.clone()),
-                    Style::default().bg(fondo),
+                    if app.papel_en_cascada(d) == Some(true) {
+                        Style::default().fg(tema::atenuado()).bg(fondo)
+                    } else {
+                        Style::default().bg(fondo)
+                    },
+                ),
+                Span::styled(
+                    if app.papel_en_cascada(d) == Some(true) {
+                        " (¿consecuencia del primero?)"
+                    } else {
+                        ""
+                    },
+                    Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
                 Span::styled(
                     sugerencia.map(|t| format!(" — {t}")).unwrap_or_default(),
