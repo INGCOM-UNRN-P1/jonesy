@@ -2696,6 +2696,65 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.y,
             ))
         }
+        Modal::Reemplazar {
+            buscar,
+            reemplazo,
+            campo,
+            mayusculas,
+            palabra,
+        } => {
+            let n = app
+                .buf()
+                .buf
+                .coincidencias(buscar, *mayusculas, *palabra)
+                .len();
+            let base = app.zonas.editor.map(|z| z.texto).unwrap_or(area);
+            let w = 60.min(base.width);
+            let r = Rect::new(base.x + base.width.saturating_sub(w), base.y, w, 6);
+            limpiar(f, r);
+            let b = bloque(format!(" Buscar y reemplazar · {n} coincidencia(s) "), true);
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let marca = |on: bool| if on { "[x]" } else { "[ ]" };
+            let rotulo = |k: u8| {
+                if *campo == k {
+                    Style::default()
+                        .fg(tema::acento())
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(tema::atenuado())
+                }
+            };
+            let lineas = vec![
+                Line::from(vec![
+                    Span::styled("Buscar:     ", rotulo(0)),
+                    Span::raw(buscar.clone()),
+                ]),
+                Line::from(vec![
+                    Span::styled("Reemplazar: ", rotulo(1)),
+                    Span::raw(reemplazo.clone()),
+                ]),
+                Line::styled(
+                    format!(
+                        "{} mayúsculas (Alt+M)  {} palabra completa (Alt+P)",
+                        marca(*mayusculas),
+                        marca(*palabra)
+                    ),
+                    Style::default().fg(tema::nota()),
+                ),
+                Line::styled(
+                    "Enter reemplaza y sigue · F3 saltea · Alt+T todas · Tab campo",
+                    Style::default().fg(tema::atenuado()),
+                ),
+            ];
+            f.render_widget(Paragraph::new(lineas), i);
+            let texto = if *campo == 0 { buscar } else { reemplazo };
+            Some((
+                (i.x + 12 + UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.x + i.width.saturating_sub(1)),
+                i.y + *campo as u16,
+            ))
+        }
         Modal::Confirmar {
             titulo, mensaje, ..
         } => {

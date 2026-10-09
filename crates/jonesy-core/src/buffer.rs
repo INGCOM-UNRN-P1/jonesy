@@ -862,6 +862,78 @@ impl Buffer {
         Some(self.texto.byte_to_char(pos_byte))
     }
 
+    /// Todas las apariciones de `patron` como rangos (inicio, fin) en caracteres.
+    /// `mayusculas`: distinguirlas; `palabra`: sólo palabras completas.
+    pub fn coincidencias(
+        &self,
+        patron: &str,
+        mayusculas: bool,
+        palabra: bool,
+    ) -> Vec<(usize, usize)> {
+        if patron.is_empty() {
+            return vec![];
+        }
+        let norm = |c: char| {
+            if mayusculas {
+                c
+            } else {
+                c.to_lowercase().next().unwrap_or(c)
+            }
+        };
+        let t: Vec<char> = self.texto.chars().map(norm).collect();
+        let p: Vec<char> = patron.chars().map(norm).collect();
+        let de_palabra = |c: char| c.is_alphanumeric() || c == '_';
+        let mut v = vec![];
+        let mut i = 0;
+        while i + p.len() <= t.len() {
+            if t[i..i + p.len()] == p[..] {
+                let borde_ini = i == 0 || !de_palabra(t[i - 1]);
+                let borde_fin = i + p.len() == t.len() || !de_palabra(t[i + p.len()]);
+                if !palabra || (borde_ini && borde_fin) {
+                    v.push((i, i + p.len()));
+                    i += p.len();
+                    continue;
+                }
+            }
+            i += 1;
+        }
+        v
+    }
+
+    /// Reemplaza el rango `a..b` por `texto` y deja el cursor al final.
+    pub fn reemplazar_rango(&mut self, a: usize, b: usize, texto: &str) -> Option<Delta> {
+        let fin = a + texto.chars().count();
+        self.aplicar(a, b - a, texto, fin, false)
+    }
+
+    /// Reemplaza todas las apariciones en una sola unidad de deshacer: (delta, cuántas).
+    pub fn reemplazar_todas(
+        &mut self,
+        patron: &str,
+        reemplazo: &str,
+        mayusculas: bool,
+        palabra: bool,
+    ) -> Option<(Delta, usize)> {
+        let rangos = self.coincidencias(patron, mayusculas, palabra);
+        if rangos.is_empty() {
+            return None;
+        }
+        let texto: Vec<char> = self.texto.chars().collect();
+        let mut nuevo = String::with_capacity(texto.len());
+        let mut ult = 0;
+        for (a, b) in &rangos {
+            nuevo.extend(&texto[ult..*a]);
+            nuevo.push_str(reemplazo);
+            ult = *b;
+        }
+        nuevo.extend(&texto[ult..]);
+        let (fila, col) = self.linea_columna();
+        let d = self.aplicar(0, texto.len(), &nuevo, 0, false)?;
+        let f = fila.min(self.lineas().saturating_sub(1));
+        self.cursor = self.linea_columna_a_pos(f, col.min(self.largo_linea(f)));
+        Some((d, rangos.len()))
+    }
+
     // ------------------------------------------------------------------ disco
 
     /// Guarda de forma atómica: archivo temporal en el mismo directorio, fsync y rename.
@@ -1010,6 +1082,26 @@ mod tests {
         assert_eq!(b.contenido(), "int main(void) {\n    x;\n    ");
         b.borrar_atras();
         assert_eq!(b.contenido(), "int main(void) {\n    x;\n");
+    }
+
+    #[test]
+    fn buscar_con_opciones_y_reemplazar() {
+        let mut b = Buffer::desde_texto("int max = MAX; maximo(max);");
+        assert_eq!(b.coincidencias("max", false, false).len(), 4);
+        assert_eq!(b.coincidencias("max", true, false).len(), 3);
+        assert_eq!(
+            b.coincidencias("max", false, true),
+            vec![(4, 7), (10, 13), (22, 25)]
+        );
+        assert_eq!(b.coincidencias("max", true, true), vec![(4, 7), (22, 25)]);
+        let (_, n) = b.reemplazar_todas("max", "tope", true, true).unwrap();
+        assert_eq!(n, 2);
+        assert_eq!(b.contenido(), "int tope = MAX; maximo(tope);");
+        b.deshacer();
+        assert_eq!(b.contenido(), "int max = MAX; maximo(max);");
+        b.reemplazar_rango(4, 7, "m");
+        assert_eq!(b.contenido(), "int m = MAX; maximo(max);");
+        assert_eq!(b.cursor, 5);
     }
 
     fn c(texto: &str) -> Buffer {

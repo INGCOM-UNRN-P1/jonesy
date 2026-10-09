@@ -2089,3 +2089,48 @@ fn edicion_pares_comentarios_lineas_y_espacios() {
     let guardado = std::fs::read_to_string(dir.path().join("main.c")).unwrap();
     assert_eq!(guardado, "int a;\nf(x)\nint b;\nf(x)");
 }
+
+#[test]
+fn buscar_y_reemplazar_una_por_una_y_todas() {
+    let dir = proyecto(&[
+        ("main.c", "int max = 1;\nint y = max + MAX;\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.buf_mut().buf.mover_a(0, false);
+    tecla(&mut a, KeyCode::Char('h'), KeyModifiers::CONTROL);
+    escribir(&mut a, "max");
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::NONE);
+    escribir(&mut a, "tope");
+    tecla(&mut a, KeyCode::Char('m'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("2 coincidencia(s)") && p.contains("[x] mayúsculas"),
+        "{p}"
+    );
+    // Enter elige la primera; Enter de nuevo la reemplaza y elige la siguiente.
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(
+        a.buf().buf.contenido(),
+        "int tope = 1;\nint y = max + MAX;\n"
+    );
+    assert_eq!(a.buf().buf.texto_seleccionado().as_deref(), Some("max"));
+    // F3 la saltea; Alt+T reemplaza todas (sin distinguir mayúsculas).
+    tecla(&mut a, KeyCode::F(3), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('m'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('t'), KeyModifiers::ALT);
+    assert_eq!(
+        a.buf().buf.contenido(),
+        "int tope = 1;\nint y = tope + tope;\n"
+    );
+    assert!(a.mensaje.as_ref().unwrap().0.starts_with("2 reemplazo(s)"));
+    // Un solo Ctrl+Z deshace el «todas».
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
+    assert_eq!(
+        a.buf().buf.contenido(),
+        "int tope = 1;\nint y = max + MAX;\n"
+    );
+}

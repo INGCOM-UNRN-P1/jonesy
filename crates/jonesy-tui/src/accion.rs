@@ -86,6 +86,7 @@ pub enum Accion {
     SubirLinea,
     BajarLinea,
     LimpiarEspacios,
+    Reemplazar,
 }
 
 pub struct Info {
@@ -174,6 +175,7 @@ impl Accion {
             SubirLinea => ("Mover línea arriba", "Alt+↑"),
             BajarLinea => ("Mover línea abajo", "Alt+↓"),
             LimpiarEspacios => ("Quitar espacios al final de las líneas", ""),
+            Reemplazar => ("Buscar y reemplazar…", "Ctrl+H"),
         };
         Info { titulo, atajo }
     }
@@ -257,6 +259,7 @@ impl Accion {
             SubirLinea,
             BajarLinea,
             LimpiarEspacios,
+            Reemplazar,
             Salir,
         ]
     }
@@ -385,6 +388,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(Buscar),
                 A(BuscarSiguiente),
+                A(Reemplazar),
                 A(IrALinea),
                 SEP,
                 A(Comentar),
@@ -561,6 +565,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y |
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
 | Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
+| Buscar y reemplazar (Tab campo, Alt+M mayúsculas, Alt+P palabra, Enter reemplaza, F3 saltea, Alt+T todas) | Ctrl+H |
 | Ir a línea | Ctrl+G |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
 | Mover línea arriba / abajo | Alt+↑ / Alt+↓ |

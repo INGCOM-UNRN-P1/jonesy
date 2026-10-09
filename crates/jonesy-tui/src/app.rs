@@ -318,6 +318,15 @@ pub enum Modal {
         siempre: bool,
         faltan: Vec<(String, String, String)>,
     },
+    /// Editar → Buscar y reemplazar (Ctrl+H).
+    Reemplazar {
+        buscar: String,
+        reemplazo: String,
+        /// 0: buscar; 1: reemplazar.
+        campo: u8,
+        mayusculas: bool,
+        palabra: bool,
+    },
     /// Archivo → Configuración del entorno: solapa (ver `PESTANAS_CONFIG`) y fila.
     Configuracion {
         pestana: usize,
@@ -4590,6 +4599,21 @@ impl App {
                 })
             }
             Accion::BuscarSiguiente => self.buscar_siguiente(),
+            Accion::Reemplazar => {
+                let buscar = self
+                    .buf()
+                    .buf
+                    .texto_seleccionado()
+                    .filter(|t| !t.contains('\n'))
+                    .unwrap_or_else(|| self.busqueda.clone());
+                self.modal = Some(Modal::Reemplazar {
+                    buscar,
+                    reemplazo: String::new(),
+                    campo: 0,
+                    mayusculas: false,
+                    palabra: false,
+                });
+            }
             Accion::IrALinea => {
                 self.modal = Some(Modal::IrALinea {
                     texto: String::new(),
@@ -4895,6 +4919,24 @@ impl App {
             sistema::osc52(&t);
         }
         self.portapapeles = t;
+    }
+
+    /// Elige la próxima coincidencia después del cursor (o de la elegida), circular.
+    fn siguiente_coincidencia(&mut self, patron: &str, mayusculas: bool, palabra: bool) {
+        let b = &mut self.buf_mut().buf;
+        let v = b.coincidencias(patron, mayusculas, palabra);
+        let desde = b.seleccion().map(|(_, f)| f).unwrap_or(b.cursor);
+        match v.iter().find(|(a, _)| *a >= desde).or(v.first()) {
+            Some(&(a, z)) => {
+                b.mover_a(a, false);
+                b.mover_a(z, true);
+                centrar(b, 8);
+            }
+            None => {
+                b.mover_a(b.cursor, false);
+                self.avisar(format!("No hay más «{patron}»."), Nivel::Aviso);
+            }
+        }
     }
 
     fn buscar_siguiente(&mut self) {
@@ -5700,6 +5742,9 @@ impl App {
             (KeyCode::Char('v'), true, _) => Some(Accion::Pegar),
             (KeyCode::Char('a'), true, _) => Some(Accion::SeleccionarTodo),
             (KeyCode::Char('f'), true, _) => Some(Accion::Buscar),
+            // Ctrl+H: algunas terminales lo mandan como Ctrl+Backspace.
+            (KeyCode::Char('h'), true, _) => Some(Accion::Reemplazar),
+            (KeyCode::Backspace, true, _) => Some(Accion::Reemplazar),
             (KeyCode::F(3), _, true) => Some(Accion::BuscarSiguiente),
             (KeyCode::F(3), _, false) => Some(Accion::Buscar),
             (KeyCode::Char('g'), true, _) => Some(Accion::IrALinea),
@@ -6176,6 +6221,71 @@ impl App {
                     lado_a_lado,
                     desplazamiento_h,
                     lenguaje,
+                });
+            }
+            Modal::Reemplazar {
+                mut buscar,
+                mut reemplazo,
+                mut campo,
+                mut mayusculas,
+                mut palabra,
+            } => {
+                if cerrar {
+                    return;
+                }
+                match (k.code, alt) {
+                    (KeyCode::Tab | KeyCode::BackTab, _) => campo = 1 - campo,
+                    (KeyCode::Char('m' | 'M'), true) => mayusculas = !mayusculas,
+                    (KeyCode::Char('p' | 'P'), true) => palabra = !palabra,
+                    (KeyCode::Char('t' | 'T'), true) => {
+                        let (b, r) = (buscar.clone(), reemplazo.clone());
+                        let mut n = 0;
+                        self.editar(|buf| {
+                            buf.reemplazar_todas(&b, &r, mayusculas, palabra)
+                                .map(|(d, k)| {
+                                    n = k;
+                                    d
+                                })
+                        });
+                        self.avisar(
+                            if n == 0 {
+                                format!("No se encontró «{buscar}».")
+                            } else {
+                                format!("{n} reemplazo(s) de «{buscar}» por «{reemplazo}».")
+                            },
+                            if n == 0 { Nivel::Aviso } else { Nivel::Ok },
+                        );
+                    }
+                    (KeyCode::Enter, _) => {
+                        // Si la coincidencia elegida es la actual, se reemplaza.
+                        let b = &self.buf().buf;
+                        let actual = b
+                            .seleccion()
+                            .filter(|s| b.coincidencias(&buscar, mayusculas, palabra).contains(s));
+                        if let Some((a, z)) = actual {
+                            let r = reemplazo.clone();
+                            self.editar(|buf| buf.reemplazar_rango(a, z, &r));
+                        }
+                        self.siguiente_coincidencia(&buscar, mayusculas, palabra);
+                    }
+                    (KeyCode::F(3), _) => {
+                        self.siguiente_coincidencia(&buscar, mayusculas, palabra);
+                    }
+                    _ => {
+                        let c = if campo == 0 {
+                            &mut buscar
+                        } else {
+                            &mut reemplazo
+                        };
+                        editar_campo(c, &k);
+                    }
+                }
+                self.modal = Some(Modal::Reemplazar {
+                    buscar,
+                    reemplazo,
+                    campo,
+                    mayusculas,
+                    palabra,
                 });
             }
             Modal::Bienvenida { siempre, faltan } => match k.code {
