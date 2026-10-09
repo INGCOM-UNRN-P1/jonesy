@@ -179,6 +179,11 @@ impl Deck {
         let _ = self.hijo.kill();
     }
 
+    /// PID del proceso (para enviarle señales).
+    pub fn pid(&self) -> Option<u32> {
+        self.hijo.process_id()
+    }
+
     /// Texto visible (sin atributos); útil para pruebas y para copiar.
     pub fn texto(&self) -> String {
         self.con_pantalla(|s| s.contents())

@@ -21,3 +21,9 @@ jonesy-git = { path = "../jonesy-git" }
 jonesy-plugins = { path = "../jonesy-plugins" }
 jonesy-telemetry = { path = "../jonesy-telemetry" }
 jonesy-tui = { path = "../jonesy-tui" }
+
+[dev-dependencies]
+jonesy-terminal = { path = "../jonesy-terminal" }
+
+[target.'cfg(unix)'.dev-dependencies]
+libc.workspace = true
