@@ -378,3 +378,112 @@ pub const AYUDA_ATAJOS: &str = "\
 
 En el panel de la terminal, `Alt+T` o `Esc Esc` devuelven el foco al editor.
 ";
+
+/// Tecla Alt+letra que abre el menú `i`, si no la toma antes un atajo global.
+fn alt_de_menu(menus: &[(&str, Vec<Accion>)], i: usize) -> Option<char> {
+    // Mismo criterio que la TUI: el primer menú cuyo nombre empieza con la letra, y las
+    // letras de los atajos globales con Alt ganan.
+    const GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 'f', 'd', 'r', 'p', 'o', 'm'];
+    let c = menus[i].0.chars().next()?.to_lowercase().next()?;
+    let primero = menus
+        .iter()
+        .position(|(n, _)| n.to_lowercase().starts_with(c));
+    (primero == Some(i) && !GLOBALES.contains(&c)).then_some(c)
+}
+
+/// La parte generada de `docs/menus.md`: la barra y cada menú con sus atajos.
+pub fn documento_menus() -> String {
+    let mut s = String::new();
+    let menus = menus(true);
+    // La barra, como se ve (en examen aparece además «Examen»).
+    let barra: String = menus.iter().map(|(n, _)| format!(" {n} ")).collect();
+    s.push_str("```text\n");
+    s.push_str(&format!(" {barra}\n"));
+    s.push_str("```\n\n");
+    s.push_str("| Menú | Abre con | Entradas |\n|---|---|---|\n");
+    for (i, (nombre, acciones)) in menus.iter().enumerate() {
+        let tecla = match alt_de_menu(&menus, i) {
+            Some(c) => format!("Alt+{}", c.to_ascii_uppercase()),
+            None => "F10 y flechas, o clic".into(),
+        };
+        s.push_str(&format!("| {nombre} | {tecla} | {} |\n", acciones.len()));
+    }
+    for (nombre, acciones) in &menus {
+        s.push_str(&format!("\n## {nombre}\n\n"));
+        if *nombre == "Examen" {
+            s.push_str("Sólo en modo examen (`--exam`).\n\n");
+        }
+        // El menú desplegado, como caja.
+        let filas: Vec<(String, &str)> = acciones
+            .iter()
+            .map(|a| {
+                let i = a.info();
+                (i.titulo.to_string(), i.atajo)
+            })
+            .collect();
+        let ancho_t = filas
+            .iter()
+            .map(|(t, _)| t.chars().count())
+            .max()
+            .unwrap_or(0);
+        let ancho_a = filas
+            .iter()
+            .map(|(_, a)| a.chars().count())
+            .max()
+            .unwrap_or(0);
+        let interior = ancho_t + ancho_a + 4;
+        s.push_str("```text\n");
+        s.push_str(&format!("┌{}┐\n", "─".repeat(interior)));
+        for (t, a) in &filas {
+            let relleno_t = ancho_t - t.chars().count();
+            let relleno_a = ancho_a - a.chars().count();
+            s.push_str(&format!(
+                "│ {t}{}  {}{a} │\n",
+                " ".repeat(relleno_t),
+                " ".repeat(relleno_a)
+            ));
+        }
+        s.push_str(&format!("└{}┘\n", "─".repeat(interior)));
+        s.push_str("```\n");
+    }
+    s
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const INICIO: &str = "<!-- menus: inicio (generado por accion::documento_menus) -->\n";
+    const FIN: &str = "<!-- menus: fin -->";
+
+    /// docs/menus.md tiene que coincidir con los menús del código. Para regenerarlo:
+    /// `JONESY_ACTUALIZAR_DOCS=1 cargo test -p jonesy-tui documento_de_menus`.
+    #[test]
+    fn documento_de_menus_al_dia() {
+        let ruta = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/menus.md");
+        let doc = std::fs::read_to_string(&ruta).expect("docs/menus.md");
+        let (antes, resto) = doc.split_once(INICIO).expect("marcador de inicio");
+        let (_, despues) = resto.split_once(FIN).expect("marcador de fin");
+        let nuevo = format!("{antes}{INICIO}\n{}\n{FIN}{despues}", documento_menus());
+        if std::env::var_os("JONESY_ACTUALIZAR_DOCS").is_some() {
+            std::fs::write(&ruta, &nuevo).unwrap();
+            return;
+        }
+        assert!(
+            doc == nuevo,
+            "docs/menus.md no coincide con los menús: JONESY_ACTUALIZAR_DOCS=1 cargo test -p jonesy-tui documento_de_menus"
+        );
+    }
+
+    #[test]
+    fn todas_las_acciones_de_los_menus_estan_en_la_paleta() {
+        for (_, acciones) in menus(true) {
+            for a in acciones {
+                assert!(
+                    a == Accion::Paleta || Accion::todas().contains(&a),
+                    "{a:?} está en un menú pero no en la paleta"
+                );
+            }
+        }
+    }
+}

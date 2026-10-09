@@ -24,6 +24,7 @@ memoria). Lo de docentes e infraestructura queda en segundo plano.
 | Programas con entrada bajo valgrind | falta | Revisar la memoria corre sin teclado (en el panel): un programa que lee de stdin recibe EOF. Correrlo en el deck y leer la salida al terminar. |
 | Primera vez | falta | una pantalla de bienvenida corta (F6, Ctrl+F5, Ctrl+F6, F5, F1) para quien nunca usó el IDE. |
 | Explicaciones de errores de ripley/gaff | flojo | F1 depende de que cada herramienta tenga `explain`; unificar el formato con el de los errores de gcc. |
+| Alt+letra en los menús | flojo | sólo Archivo (Alt+A), Ver (Alt+V) y Construir (Alt+C) se abren así: Editar, Git y Herramientas chocan con atajos globales (Alt+E, Alt+G, Alt+H) y Ayuda comparte la A con Archivo. Mostrar la letra subrayada y elegir letras libres (ver `docs/menus.md`). |
 | Pruebas: salida de otros frameworks | falta | sólo se interpreta `p1_test`; con otro formato se ve la salida cruda. |
 
 ## Lo que queda (fuera del perfil estudiante)
