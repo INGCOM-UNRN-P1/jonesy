@@ -42,6 +42,8 @@ fn leer_en_hilo(
             let mut buf = [0u8; 8192];
             loop {
                 match lector.read(&mut buf) {
+                    // Una señal interrumpió la lectura: no es el fin de la salida.
+                    Err(e) if e.kind() == std::io::ErrorKind::Interrupted => continue,
                     Ok(0) | Err(_) => break,
                     Ok(n) => {
                         if let Ok(mut p) = parser.lock() {
@@ -69,6 +71,8 @@ pub struct Deck {
     vivo: Arc<AtomicBool>,
     pendiente: Arc<AtomicBool>,
     pub titulo: String,
+    /// Cuándo se vio que el proceso terminó (para esperar a leer su última salida).
+    termino: Option<std::time::Instant>,
 }
 
 impl Deck {
@@ -129,6 +133,7 @@ impl Deck {
             vivo,
             pendiente,
             titulo,
+            termino: None,
         })
     }
 
@@ -163,11 +168,15 @@ impl Deck {
         self.pendiente.swap(false, Ordering::AcqRel)
     }
 
+    /// El proceso sigue corriendo, o terminó pero todavía se está leyendo lo último que
+    /// escribió (hasta 1 s). Así, cuando dice que no, la pantalla ya tiene toda la salida.
     pub fn vivo(&mut self) -> bool {
-        if !self.vivo.load(Ordering::Acquire) {
-            return false;
+        if matches!(self.hijo.try_wait(), Ok(None)) {
+            return true;
         }
-        matches!(self.hijo.try_wait(), Ok(None))
+        let lector_abierto = self.vivo.load(Ordering::Acquire);
+        let desde = *self.termino.get_or_insert_with(std::time::Instant::now);
+        lector_abierto && desde.elapsed() < std::time::Duration::from_secs(1)
     }
 
     /// Código de salida si el proceso terminó.
