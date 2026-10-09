@@ -115,19 +115,25 @@ impl R<'_> {
             titulo.push_str(t);
         }
         let estilo = self.estilo();
+        // El espacio entre palabras no entró en la línea: la palabra siguiente va abajo
+        // (si no, quedaría pegada a la anterior).
+        let mut sin_espacio = false;
         for (i, parte) in t.split(' ').enumerate() {
             if i > 0 {
                 self.prefijo();
                 if self.col + 1 < self.ancho {
                     self.actual.push(Span::styled(" ", estilo));
                     self.col += 1;
+                } else {
+                    sin_espacio = true;
                 }
             }
             if parte.is_empty() {
                 continue;
             }
             let w = UnicodeWidthStr::width(parte);
-            if self.col + w > self.ancho && self.col > self.prefijos.concat().len() {
+            let al_borde = std::mem::take(&mut sin_espacio);
+            if (al_borde || self.col + w > self.ancho) && self.col > self.prefijos.concat().len() {
                 // Saca el espacio final antes de cortar.
                 if self.actual.last().is_some_and(|s| s.content == " ") {
                     self.actual.pop();
@@ -614,6 +620,19 @@ mod tests {
 
     fn texto(doc: &Documento) -> Vec<String> {
         doc.lineas.iter().map(texto_linea).collect()
+    }
+
+    #[test]
+    fn palabras_no_se_pegan_en_el_borde() {
+        // «recibe» termina justo en la última columna útil: el espacio no entra y «y»
+        // tiene que pasar a la línea siguiente, no pegarse.
+        // (20 es el ancho mínimo.)
+        let d = renderizar("abcdefghij le recibe\ny dos", 20, &Simbolos::unicode());
+        let t = texto(&d);
+        assert_eq!(t[0].trim_end(), "abcdefghij le recibe");
+        assert!(t[1].starts_with("y dos"), "{t:?}");
+        let todo = t.join(" ");
+        assert!(!todo.contains("recibey"), "{t:?}");
     }
 
     #[test]
