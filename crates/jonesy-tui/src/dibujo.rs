@@ -765,7 +765,7 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 (
                     d.linea.saturating_sub(1),
                     d.severidad,
-                    format!("{}{codigo}", d.mensaje),
+                    format!("{}{codigo}", d.resumen.as_deref().unwrap_or(&d.mensaje)),
                 )
             })
             .collect(),
@@ -1447,7 +1447,11 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                     format!("{ubic} "),
                     Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
-                Span::styled(d.mensaje.clone(), Style::default().bg(fondo)),
+                // Los de gcc reconocidos: en español (el original va al final).
+                Span::styled(
+                    d.resumen.clone().unwrap_or_else(|| d.mensaje.clone()),
+                    Style::default().bg(fondo),
+                ),
                 Span::styled(
                     sugerencia.map(|t| format!(" — {t}")).unwrap_or_default(),
                     Style::default().fg(tema::nota()).bg(fondo),
@@ -1460,7 +1464,20 @@ fn dibujar_problemas(f: &mut Frame, app: &mut App, r: Rect) {
                     Style::default().fg(tema::estilo()).bg(fondo),
                 ),
                 Span::styled(
-                    format!(" ({origen})"),
+                    if d.resumen.is_some() {
+                        format!(" ({origen} · F1 explica)")
+                    } else {
+                        format!(" ({origen})")
+                    },
+                    Style::default().fg(tema::atenuado()).bg(fondo),
+                ),
+                // El mensaje original al final: si no entra, es lo que se corta.
+                Span::styled(
+                    if d.resumen.is_some() {
+                        format!(" {}", d.mensaje)
+                    } else {
+                        String::new()
+                    },
                     Style::default().fg(tema::atenuado()).bg(fondo),
                 ),
             ])

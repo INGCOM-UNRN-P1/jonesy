@@ -352,6 +352,7 @@ pub fn interpretar(
                     herramienta: herramienta.clone(),
                     categoria: h["categoria"].as_str().map(str::to_string),
                     enlace: h["enlace"].as_str().map(str::to_string),
+                    resumen: None,
                 })
                 .collect()
         }
@@ -378,6 +379,7 @@ pub fn interpretar(
                         herramienta: herramienta.clone(),
                         categoria: Some("documentacion".into()),
                         enlace: None,
+                        resumen: None,
                     }
                 })
                 .collect()

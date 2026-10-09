@@ -185,7 +185,18 @@ fn compila_y_salta_al_error() {
     assert_eq!(a.buf().buf.linea_columna().0, 2);
     let p = pantalla(&mut a, 120, 30);
     assert!(p.contains("Problemas ("), "{p}");
-    assert!(p.contains("undeclared") || p.contains("no declarad"), "{p}");
+    // El error de gcc llega en inglés (LC_MESSAGES=C) y se muestra explicado en español,
+    // en Problemas y al final de la línea.
+    assert!(p.contains("«x» no está declarada"), "{p}");
+    assert!(p.contains("F1 explica"), "{p}");
+    // F1 sobre el problema abre la explicación con el ejemplo.
+    a.foco = Foco::Inferior;
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    assert!(matches!(a.modal, Some(Modal::Visor { .. })));
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Error de compilación"), "{p}");
+    assert!(p.contains("undeclared"), "el mensaje original, citado: {p}");
+    assert!(p.contains("Así sí"), "{p}");
 }
 
 #[test]

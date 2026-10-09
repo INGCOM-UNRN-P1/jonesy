@@ -11,6 +11,7 @@ pub mod doctor;
 pub mod documentacion;
 pub mod entorno;
 pub mod entrega;
+pub mod errores_gcc;
 pub mod estructura;
 pub mod gdb;
 pub mod integraciones;

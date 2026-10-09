@@ -51,6 +51,8 @@ pub struct Diagnostico {
     pub categoria: Option<String>,
     /// Página del apunte que explica el tema o la regla.
     pub enlace: Option<String>,
+    /// El mensaje en español claro (errores de gcc reconocidos, ver `errores_gcc`).
+    pub resumen: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -87,9 +89,15 @@ pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
             }
             continue;
         }
-        if let Some(d) =
+        if let Some(mut d) =
             parsear_linea_gcc(linea, pila.last().unwrap()).or_else(|| parsear_enlazador(linea))
         {
+            match crate::errores_gcc::explicar(&d.mensaje) {
+                // Notas que repiten lo que ya explica el diagnóstico anterior.
+                Some(e) if e.ocultar => continue,
+                Some(e) => d.resumen = Some(e.resumen),
+                None => {}
+            }
             diags.push(d);
         }
     }
@@ -115,7 +123,10 @@ fn directorio_de_make(linea: &str, frase: &str) -> Option<PathBuf> {
 /// «undefined reference to `f'». «collect2: error: ld returned…» se omite (repite).
 fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
     let l = linea.trim();
-    let mensaje = if let Some(i) = l.find("undefined reference to") {
+    let mensaje = if let Some(i) = l
+        .find("undefined reference to")
+        .or_else(|| l.find("multiple definition of"))
+    {
         // «main.c:(.text+0x1a): undefined reference to `f'» o «/usr/bin/ld: main.o: in function…»
         l[i..].to_string()
     } else {
@@ -131,13 +142,6 @@ fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
         }
         resto.to_string()
     };
-    let explicacion = if mensaje.starts_with("cannot find -l") {
-        Some("la biblioteca no está compilada o falta su ruta (-L): compilala primero")
-    } else if mensaje.starts_with("undefined reference") {
-        Some("la función se declaró pero su definición no se compiló ni enlazó")
-    } else {
-        None
-    };
     Some(Diagnostico {
         archivo: None,
         linea: 0,
@@ -145,7 +149,7 @@ fn parsear_enlazador(linea: &str) -> Option<Diagnostico> {
         severidad: Severidad::Error,
         mensaje: format!("enlazador: {mensaje}"),
         codigo: None,
-        sugerencia: explicacion.map(str::to_string),
+        sugerencia: None,
         origen: Origen::Compilador,
         ..Default::default()
     })
@@ -318,6 +322,39 @@ mod tests {
         assert!(d[1]
             .mensaje
             .contains("undefined reference to `lista_crear'"));
+        // Cada uno con su explicación en español.
+        assert!(d[0].resumen.as_deref().unwrap().contains("«arreglos»"));
+        assert!(d[1].resumen.as_deref().unwrap().contains("«lista_crear»"));
+        let doble = parsear_gcc(
+            "b.c:(.text+0x0): multiple definition of `comun'; a.o:a.c:(.text+0x0): first defined here\n",
+            Path::new("/tp"),
+        );
+        assert_eq!(doble.len(), 1);
+        assert!(doble[0]
+            .resumen
+            .as_deref()
+            .unwrap()
+            .contains("definida dos veces"));
+    }
+
+    #[test]
+    fn errores_de_gcc_en_espanol_y_sin_notas_repetidas() {
+        let salida = "main.c:3:5: error: implicit declaration of function 'printf' [-Wimplicit-function-declaration]\n\
+                      main.c:1:1: note: include '<stdio.h>' or provide a declaration of 'printf'\n\
+                      main.c:3:5: warning: incompatible implicit declaration of built-in function 'printf' [-Wbuiltin-declaration-mismatch]\n\
+                      main.c:4:5: error: 'x' undeclared (first use in this function)\n\
+                      main.c:4:5: note: each undeclared identifier is reported only once for each function it appears in\n";
+        let d = parsear_gcc(salida, Path::new("/tp"));
+        assert_eq!(d.len(), 2, "{d:#?}");
+        assert_eq!(
+            d[0].resumen.as_deref(),
+            Some("«printf» se usa sin estar declarada: agregá «#include <stdio.h>» al principio del archivo")
+        );
+        assert!(d[1]
+            .resumen
+            .as_deref()
+            .unwrap()
+            .starts_with("«x» no está declarada"));
     }
 
     #[test]

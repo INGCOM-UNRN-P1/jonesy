@@ -1,0 +1,1145 @@
+# Errores y advertencias de gcc explicados para quien empieza con C.
+#
+# Cada entrada reconoce uno o más mensajes de gcc (en inglés: jonesy compila con
+# LC_MESSAGES=C para que no dependan del idioma del sistema). La primera que coincide gana,
+# así que las específicas van antes que las generales.
+#
+#   patrones     textos del mensaje; {} captura lo que haya hasta el texto siguiente.
+#                Las comillas ‘’ y ` se normalizan a ' antes de comparar.
+#   resumen      una línea en español: se muestra en Problemas y al final de la línea.
+#                {1}, {2}… son las capturas; {include} sugiere el header que declara {1}.
+#   explicacion  qué significa y cómo se arregla (F1).
+#   mal / bien   ejemplo mínimo.
+#   sin_puntero  capturas que no pueden contener «*» (para distinguir tipos).
+#   ocultar      notas de gcc que repiten lo que ya dice otra entrada.
+
+# ------------------------------------------------------------------ sintaxis
+
+[[error]]
+id = "falta-punto-y-coma"
+patrones = [
+  "expected ';' before",
+  "expected ',' or ';' before",
+  "expected '=', ',', ';', 'asm' or '__attribute__' before",
+  "expected ';' at end of",
+]
+resumen = "Falta un «;» al final de la instrucción anterior (mirá la línea de arriba)"
+explicacion = """
+Cada instrucción de C termina con `;`. gcc se da cuenta recién cuando lee lo que sigue,
+por eso el error suele señalar **la línea siguiente** a la que le falta el punto y coma.
+"""
+mal = """
+int x = 1
+return x;
+"""
+bien = """
+int x = 1;
+return x;
+"""
+
+[[error]]
+id = "llave-sin-cerrar"
+patrones = ["expected declaration or statement at end of input"]
+resumen = "El archivo terminó con una llave «{» sin cerrar"
+explicacion = """
+Cada `{` necesita su `}`. Contá las llaves de la función donde empieza el problema:
+casi siempre falta cerrar un `if`, un ciclo o la función misma. Autoformato (Editar) ayuda
+a ver la estructura: el bloque mal cerrado queda con la sangría corrida.
+"""
+mal = """
+int main(void)
+{
+    if (x > 0) {
+        return 1;
+    return 0;
+}
+"""
+bien = """
+int main(void)
+{
+    if (x > 0) {
+        return 1;
+    }
+    return 0;
+}
+"""
+
+[[error]]
+id = "fuera-de-funcion"
+patrones = ["expected identifier or '(' before"]
+resumen = "Hay código fuera de una función, o una llave «}» de más que cerró la función antes"
+explicacion = """
+Fuera de las funciones sólo pueden ir declaraciones (`#include`, prototipos, tipos,
+variables globales). Si hay instrucciones sueltas, suele ser porque una `}` de más cerró
+la función antes de tiempo, o porque falta la línea con el nombre de la función.
+"""
+mal = """
+int main(void)
+{
+    int x = 1;
+    }
+    return x;
+}
+"""
+bien = """
+int main(void)
+{
+    int x = 1;
+    return x;
+}
+"""
+
+[[error]]
+id = "expresion-esperada"
+patrones = ["expected expression before '{}'"]
+resumen = "Falta un valor antes de «{1}» (o sobra un símbolo)"
+explicacion = """
+gcc esperaba un valor (un número, una variable, una llamada) y encontró otra cosa. Pasa
+con asignaciones incompletas (`x = ;`), operadores de más (`a + * b`) o un paréntesis o
+coma fuera de lugar.
+"""
+mal = "int a = ;"
+bien = "int a = 0;"
+
+[[error]]
+id = "falta-parentesis"
+patrones = ["expected ')' before '{}'"]
+resumen = "Falta cerrar un paréntesis «)» antes de «{1}»"
+explicacion = """
+Cada `(` necesita su `)`. Revisá las condiciones de `if`/`while` y las llamadas con
+paréntesis anidados: contá cuántos abren y cuántos cierran.
+"""
+mal = "if ((a + b > 0) {"
+bien = "if ((a + b) > 0) {"
+
+[[error]]
+id = "falta-algo"
+patrones = ["expected '{}' before '{}'"]
+resumen = "Falta «{1}» antes de «{2}»"
+explicacion = """
+gcc esperaba encontrar el símbolo indicado y encontró otro. Mirá la línea señalada y la
+anterior: suele faltar un `;`, un `)` o una `}`.
+"""
+mal = "while (i < n {"
+bien = "while (i < n) {"
+
+[[error]]
+id = "caracter-extrano"
+patrones = ["stray '{}' in program"]
+resumen = "Hay un carácter que C no entiende (comillas “curvas” o símbolos copiados de un PDF o Word)"
+explicacion = """
+El código tiene un carácter fuera de ASCII: comillas tipográficas (“ ” ‘ ’), guiones
+largos (–), espacios especiales. Aparecen al copiar código de un PDF, una página o un
+procesador de texto. Borrá ese carácter y escribilo de nuevo con el teclado.
+"""
+mal = "printf(“hola”);"
+bien = "printf(\"hola\");"
+
+[[error]]
+id = "comilla-sin-cerrar"
+patrones = ["missing terminating \" character", "missing terminating ' character"]
+resumen = "Una cadena o un carácter no cierra sus comillas en esta línea"
+explicacion = """
+Las cadenas van entre comillas dobles (`"hola"`) y los caracteres entre simples (`'a'`),
+y tienen que cerrarse en la misma línea. Si la cadena tiene una comilla adentro,
+escribila como `\\"`.
+"""
+mal = "printf(\"hola);"
+bien = "printf(\"hola\");"
+
+[[error]]
+id = "else-sin-if"
+patrones = ["'else' without a previous 'if'"]
+resumen = "«else» sin «if»: revisá las llaves y que no haya un «;» después del if"
+explicacion = """
+El `else` tiene que venir inmediatamente después del bloque del `if`. Si el `if` tiene
+varias instrucciones sin llaves, o un `;` después de la condición, el `else` queda suelto.
+"""
+mal = """
+if (a > 0)
+    x = 1;
+    y = 2;
+else
+    x = 0;
+"""
+bien = """
+if (a > 0) {
+    x = 1;
+    y = 2;
+} else {
+    x = 0;
+}
+"""
+
+[[error]]
+id = "break-fuera"
+patrones = ["break statement not within loop or switch"]
+resumen = "«break» sólo puede ir dentro de un ciclo o de un switch"
+explicacion = """
+`break` corta un `for`, `while`, `do` o `switch`. Para salir de una función se usa
+`return`. Si está dentro de un `if` que está en un ciclo, revisá las llaves: puede que el
+`if` haya quedado fuera del ciclo.
+"""
+mal = """
+if (error) {
+    break;
+}
+"""
+bien = """
+if (error) {
+    return 1;
+}
+"""
+
+[[error]]
+id = "tipo-de-retorno"
+patrones = ["return type defaults to 'int'"]
+resumen = "Falta el tipo de retorno de la función (por ejemplo «int main(void)»)"
+explicacion = """
+Toda función declara qué devuelve antes del nombre: `int`, `void`, `char *`… El C
+moderno no supone `int`.
+"""
+mal = "main(void)"
+bien = "int main(void)"
+
+# ------------------------------------------------------------------ declaraciones
+
+[[error]]
+id = "no-declarada-ruido"
+patrones = ["each undeclared identifier is reported only once"]
+resumen = ""
+ocultar = true
+
+[[error]]
+id = "no-declarada"
+patrones = ["'{}' undeclared"]
+resumen = "«{1}» no está declarada: falta declararla con su tipo, o hay un error de tipeo"
+explicacion = """
+En C cada variable se declara (con su tipo) antes de usarla, y sólo existe dentro del
+bloque `{ }` donde se declaró. Revisá:
+
+- que esté escrita igual (mayúsculas y minúsculas importan);
+- que esté declarada antes de esta línea;
+- que no se haya declarado dentro de otro bloque (un `for`, un `if`) que ya terminó.
+"""
+mal = """
+for (int i = 0; i < n; i++) {
+    suma += v[i];
+}
+printf("%d", i);
+"""
+bien = """
+int i;
+for (i = 0; i < n; i++) {
+    suma += v[i];
+}
+printf("%d", i);
+"""
+
+[[error]]
+id = "nota-include"
+patrones = ["include '<{}>' or provide a declaration of"]
+resumen = ""
+ocultar = true
+
+[[error]]
+id = "builtin-incompatible"
+patrones = ["incompatible implicit declaration of built-in function"]
+resumen = ""
+ocultar = true
+
+[[error]]
+id = "declaracion-implicita"
+patrones = ["implicit declaration of function '{}'"]
+resumen = "«{1}» se usa sin estar declarada: {include}"
+explicacion = """
+Para llamar a una función, el compilador tiene que conocer antes su prototipo (qué recibe
+y qué devuelve). Las de la biblioteca estándar se declaran en su header (`printf` en
+`stdio.h`, `malloc` en `stdlib.h`, `strlen` en `string.h`). Las propias necesitan su
+prototipo arriba del archivo o en un `.h` incluido. También puede ser un error de tipeo
+en el nombre.
+"""
+mal = """
+int main(void)
+{
+    printf("hola\\n");
+    return 0;
+}
+"""
+bien = """
+#include <stdio.h>
+
+int main(void)
+{
+    printf("hola\\n");
+    return 0;
+}
+"""
+
+[[error]]
+id = "tipo-desconocido"
+patrones = ["unknown type name '{}'"]
+resumen = "«{1}» no es un tipo conocido: {include}"
+explicacion = """
+El tipo no está definido en este punto. Si es de la biblioteca estándar falta su header
+(`bool` → `stdbool.h`, `size_t` → `stddef.h`, `FILE` → `stdio.h`). Si es tuyo
+(`typedef`), tiene que estar definido antes o en un `.h` incluido.
+"""
+mal = "bool listo = false;"
+bien = """
+#include <stdbool.h>
+
+bool listo = false;
+"""
+
+[[error]]
+id = "nota-header-tipo"
+patrones = ["is defined in header '<{}>'; this is probably fixable by adding"]
+resumen = ""
+ocultar = true
+
+[[error]]
+id = "biblioteca-no-encontrada"
+patrones = ["cannot find -l{}: ", "cannot find -l{}"]
+resumen = "No se encontró la biblioteca «{1}»: compilala primero (make en su carpeta) o revisá -L"
+explicacion = """
+`-lnombre` busca `libnombre.a` (o `.so`) en las carpetas de `-L`. Si es una biblioteca de
+la cátedra, compilala primero; jonesy lo hace con F6 desde un ejercicio que la usa.
+"""
+mal = "gcc main.c -llista            # liblista.a no existe todavía"
+bien = "make -C ../lista && gcc main.c -L../lista -llista"
+
+[[error]]
+id = "include-no-encontrado"
+patrones = ["{}: No such file or directory"]
+resumen = "No se encontró «{1}»: revisá el nombre, la carpeta, y si va entre <> (sistema) o \"\" (tuyo)"
+explicacion = """
+`#include <x.h>` busca en los headers del sistema; `#include "x.h"` busca primero junto al
+archivo. Para headers de una biblioteca de la cátedra, el Makefile tiene que pasar su
+carpeta con `-I`. Revisá también mayúsculas y la extensión.
+"""
+mal = "#include <lista.h>"
+bien = "#include \"lista.h\""
+
+[[error]]
+id = "tipos-en-conflicto"
+patrones = ["conflicting types for '{}'"]
+resumen = "La declaración de «{1}» no coincide con otra (prototipo y definición tienen que ser iguales)"
+explicacion = """
+El prototipo y la definición de una función tienen que tener exactamente el mismo tipo de
+retorno y los mismos parámetros. También aparece si se usa una función antes de
+declararla: gcc supone un prototipo y después no coincide.
+"""
+mal = """
+int promedio(int v[], int n);
+float promedio(int v[], int n) { … }
+"""
+bien = """
+float promedio(int v[], int n);
+float promedio(int v[], int n) { … }
+"""
+
+[[error]]
+id = "redefinicion"
+patrones = ["redefinition of '{}'", "'{}' redeclared as different kind of symbol"]
+resumen = "«{1}» ya estaba declarada en este lugar: usá otro nombre, o sacá el tipo para sólo asignar"
+explicacion = """
+No se puede declarar dos veces el mismo nombre en el mismo bloque (ni una variable con el
+nombre de un parámetro). Si querías cambiarle el valor, asigná sin repetir el tipo.
+"""
+mal = """
+int total = 0;
+int total = 5;
+"""
+bien = """
+int total = 0;
+total = 5;
+"""
+
+[[error]]
+id = "solo-lectura"
+patrones = ["assignment of read-only variable '{}'", "assignment of read-only location", "assignment of read-only parameter '{}'"]
+resumen = "«{1}» es const: no se puede modificar"
+explicacion = """
+Algo declarado `const` (o un parámetro `const char *`) promete no cambiar. Si necesitás
+modificarlo, trabajá sobre una copia o sacá el `const` si de verdad corresponde.
+"""
+mal = """
+const int max = 10;
+max = 20;
+"""
+bien = """
+const int max = 10;
+int limite = max * 2;
+"""
+
+# ------------------------------------------------------------------ funciones
+
+[[error]]
+id = "pocos-argumentos"
+patrones = ["too few arguments to function '{}'"]
+resumen = "Faltan argumentos al llamar a «{1}» (mirá su prototipo)"
+explicacion = """
+Una llamada tiene que pasar exactamente un argumento por cada parámetro del prototipo, en
+el mismo orden. La nota de gcc («declared here») señala dónde está declarada.
+"""
+mal = "int r = sumar(1);"
+bien = "int r = sumar(1, 2);"
+
+[[error]]
+id = "muchos-argumentos"
+patrones = ["too many arguments to function '{}'"]
+resumen = "Sobran argumentos al llamar a «{1}» (mirá su prototipo)"
+explicacion = """
+Una llamada tiene que pasar exactamente un argumento por cada parámetro del prototipo. Si
+la función tiene que recibir más datos, cambiá el prototipo y la definición.
+"""
+mal = "int r = doble(1, 2);"
+bien = "int r = doble(1);"
+
+[[error]]
+id = "return-con-valor"
+patrones = ["'return' with a value, in function returning void"]
+resumen = "La función es «void»: no puede devolver un valor"
+explicacion = """
+Una función `void` no devuelve nada: su `return` va solo (`return;`). Si tiene que
+devolver un resultado, cambiá su tipo de retorno.
+"""
+mal = "void imprimir(int x) { printf(\"%d\", x); return 1; }"
+bien = "void imprimir(int x) { printf(\"%d\", x); return; }"
+
+[[error]]
+id = "return-sin-valor"
+patrones = ["'return' with no value, in function returning non-void"]
+resumen = "La función debe devolver un valor: el «return» necesita una expresión"
+explicacion = """
+Si la función declara que devuelve algo (`int`, `char *`…), todos sus `return` tienen
+que devolver un valor de ese tipo.
+"""
+mal = "int buscar(…) { if (…) return; … }"
+bien = "int buscar(…) { if (…) return -1; … }"
+
+[[error]]
+id = "sin-return"
+patrones = ["control reaches end of non-void function"]
+resumen = "La función puede terminar sin «return»: algún camino no devuelve valor"
+explicacion = """
+Todos los caminos de una función que no es `void` tienen que terminar en un `return`. Lo
+típico: un `return` dentro de un `if` o de un ciclo, y nada al final para cuando la
+condición no se cumple. Si la función llega al final sin devolver, quien la llamó recibe
+basura.
+"""
+mal = """
+int signo(int x)
+{
+    if (x > 0) {
+        return 1;
+    } else if (x < 0) {
+        return -1;
+    }
+}
+"""
+bien = """
+int signo(int x)
+{
+    if (x > 0) {
+        return 1;
+    } else if (x < 0) {
+        return -1;
+    }
+    return 0;
+}
+"""
+
+[[error]]
+id = "no-es-funcion"
+patrones = ["called object '{}' is not a function", "called object is not a function"]
+resumen = "«{1}» no es una función (¿una variable con el mismo nombre que la función?)"
+explicacion = """
+Se usan paréntesis de llamada sobre algo que no es una función. Pasa cuando una variable
+local tapa a una función con el mismo nombre, o al olvidar un operador (`2(x + 1)` en vez
+de `2 * (x + 1)`).
+"""
+mal = "int y = 2(x + 1);"
+bien = "int y = 2 * (x + 1);"
+
+[[error]]
+id = "valor-void"
+patrones = ["void value not ignored as it ought to be"]
+resumen = "Se usa el resultado de una función «void», que no devuelve nada"
+explicacion = """
+Una función `void` no devuelve valor: no se puede asignar ni usar su llamada en una
+expresión. O la función tiene que devolver algo, o se la llama sola.
+"""
+mal = "int r = imprimir_lista(l);"
+bien = "imprimir_lista(l);"
+
+[[error]]
+id = "direccion-local"
+patrones = ["function returns address of local variable"]
+resumen = "Se devuelve la dirección de una variable local, que deja de existir al salir de la función"
+explicacion = """
+Las variables locales viven en la pila y desaparecen cuando la función termina: el
+puntero devuelto queda apuntando a memoria inválida. Para devolver un arreglo o una
+estructura nueva, pedí la memoria con `malloc` (y que quien llama haga `free`), o recibí
+el lugar donde escribir como parámetro.
+"""
+mal = """
+int *crear(void)
+{
+    int v[10];
+    return v;
+}
+"""
+bien = """
+int *crear(void)
+{
+    int *v = malloc(10 * sizeof *v);
+    return v;
+}
+"""
+
+[[error]]
+id = "valor-ignorado"
+patrones = ["ignoring return value of '{}'"]
+resumen = "Se ignora lo que devuelve «{1}»: conviene verificarlo (¿falló?)"
+explicacion = """
+Funciones como `scanf`, `fgets` o `malloc` avisan si fallaron con su valor de retorno.
+Ignorarlo hace que el programa siga con datos inválidos.
+"""
+mal = "scanf(\"%d\", &n);"
+bien = """
+if (scanf("%d", &n) != 1) {
+    return 1;
+}
+"""
+
+# ------------------------------------------------------------------ printf y scanf
+
+[[error]]
+id = "formato-arreglo-con-ampersand"
+patrones = ["expects argument of type 'char *', but argument {} has type 'char (*)[{}]'"]
+resumen = "Con %s no va «&»: el nombre del arreglo ya es su dirección"
+explicacion = """
+Un arreglo usado en una expresión se convierte en un puntero a su primer elemento. Por
+eso `scanf("%s", nombre)` ya recibe la dirección; `&nombre` es un puntero a todo el
+arreglo, de otro tipo.
+"""
+mal = "scanf(\"%9s\", &nombre);"
+bien = "scanf(\"%9s\", nombre);"
+
+[[error]]
+id = "formato-espera-puntero"
+patrones = ["format '{}' expects argument of type '{} *', but argument {} has type '{}'"]
+sin_puntero = [4]
+resumen = "«{1}» espera la dirección de una variable y el argumento {3} es un valor: en scanf falta «&»"
+explicacion = """
+`scanf` necesita saber **dónde** guardar lo que lee, así que recibe direcciones: `&n`
+para un `int`, `&x` para un `double`. (Las cadenas son la excepción: un arreglo de
+`char` ya es una dirección.) En `printf`, `%s` espera una cadena, no un número.
+"""
+mal = "scanf(\"%d\", n);"
+bien = "scanf(\"%d\", &n);"
+
+[[error]]
+id = "formato-tipo"
+patrones = ["format '{}' expects argument of type '{}', but argument {} has type '{}'"]
+resumen = "«{1}» es para {2}, pero el argumento {3} es {4}: usá el especificador que corresponde"
+explicacion = """
+Cada `%` del formato tiene que coincidir con el tipo de su argumento. Los más usados:
+
+| Tipo | printf | scanf |
+|---|---|---|
+| `int` | `%d` | `%d` |
+| `double` | `%f` | `%lf` |
+| `char` | `%c` | ` %c` |
+| cadena | `%s` | `%s` (sin `&`) |
+| `size_t` | `%zu` | `%zu` |
+| puntero | `%p` | — |
+
+Con el especificador equivocado se imprime basura o el programa falla.
+"""
+mal = "printf(\"%d\\n\", promedio);   /* promedio es double */"
+bien = "printf(\"%f\\n\", promedio);"
+
+[[error]]
+id = "formato-muchos-argumentos"
+patrones = ["too many arguments for format"]
+resumen = "Hay más argumentos que especificadores «%» en el formato"
+explicacion = """
+Cada argumento después del formato tiene que tener su `%` correspondiente. Falta un
+especificador, o sobra un argumento.
+"""
+mal = "printf(\"total\\n\", total);"
+bien = "printf(\"total: %d\\n\", total);"
+
+[[error]]
+id = "formato-pocos-argumentos"
+patrones = ["too few arguments for format"]
+resumen = "Hay más especificadores «%» que argumentos: falta pasar un valor"
+explicacion = """
+Cada `%` del formato consume un argumento. Si faltan, `printf` lee basura de la memoria.
+Para imprimir un `%` literal se escribe `%%`.
+"""
+mal = "printf(\"%d de %d\\n\", hechos);"
+bien = "printf(\"%d de %d\\n\", hechos, total);"
+
+[[error]]
+id = "formato-no-literal"
+patrones = ["format not a string literal and no format arguments"]
+resumen = "printf(cadena) es peligroso: usá printf(\"%s\", cadena)"
+explicacion = """
+Si la cadena tiene un `%`, `printf` la interpreta como formato y lee argumentos que no
+existen. Para imprimir texto variable, usá siempre un formato fijo.
+"""
+mal = "printf(nombre);"
+bien = "printf(\"%s\", nombre);"
+
+# ------------------------------------------------------------------ punteros y tipos
+
+[[error]]
+id = "puntero-desde-entero"
+patrones = ["makes pointer from integer without a cast"]
+resumen = "Se usa un entero donde va un puntero (¿falta «&»? ¿o la función devuelve otra cosa?)"
+explicacion = """
+Un puntero guarda una **dirección**; un entero, un número. Mezclarlos casi siempre es un
+error: falta `&` para tomar la dirección de una variable, se pasó la variable en vez de su
+dirección, o se usa una función sin su `#include` (y gcc supone que devuelve `int`).
+"""
+mal = """
+int x = 5;
+int *p = x;
+"""
+bien = """
+int x = 5;
+int *p = &x;
+"""
+
+[[error]]
+id = "entero-desde-puntero"
+patrones = ["makes integer from pointer without a cast"]
+resumen = "Se usa un puntero donde va un entero (¿falta «*» para leer el valor apuntado?)"
+explicacion = """
+Para obtener el valor al que apunta un puntero se usa `*p`. Usar `p` solo da la dirección.
+Con cadenas: un `char` va entre comillas simples (`'a'`); entre dobles (`"a"`) es una
+cadena, o sea un puntero.
+"""
+mal = """
+int *p = &x;
+int y = p;
+"""
+bien = """
+int *p = &x;
+int y = *p;
+"""
+
+[[error]]
+id = "puntero-incompatible"
+patrones = ["from incompatible pointer type", "incompatible pointer type"]
+resumen = "Los punteros apuntan a tipos distintos"
+explicacion = """
+Un `int *` no es un `char *` ni un `double *`: el compilador necesita saber qué hay en la
+dirección para leerla bien. Revisá el tipo de la variable y el del parámetro (la nota
+«expected … but argument is of type …» dice ambos).
+"""
+mal = """
+void llenar(int *v);
+char c;
+llenar(&c);
+"""
+bien = """
+void llenar(int *v);
+int n;
+llenar(&n);
+"""
+
+[[error]]
+id = "tipos-incompatibles"
+patrones = ["incompatible types when assigning to type '{}' from type '{}'", "incompatible types when initializing type '{}' using type '{}'", "incompatible types when returning type '{}' but '{}' was expected"]
+resumen = "No se puede asignar un valor de tipo «{2}» a «{1}»"
+explicacion = """
+Los dos lados de la asignación tienen tipos que C no convierte solo (por ejemplo una
+`struct` y un `int`, o una `struct` y un puntero a ella: ahí falta `*`).
+"""
+mal = """
+nodo_t *p = …;
+nodo_t n = p;
+"""
+bien = """
+nodo_t *p = …;
+nodo_t n = *p;
+"""
+
+[[error]]
+id = "lvalue"
+patrones = ["lvalue required as left operand of assignment", "lvalue required as increment operand", "lvalue required as decrement operand"]
+resumen = "A la izquierda del «=» tiene que haber una variable (algo que se pueda modificar)"
+explicacion = """
+Sólo se puede asignar a una variable, a un elemento de un arreglo o a lo apuntado por un
+puntero. No a una cuenta (`a + 1 = 3`) ni a una constante. ¿Querías comparar con `==`?
+"""
+mal = "if (x + 1 = y) {"
+bien = "if (x + 1 == y) {"
+
+[[error]]
+id = "asignar-arreglo"
+patrones = ["assignment to expression with array type"]
+resumen = "Los arreglos no se asignan con «=»: copiá con strcpy (cadenas) o elemento por elemento"
+explicacion = """
+El nombre de un arreglo no es una variable que se pueda reasignar. Para cadenas usá
+`strcpy`/`strncpy` (de `string.h`); para otros arreglos, un ciclo o `memcpy`. Sí se puede
+inicializar con `=` al declarar.
+"""
+mal = """
+char nombre[20];
+nombre = "Ana";
+"""
+bien = """
+char nombre[20];
+strcpy(nombre, "Ana");
+"""
+
+[[error]]
+id = "subindice"
+patrones = ["subscripted value is neither array nor pointer nor vector"]
+resumen = "Se usa «[ ]» sobre algo que no es arreglo ni puntero"
+explicacion = """
+Los corchetes acceden a un elemento de un arreglo o de lo apuntado por un puntero. Si la
+variable es un número, revisá el nombre: puede que una variable local tape al arreglo.
+"""
+mal = """
+int v = 3;
+int x = v[0];
+"""
+bien = """
+int v[3] = {1, 2, 3};
+int x = v[0];
+"""
+
+[[error]]
+id = "flecha"
+patrones = ["'{}' is a pointer; did you mean to use '->'?"]
+resumen = "«{1}» es un puntero a struct: accedé a los campos con «->», no con «.»"
+explicacion = """
+Con una `struct` se usa `.`; con un **puntero** a struct, `->` (que es lo mismo que
+`(*p).campo`).
+"""
+mal = "p.valor = 3;"
+bien = "p->valor = 3;"
+
+[[error]]
+id = "punto"
+patrones = ["invalid type argument of '->'"]
+resumen = "Se usa «->» sobre una struct que no es puntero: usá «.»"
+explicacion = """
+`->` es para punteros a struct. Si la variable es la struct misma, sus campos se acceden
+con `.`.
+"""
+mal = """
+nodo_t n;
+n->valor = 3;
+"""
+bien = """
+nodo_t n;
+n.valor = 3;
+"""
+
+[[error]]
+id = "no-es-struct"
+patrones = ["request for member '{}' in something not a structure or union"]
+resumen = "Se pide el campo «{1}» de algo que no es una struct"
+explicacion = """
+El `.` (o `->`) sólo funciona sobre structs. Revisá el tipo de la variable: puede ser un
+puntero a puntero, un número, o una variable que tapa a otra.
+"""
+mal = "int n; n.valor = 1;"
+bien = "nodo_t n; n.valor = 1;"
+
+[[error]]
+id = "sin-miembro"
+patrones = ["'{}' has no member named '{}'"]
+resumen = "«{1}» no tiene un campo «{2}» (revisá el nombre en la definición de la struct)"
+explicacion = """
+El campo no existe en esa struct. Revisá cómo se llama en su definición (mayúsculas,
+plural/singular) y que la variable sea del tipo que creés.
+"""
+mal = "l->cant = 0;   /* el campo se llama cantidad */"
+bien = "l->cantidad = 0;"
+
+[[error]]
+id = "tipo-incompleto"
+patrones = ["invalid use of undefined type '{}'", "dereferencing pointer to incomplete type '{}'"]
+resumen = "La definición de «{1}» no está visible aquí: incluí el .h que la define"
+explicacion = """
+Se declaró que el tipo existe (`struct nodo;`) pero no qué campos tiene, así que no se
+puede acceder a ellos. Incluí el header con la definición completa, o — si el tipo es
+opaco a propósito — usá las funciones de su biblioteca en vez de tocar sus campos.
+"""
+mal = """
+struct nodo;
+int v = n->valor;
+"""
+bien = """
+#include "nodo.h"   /* define struct nodo { int valor; … } */
+int v = n->valor;
+"""
+
+[[error]]
+id = "operandos-invalidos"
+patrones = ["invalid operands to binary {} (have '{}' and '{}')"]
+resumen = "El operador «{1}» no se puede usar entre «{2}» y «{3}» (las cadenas no se suman ni se comparan así)"
+explicacion = """
+Los operadores aritméticos trabajan con números. Las cadenas en C son arreglos: se
+concatenan con `strcat`/`snprintf` y se comparan con `strcmp`. Con structs, operá campo
+por campo.
+"""
+mal = "char *saludo = \"hola \" + nombre;"
+bien = "snprintf(saludo, sizeof saludo, \"hola %s\", nombre);"
+
+[[error]]
+id = "comparar-cadenas"
+patrones = ["comparison with string literal results in unspecified behavior"]
+resumen = "Las cadenas no se comparan con «==»: usá strcmp(a, b) == 0"
+explicacion = """
+`==` entre cadenas compara **direcciones**, no contenido. Para saber si dos cadenas son
+iguales se usa `strcmp` de `string.h`, que devuelve 0 cuando coinciden.
+"""
+mal = "if (opcion == \"salir\") {"
+bien = "if (strcmp(opcion, \"salir\") == 0) {"
+
+[[error]]
+id = "puntero-con-entero"
+patrones = ["comparison between pointer and integer"]
+resumen = "Se compara un puntero con un entero (¿falta «*»? ¿un carácter va con comillas simples?)"
+explicacion = """
+Un puntero guarda una dirección: compararlo con un número casi nunca es lo que se quiere.
+Si querés el valor apuntado, usá `*p`. Para comparar un carácter de una cadena, usá
+comillas simples: `s[0] == 'a'`.
+"""
+mal = "if (s[0] == \"a\") {"
+bien = "if (s[0] == 'a') {"
+
+[[error]]
+id = "sizeof-puntero"
+patrones = ["argument to 'sizeof' in '{}' call is the same expression as the destination"]
+resumen = "sizeof de un puntero da el tamaño del puntero (8), no el del arreglo: pasá el largo como parámetro"
+explicacion = """
+Un arreglo pasado a una función llega como puntero: `sizeof` ya no sabe cuántos elementos
+tenía. Pasá la cantidad como otro parámetro.
+"""
+mal = "void limpiar(char *s) { memset(s, 0, sizeof(s)); }"
+bien = "void limpiar(char *s, size_t largo) { memset(s, 0, largo); }"
+
+[[error]]
+id = "free-no-heap"
+patrones = ["called on unallocated object"]
+resumen = "Se libera con free algo que no se pidió con malloc"
+explicacion = """
+`free` sólo recibe punteros devueltos por `malloc`, `calloc` o `realloc`. Las variables
+locales y los arreglos comunes se liberan solos al salir de la función.
+"""
+mal = """
+int x;
+free(&x);
+"""
+bien = """
+int *x = malloc(sizeof *x);
+free(x);
+"""
+
+# ------------------------------------------------------------------ advertencias
+
+[[error]]
+id = "sin-inicializar"
+patrones = ["'{}' is used uninitialized", "'{}' may be used uninitialized"]
+resumen = "«{1}» se usa antes de darle un valor: contiene basura"
+explicacion = """
+Las variables locales no empiezan en 0: tienen lo que haya quedado en esa memoria. Dale
+un valor al declararla, o asegurate de que todos los caminos le asignen algo antes de
+usarla. En `scanf`, revisá que la llamada tenga `&`.
+"""
+mal = """
+int suma;
+for (int i = 0; i < n; i++) {
+    suma += v[i];
+}
+"""
+bien = """
+int suma = 0;
+for (int i = 0; i < n; i++) {
+    suma += v[i];
+}
+"""
+
+[[error]]
+id = "asignacion-en-condicion"
+patrones = ["suggest parentheses around assignment used as truth value"]
+resumen = "¿Quisiste comparar? «=» asigna, «==» compara"
+explicacion = """
+`if (a = 2)` **asigna** 2 a `a` y la condición siempre es verdadera. Para comparar se usa
+`==`. Si la asignación es a propósito (`while ((c = getchar()) != EOF)`), envolvela en
+paréntesis y compará el resultado.
+"""
+mal = "if (opcion = 0) {"
+bien = "if (opcion == 0) {"
+
+[[error]]
+id = "cuerpo-vacio"
+patrones = ["suggest braces around empty body in"]
+resumen = "Hay un «;» justo después de la condición: el if/for/while queda sin cuerpo"
+explicacion = """
+`if (x > 0);` termina ahí: el bloque de abajo se ejecuta siempre. Sacá el `;` que está
+después del paréntesis.
+"""
+mal = """
+for (i = 0; i < n; i++);
+{
+    suma += v[i];
+}
+"""
+bien = """
+for (i = 0; i < n; i++) {
+    suma += v[i];
+}
+"""
+
+[[error]]
+id = "indentacion-ruido"
+patrones = ["but the latter is misleadingly indented"]
+resumen = ""
+ocultar = true
+
+[[error]]
+id = "indentacion"
+patrones = ["this '{}' clause does not guard"]
+resumen = "Sólo la primera instrucción depende del «{1}»: para varias, usá llaves { }"
+explicacion = """
+Sin llaves, un `if`, `for` o `while` controla **una sola** instrucción, aunque las
+siguientes estén con la misma sangría. Poner siempre llaves evita este error.
+"""
+mal = """
+if (error)
+    printf("falló\\n");
+    return 1;
+"""
+bien = """
+if (error) {
+    printf("falló\\n");
+    return 1;
+}
+"""
+
+[[error]]
+id = "caida-switch"
+patrones = ["this statement may fall through"]
+resumen = "Falta «break» al final de este case: sigue ejecutando el siguiente"
+explicacion = """
+En un `switch`, después de un `case` la ejecución **sigue** en el próximo hasta encontrar
+un `break`. Agregalo al final de cada caso.
+"""
+mal = """
+case 1:
+    x = 10;
+case 2:
+    x = 20;
+    break;
+"""
+bien = """
+case 1:
+    x = 10;
+    break;
+case 2:
+    x = 20;
+    break;
+"""
+
+[[error]]
+id = "sin-efecto"
+patrones = ["statement with no effect", "value computed is not used"]
+resumen = "Esta instrucción no hace nada (¿«==» en vez de «=»?)"
+explicacion = """
+La línea calcula algo y descarta el resultado. Lo típico es `a == 2;` cuando se quería
+asignar (`a = 2;`), o `*p++;` cuando se quería `(*p)++;`.
+"""
+mal = "total == 0;"
+bien = "total = 0;"
+
+[[error]]
+id = "variable-sin-uso"
+patrones = ["unused variable '{}'"]
+resumen = "La variable «{1}» se declara pero no se usa (¿sobra, o hay un error de tipeo?)"
+explicacion = """
+Una variable sin usar suele ser un resto de una versión anterior, o señal de que en otro
+lado se usó otra por error. Si sobra, borrala.
+"""
+mal = "int i, j;   /* j nunca se usa */"
+bien = "int i;"
+
+[[error]]
+id = "asignada-sin-usar"
+patrones = ["variable '{}' set but not used"]
+resumen = "A «{1}» se le asigna un valor que nunca se lee"
+explicacion = """
+El valor calculado no se usa en ningún lado: o sobra la variable, o falta usarla (por
+ejemplo, imprimirla o devolverla).
+"""
+mal = """
+int r = calcular(x);
+return 0;
+"""
+bien = """
+int r = calcular(x);
+return r;
+"""
+
+[[error]]
+id = "parametro-sin-uso"
+patrones = ["unused parameter '{}'"]
+resumen = "El parámetro «{1}» no se usa en la función"
+explicacion = """
+La función recibe un dato que no usa. Puede ser un error (se usa otra variable en su
+lugar) o un parámetro que sobra en el prototipo.
+"""
+mal = "int doble(int x, int y) { return 2 * x; }"
+bien = "int doble(int x) { return 2 * x; }"
+
+[[error]]
+id = "sin-uso-funcion"
+patrones = ["'{}' defined but not used"]
+resumen = "«{1}» está definida pero no se usa"
+explicacion = """
+Una función `static` (o variable) que nadie llama. Si sobra, borrala; si tenía que
+usarse, revisá dónde se llama.
+"""
+mal = "static int auxiliar(int x) { … }   /* nunca se llama */"
+bien = "/* se borró auxiliar, o se la llama donde corresponde */"
+
+[[error]]
+id = "signos-distintos"
+patrones = ["comparison of integer expressions of different signedness"]
+resumen = "Se compara un entero con signo con uno sin signo: un negativo se vuelve un número enorme"
+explicacion = """
+`size_t` y `unsigned` no tienen negativos: al comparar `-1 < (size_t) 3`, el `-1` se
+convierte en un número gigante y la comparación da falso. Usá el mismo tipo en los dos
+lados (típicamente `size_t` para índices y largos).
+"""
+mal = "for (int i = 0; i < strlen(s); i++)"
+bien = "for (size_t i = 0; i < strlen(s); i++)"
+
+[[error]]
+id = "division-cero"
+patrones = ["division by zero"]
+resumen = "División por cero: el programa se va a cortar (SIGFPE) al llegar acá"
+explicacion = """
+Dividir un entero por 0 no tiene resultado y termina el programa. Verificá el divisor
+antes de dividir.
+"""
+mal = "promedio = suma / cantidad;"
+bien = """
+if (cantidad > 0) {
+    promedio = suma / cantidad;
+}
+"""
+
+[[error]]
+id = "exceso-inicializador"
+patrones = ["excess elements in array initializer", "excess elements in scalar initializer"]
+resumen = "Hay más valores que lugares en el arreglo"
+explicacion = """
+El tamaño entre corchetes tiene que alcanzar para todos los valores. Podés dejar los
+corchetes vacíos y que el compilador cuente: `int v[] = {1, 2, 3};`.
+"""
+mal = "int v[2] = {1, 2, 3};"
+bien = "int v[3] = {1, 2, 3};"
+
+[[error]]
+id = "vla-inicializada"
+patrones = ["variable-sized object may not be initialized"]
+resumen = "Un arreglo de tamaño variable no se puede inicializar con { … }"
+explicacion = """
+Si el tamaño es una variable, el arreglo se crea al ejecutar y no admite inicializador.
+Usá un tamaño constante (`#define N 10`) o llenalo con un ciclo. Para tamaños que se
+conocen recién al ejecutar, lo habitual en la materia es `malloc`.
+"""
+mal = """
+int n = 10;
+int v[n] = {0};
+"""
+bien = """
+#define N 10
+int v[N] = {0};
+"""
+
+[[error]]
+id = "case-duplicado"
+patrones = ["duplicate case value"]
+resumen = "Dos «case» tienen el mismo valor"
+explicacion = "Cada `case` de un `switch` tiene que tener un valor distinto."
+mal = "case 1: … case 1: …"
+bien = "case 1: … case 2: …"
+
+[[error]]
+id = "fuera-de-rango"
+patrones = ["array subscript {} is above array bounds", "array subscript {} is below array bounds"]
+resumen = "El índice {1} está fuera del arreglo (va de 0 a tamaño − 1)"
+explicacion = """
+Un arreglo de `N` elementos tiene índices de `0` a `N - 1`. Acceder fuera lee o pisa otra
+memoria: el programa puede andar «de casualidad» y fallar después.
+"""
+mal = """
+int v[3];
+v[3] = 1;
+"""
+bien = """
+int v[3];
+v[2] = 1;
+"""
+
+# ------------------------------------------------------------------ enlazador
+
+[[error]]
+id = "sin-main"
+patrones = ["undefined reference to 'main'"]
+resumen = "No hay función main: el programa necesita una (¿compilaste sólo una biblioteca?)"
+explicacion = """
+Un programa ejecutable empieza en `main`. Si estás compilando una biblioteca, se compila
+con `-c` (objetos) y se enlaza con un programa que tenga `main`; si es un ejercicio,
+revisá que `main` esté escrito bien (`int main(void)`).
+"""
+mal = "int principal(void) { … }"
+bien = "int main(void) { … }"
+
+[[error]]
+id = "referencia-indefinida"
+patrones = ["undefined reference to '{}'"]
+resumen = "Se encontró la declaración de «{1}» pero no su código: falta compilar/enlazar el .c que la define (o hay un error de tipeo)"
+explicacion = """
+El prototipo (en el `.h`) le alcanza al compilador, pero el **enlazador** necesita el
+código de la función. Revisá que:
+
+- el `.c` que la define se compile junto con el programa (o la biblioteca esté en `-l`);
+- el nombre en la definición sea idéntico al del prototipo;
+- la definición no esté comentada o dentro de un `#if`.
+"""
+mal = "gcc main.c -o programa          # lista.c no se compila"
+bien = "gcc main.c lista.c -o programa"
+
+[[error]]
+id = "definicion-multiple"
+patrones = ["multiple definition of '{}'"]
+resumen = "«{1}» está definida dos veces: ¿una función con cuerpo dentro de un .h? ¿un .c incluido con #include?"
+explicacion = """
+Cada función o variable global se **define** en un solo `.c`. Los `.h` llevan sólo
+prototipos (y `extern` para variables). Si un `.h` con código se incluye desde dos `.c`,
+o se hace `#include "otro.c"`, la definición aparece dos veces.
+"""
+mal = """
+/* lista.h */
+int largo(lista_t *l) { return l->cantidad; }
+"""
+bien = """
+/* lista.h */
+int largo(lista_t *l);
+/* lista.c */
+int largo(lista_t *l) { return l->cantidad; }
+"""

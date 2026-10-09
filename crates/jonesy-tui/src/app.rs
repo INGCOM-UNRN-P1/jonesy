@@ -2826,12 +2826,28 @@ impl App {
                 .cloned(),
             _ => self.activo_ruta().and_then(|r| {
                 let (l, _) = self.buf().buf.linea_columna();
-                self.diagnosticos_linea(&r, l)
-                    .into_iter()
-                    .find(|d| d.codigo.is_some())
-                    .cloned()
+                let en_linea = self.diagnosticos_linea(&r, l);
+                // Primero los errores de gcc explicados (lo que impide compilar).
+                en_linea
+                    .iter()
+                    .find(|d| d.resumen.is_some())
+                    .or_else(|| en_linea.iter().find(|d| d.codigo.is_some()))
+                    .map(|d| (*d).clone())
             }),
         };
+        if let Some(e) = d
+            .as_ref()
+            .filter(|d| d.resumen.is_some())
+            .and_then(|d| jonesy_core::errores_gcc::explicar(&d.mensaje))
+        {
+            let ancho = self.tam.0.saturating_sub(10).clamp(40, 100);
+            self.modal = Some(Modal::Visor {
+                titulo: "Error de compilación".into(),
+                lineas: markdown::renderizar(&e.texto, ancho, &self.sim).lineas,
+                desplazamiento: 0,
+            });
+            return;
+        }
         let Some(d) = d.filter(|d| d.codigo.is_some()) else {
             self.abrir_paleta();
             return;
