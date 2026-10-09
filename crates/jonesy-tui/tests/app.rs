@@ -1393,3 +1393,94 @@ fn tema_se_elige_desde_la_config_y_se_cambia_y_recuerda() {
     assert_eq!(tema::actual(), Tema::Contraste);
     tema::usar(Tema::Oscuro);
 }
+
+/// Clic izquierdo en (x, y).
+fn clic(app: &mut App, x: u16, y: u16) {
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    app.evento(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: x,
+        row: y,
+        modifiers: KeyModifiers::NONE,
+    }));
+}
+
+/// Posición (columna, fila) de `texto` en la pantalla.
+fn buscar(p: &str, texto: &str) -> Option<(u16, u16)> {
+    p.lines().enumerate().find_map(|(y, l)| {
+        let i = l.find(texto)?;
+        Some((l[..i].chars().count() as u16, y as u16))
+    })
+}
+
+#[test]
+fn menu_con_el_mouse() {
+    use jonesy_tui::navegador::PestanaNav;
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut a, 160, 40);
+    // Clic en un título abre su menú.
+    let (x, y) = buscar(p.lines().next().unwrap(), "Archivo").unwrap();
+    clic(&mut a, x + 1, y);
+    assert!(matches!(a.modal, Some(Modal::Menu { .. })));
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Nuevo archivo"), "{p}");
+    // Con un menú abierto, clic en otro título cambia de menú.
+    let (x, y) = buscar(p.lines().next().unwrap(), "Ver").unwrap();
+    clic(&mut a, x + 1, y);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(!p.contains("Nuevo archivo"));
+    // Clic en una entrada ejecuta su acción y cierra el menú.
+    let (x, y) = buscar(&p, "Explorador de archivos").expect(&p);
+    clic(&mut a, x + 2, y);
+    assert!(a.modal.is_none());
+    assert_eq!(a.navegador, Some(PestanaNav::Archivos));
+    // Clic fuera del menú lo cierra sin hacer nada.
+    let p = pantalla(&mut a, 160, 40);
+    let (x, y) = buscar(p.lines().next().unwrap(), "Ver").unwrap();
+    clic(&mut a, x + 1, y);
+    assert!(matches!(a.modal, Some(Modal::Menu { .. })));
+    pantalla(&mut a, 160, 40);
+    clic(&mut a, 150, 30);
+    assert!(a.modal.is_none());
+    assert_eq!(a.navegador, Some(PestanaNav::Archivos));
+}
+
+#[test]
+fn compacto_con_la_barra_izquierda() {
+    use jonesy_tui::layout::Vista;
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("otro.c", "int otra_funcion(void) { return 7; }\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut a, 80, 24);
+    assert!(p.contains("printf"));
+    // La barra izquierda ocupa toda la pantalla.
+    a.accion(jonesy_tui::accion::Accion::Explorador);
+    let p = pantalla(&mut a, 80, 24);
+    assert_eq!(a.vista, Vista::Navegador);
+    assert!(p.contains("otro.c") && !p.contains("printf"), "{p}");
+    let izq = a.areas.izquierdo.expect("barra izquierda");
+    assert_eq!(izq.width, 80);
+    // Esc vuelve al código.
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 80, 24);
+    assert_eq!(a.vista, Vista::Codigo);
+    assert!(p.contains("printf"));
+    // Abrir un archivo desde la barra muestra el editor con ese archivo.
+    a.accion(jonesy_tui::accion::Accion::Explorador);
+    let p = pantalla(&mut a, 80, 24);
+    let (x, y) = buscar(&p, "otro.c").unwrap();
+    clic(&mut a, x, y);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 80, 24);
+    assert_eq!(a.buf().buf.nombre(), "otro.c");
+    assert!(p.contains("otra_funcion"), "{p}");
+    // Al agrandar la terminal la barra queda al costado del editor.
+    a.accion(jonesy_tui::accion::Accion::Explorador);
+    let p = pantalla(&mut a, 160, 40);
+    let izq = a.areas.izquierdo.expect("barra izquierda");
+    assert!(izq.width < 80 && a.areas.editor.is_some());
+    assert!(p.contains("otra_funcion"));
+}
