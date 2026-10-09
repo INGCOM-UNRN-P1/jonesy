@@ -594,6 +594,8 @@ pub struct App {
     /// El último programa se cortó por un error (violación de segmento, abort…): F5 lo
     /// depura sin detenerse en main, hasta la línea del fallo.
     pub ultimo_fallo: Option<&'static jonesy_core::fallos::Fallo>,
+    /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
+    inicio_pruebas: Option<std::time::SystemTime>,
     pub depuracion: Option<Depuracion>,
     pub breakpoints: BTreeSet<(PathBuf, usize)>,
 
@@ -752,6 +754,7 @@ impl App {
             ejecucion: None,
             vigilar_programa: false,
             ultimo_fallo: None,
+            inicio_pruebas: None,
             depuracion: None,
             breakpoints: BTreeSet::new(),
             repo,
@@ -2838,8 +2841,22 @@ impl App {
                     exit_code: codigo,
                 });
                 if lectura == Lectura::Pruebas {
-                    let r = jonesy_core::pruebas::interpretar(&salida, &self.proyecto.raiz);
-                    if r.reconocida {
+                    let raiz = self.proyecto.raiz.clone();
+                    let r = jonesy_core::pruebas::interpretar(&salida, &raiz);
+                    // Sin p1_test: SARIF (otros frameworks), en la salida o en el archivo
+                    // de [pruebas] sarif.
+                    let archivo = self.proyecto.config.pruebas.sarif.trim().to_string();
+                    let r = if r.reconocida {
+                        Some(r)
+                    } else {
+                        jonesy_core::pruebas::desde_sarif(
+                            &salida,
+                            (!archivo.is_empty()).then(|| Path::new(&archivo)),
+                            self.inicio_pruebas,
+                            &raiz,
+                        )
+                    };
+                    if let Some(r) = r {
                         self.fin_pruebas(r, codigo);
                         return;
                     }
@@ -3937,6 +3954,8 @@ impl App {
             );
             return;
         };
+        // Un poco antes, por la resolución de las fechas del sistema de archivos.
+        self.inicio_pruebas = Some(std::time::SystemTime::now() - Duration::from_secs(2));
         self.correr_en_panel_con(comando, Lectura::Pruebas);
     }
 

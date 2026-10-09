@@ -40,6 +40,9 @@ pub enum Formato {
     Corbel,
     /// Salida de gcc/clang (`archivo:línea:col: error: …`).
     Gcc,
+    /// SARIF 2.1.0: el formato estándar de analizadores (gcc con
+    /// `-fdiagnostics-format=sarif-stderr`, clang, cppcheck, CodeQL…).
+    Sarif,
 }
 
 /// Qué hacer con la salida de una acción.
@@ -327,6 +330,11 @@ pub fn interpretar(
     let herramienta = Some(i.nombre.clone());
     let mut v = match i.formato {
         Formato::Gcc => crate::diagnostico::parsear_gcc(salida, dir),
+        Formato::Sarif => {
+            let doc =
+                crate::sarif::buscar(salida).ok_or("la salida no tiene un documento SARIF")?;
+            crate::sarif::interpretar(&doc, dir).diagnosticos
+        }
         Formato::Ripley => crate::diagnostico::parsear_ripley(salida, dir)?,
         Formato::Hallazgos => {
             let datos = json(salida)?;
@@ -515,6 +523,27 @@ mod tests {
             expandir("kaneda explain {codigo}", r, None, None, Some("KAN001")),
             "kaneda explain KAN001"
         );
+    }
+
+    #[test]
+    fn formato_sarif() {
+        let i = Integracion {
+            nombre: "cppcheck".into(),
+            formato: Formato::Sarif,
+            ..Default::default()
+        };
+        let salida = r#"Checking main.c ...
+{"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "Cppcheck", "rules": [{"id": "nullPointer", "helpUri": "https://cwe.mitre.org/data/definitions/476.html"}]}},
+ "results": [{"ruleId": "nullPointer", "level": "error", "message": {"text": "Null pointer dereference: p"},
+              "locations": [{"physicalLocation": {"artifactLocation": {"uri": "main.c"}, "region": {"startLine": 7, "startColumn": 6}}}]}]}]}
+"#;
+        let d = interpretar(&i, salida, Path::new("/tp/main.c"), Path::new("/tp")).unwrap();
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0].archivo.as_deref(), Some(Path::new("/tp/main.c")));
+        assert_eq!((d[0].linea, d[0].columna), (7, 6));
+        assert_eq!(d[0].codigo.as_deref(), Some("nullPointer"));
+        assert_eq!(d[0].herramienta.as_deref(), Some("Cppcheck"));
+        assert!(interpretar(&i, "sin sarif", Path::new("/tp/main.c"), Path::new("/tp")).is_err());
     }
 
     #[test]

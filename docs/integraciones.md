@@ -71,6 +71,7 @@ sin colores (`NO_COLOR=1`). Antes de una acción se guardan todos los archivos.
 | `ripley` | `ripley check --format json` (`ast_findings`). |
 | `corbel` | `corbel check --json` (`missing`). |
 | `gcc` | líneas `archivo:línea:col: error: mensaje` (también sigue los `make -C`). |
+| `sarif` | SARIF 2.1.0, el formato estándar de analizadores (gcc con `-fdiagnostics-format=sarif-stderr`, clang, `cppcheck --output-format=sarif`, CodeQL…): nivel, mensaje, regla con su descripción y enlace (`helpUri`), y la primera ubicación. |
 
 Puede haber texto antes del JSON: se lee desde la primera llave. Las rutas relativas se
 resuelven contra la raíz del proyecto; un hallazgo sin archivo se asigna al analizado.
@@ -112,6 +113,19 @@ cuando = "guardar"
 archivos = ["*.c"]
 comando = "cppcheck --enable=warning,style --template=gcc --quiet {archivo} 2>&1"
 formato = "gcc"
+```
+
+## Ejemplo: cppcheck con SARIF
+
+```toml
+[[integracion]]
+nombre = "cppcheck"
+descripcion = "Análisis estático de cppcheck (SARIF)"
+binario = "cppcheck"
+cuando = "guardar"
+archivos = ["*.c"]
+comando = "cppcheck --enable=warning --output-format=sarif --quiet {archivo} 2>&1"
+formato = "sarif"
 ```
 
 ## ¿Integración o plugin Python?

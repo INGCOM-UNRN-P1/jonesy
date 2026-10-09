@@ -72,6 +72,39 @@ fn numero_tras(linea: &str, rotulo: &str) -> Option<usize> {
         .ok()
 }
 
+/// Resultado de pruebas que informan en SARIF (otros frameworks): el documento puede estar
+/// en la salida o en `archivo` (relativo a `dir`), que sólo cuenta si se escribió después
+/// de `desde` (para no leer el de una corrida anterior).
+pub fn desde_sarif(
+    salida: &str,
+    archivo: Option<&Path>,
+    desde: Option<std::time::SystemTime>,
+    dir: &Path,
+) -> Option<Resultado> {
+    let doc = archivo
+        .map(|a| dir.join(a))
+        .filter(|a| {
+            let nuevo = std::fs::metadata(a).and_then(|m| m.modified()).ok();
+            match (desde, nuevo) {
+                (Some(d), Some(n)) => n >= d,
+                (None, Some(_)) => true,
+                _ => false,
+            }
+        })
+        .and_then(|a| std::fs::read_to_string(a).ok())
+        .and_then(|t| crate::sarif::buscar(&t))
+        .or_else(|| crate::sarif::buscar(salida))?;
+    let s = crate::sarif::interpretar(&doc, dir);
+    let mut diagnosticos = crate::diagnostico::parsear_gcc(salida, dir);
+    diagnosticos.extend(s.diagnosticos);
+    Some(Resultado {
+        pasan: s.pasan,
+        fallan: s.fallan,
+        diagnosticos,
+        reconocida: true,
+    })
+}
+
 /// Interpreta la salida de `make test` corrida desde `dir` (la raíz del proyecto).
 pub fn interpretar(salida: &str, dir: &Path) -> Resultado {
     let salida = sin_color(salida);

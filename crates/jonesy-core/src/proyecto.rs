@@ -22,6 +22,18 @@ pub struct Config {
     pub documentacion: Documentacion,
     /// Herramientas del ecosistema integradas como plugins.
     pub integraciones: crate::integraciones::ConfigIntegraciones,
+    pub pruebas: Pruebas,
+}
+
+/// `[pruebas]`: cómo correr y leer las pruebas (Construir → Correr pruebas).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct Pruebas {
+    /// Comando de las pruebas (vacío = el objetivo `test` del Makefile del módulo).
+    pub comando: String,
+    /// Archivo SARIF que dejan las pruebas, relativo a la raíz (vacío = buscarlo en la
+    /// salida). Se usa cuando la salida no es de `p1_test`.
+    pub sarif: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -316,6 +328,9 @@ impl Proyecto {
     /// Usa la estructura ya leída (se puede llamar al dibujar).
     pub fn comando_probar(&self, activo: Option<&Path>) -> Option<String> {
         use crate::estructura::TipoModulo;
+        if !self.config.pruebas.comando.trim().is_empty() {
+            return Some(self.config.pruebas.comando.clone());
+        }
         activo
             .and_then(|a| self.estructura.modulo_de(a))
             .filter(|m| m.tiene("test"))

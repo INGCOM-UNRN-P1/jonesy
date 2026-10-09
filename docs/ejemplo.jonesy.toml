@@ -86,3 +86,11 @@ activar = []             # para encender una que un manifiesto propio trae apaga
 # Correr "ripley check <archivo> --format json" al guardar archivos C.
 activo = true
 comando = "ripley"
+
+[pruebas]
+# Construir → Correr pruebas (Ctrl+F6). Vacío: el objetivo «test» del Makefile del
+# ejercicio. La salida de p1_test (la biblioteca de la cátedra) se lee sola; otros
+# frameworks pueden informar en SARIF, en la salida o en un archivo.
+comando = ""
+# Archivo SARIF que dejan las pruebas, relativo a la raíz (vacío = buscarlo en la salida).
+sarif = ""

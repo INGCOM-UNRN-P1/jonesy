@@ -1908,3 +1908,56 @@ fn atajos_de_la_barra_izquierda_se_ven_completos() {
     assert!(lineas.iter().all(|l| l.chars().count() <= 20), "{lineas:?}");
     assert_eq!(lineas.join(" · ").matches(" · ").count(), 4);
 }
+
+#[test]
+#[cfg(unix)] // make y sh
+fn pruebas_de_otros_frameworks_en_sarif() {
+    if std::process::Command::new("make")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let sarif = r#"{"version": "2.1.0", "runs": [{"tool": {"driver": {"name": "cmocka"}}, "results": [{"kind": "pass", "message": {"text": "ok"}}, {"kind": "fail", "level": "error", "message": {"text": "esperado 4, obtenido 5"}, "properties": {"test": "suma"}, "locations": [{"physicalLocation": {"artifactLocation": {"uri": "prueba.c"}, "region": {"startLine": 3}}}]}]}]}"#;
+    // 1. El SARIF en la salida de make test.
+    let receta = format!("test:\n\t@echo '{sarif}'; exit 1\n");
+    let dir = proyecto(&[
+        ("Makefile", receta.as_str()),
+        ("prueba.c", "#include <assert.h>\n\nvoid suma(void) {}\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("prueba.c"), true);
+    a.accion(jonesy_tui::accion::Accion::Probar);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Pruebas:"))
+    });
+    assert_eq!(a.mensaje.as_ref().unwrap().0, "Pruebas: 1 pasan, 1 fallan.");
+    let d = &a.diag_compilador[0];
+    assert_eq!(d.linea, 3);
+    assert_eq!(d.resumen.as_deref(), Some("La prueba falló «suma»"));
+    assert_eq!(d.herramienta.as_deref(), Some("cmocka"));
+
+    // 2. Otro comando ([pruebas] comando) que deja el SARIF en un archivo.
+    let guion = format!("printf '%s' '{sarif}' > resultados.sarif\necho listo\n");
+    let dir = proyecto(&[
+        ("prueba.c", "#include <assert.h>\n\nvoid suma(void) {}\n"),
+        ("pruebas.sh", guion.as_str()),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n[pruebas]\ncomando = \"sh pruebas.sh\"\nsarif = \"resultados.sarif\"\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("prueba.c"), true);
+    a.accion(jonesy_tui::accion::Accion::Probar);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Pruebas:"))
+    });
+    assert_eq!(a.mensaje.as_ref().unwrap().0, "Pruebas: 1 pasan, 1 fallan.");
+}
