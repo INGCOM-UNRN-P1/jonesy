@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+"""Estrés de §12.5: N sesiones de jonesy en reposo a la vez.
+
+    bin/estres-sesiones [--sesiones 100] [--calentamiento 5] [--segundos 30]
+
+Levanta N jonesy reales, cada uno en su propia terminal virtual (120x40) y con su copia
+de un proyecto típico (main.c, consigna, repo git con un cambio), con telemetría, quick-doc
+y el sondeo de git activos. Tras el calentamiento mide durante `--segundos`:
+
+- memoria total: suma del RSS de los jonesy y sus hijos;
+- CPU global en reposo: tiempo de CPU consumido / (segundos x núcleos).
+
+Presupuesto (para 100 sesiones en un servidor de 8 núcleos): ≤ 5,5 GiB y < 1,5 %. Con
+menos sesiones el de memoria se escala en proporción. Sale con 1 si se excede.
+Sólo Linux (lee /proc). Al final corta todas las sesiones con SIGHUP.
+"""
+
+import argparse
+import fcntl
+import os
+import pty
+import select
+import shutil
+import signal
+import struct
+import subprocess
+import sys
+import tempfile
+import termios
+import time
+
+RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+TICKS = os.sysconf("SC_CLK_TCK")
+PAGINA = os.sysconf("SC_PAGE_SIZE")
+
+MAIN_C = """#include <stdio.h>
+#include <stdlib.h>
+
+int main(void)
+{
+    int *v = malloc(sizeof(int) * 10);
+    if (v == NULL) {
+        return 1;
+    }
+    free(v);
+    return 0;
+}
+"""
+
+CONSIGNA = """# Ejercicio
+
+Implementá `lista_crear` y **verificá** el retorno de `malloc`.
+
+| Función | Retorno |
+|---|---|
+| `lista_crear` | `lista_t *` |
+"""
+
+
+def proyecto(base, i):
+    d = os.path.join(base, f"alumno{i:03d}")
+    os.makedirs(d)
+    with open(os.path.join(d, "main.c"), "w") as f:
+        f.write(MAIN_C)
+    with open(os.path.join(d, "consigna.md"), "w") as f:
+        f.write(CONSIGNA)
+    git = ["git", "-C", d, "-c", "user.name=estres", "-c", "user.email=estres@localhost"]
+    subprocess.run(git + ["init", "-q"], check=True)
+    subprocess.run(git + ["add", "-A"], check=True)
+    subprocess.run(git + ["commit", "-qm", "inicial"], check=True)
+    with open(os.path.join(d, "main.c"), "a") as f:
+        f.write("/* cambio */\n")
+    return d
+
+
+def lanzar(jonesy, d):
+    pid, fd = pty.fork()
+    if pid == 0:
+        os.chdir(d)
+        os.environ["TERM"] = "xterm-256color"
+        os.environ["SHELL"] = "/bin/sh"
+        os.execv(jonesy, [jonesy, "--telemetria", "main.c"])
+    fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack("HHHH", 40, 120, 0, 0))
+    return pid, fd
+
+
+def descendientes(pids):
+    """Los PIDs dados y todos sus descendientes."""
+    hijos = {}
+    for p in os.listdir("/proc"):
+        if not p.isdigit():
+            continue
+        try:
+            with open(f"/proc/{p}/stat") as f:
+                ppid = int(f.read().rsplit(")", 1)[1].split()[1])
+        except OSError:
+            continue
+        hijos.setdefault(ppid, []).append(int(p))
+    todos, pila = [], list(pids)
+    while pila:
+        p = pila.pop()
+        todos.append(p)
+        pila.extend(hijos.get(p, []))
+    return todos
+
+
+def cpu_y_rss(pids):
+    """(ticks de CPU, bytes de RSS) sumados."""
+    ticks = rss = 0
+    for p in pids:
+        try:
+            with open(f"/proc/{p}/stat") as f:
+                campos = f.read().rsplit(")", 1)[1].split()
+            # utime + stime + cutime + cstime (los hijos ya esperados, como git status)
+            ticks += sum(int(x) for x in campos[11:15])
+            rss += int(campos[21]) * PAGINA
+        except (OSError, IndexError):
+            pass
+    return ticks, rss
+
+
+def drenar(fds, segundos):
+    """Lee y descarta la salida de las terminales (si no, jonesy se bloquea al dibujar)."""
+    fin = time.monotonic() + segundos
+    abiertos = set(fds)
+    while abiertos and (resta := fin - time.monotonic()) > 0:
+        listos, _, _ = select.select(list(abiertos), [], [], min(resta, 0.5))
+        for fd in listos:
+            try:
+                if not os.read(fd, 65536):
+                    abiertos.discard(fd)
+            except OSError:
+                abiertos.discard(fd)
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--sesiones", type=int, default=100)
+    ap.add_argument("--calentamiento", type=float, default=5)
+    ap.add_argument("--segundos", type=float, default=30)
+    ap.add_argument("--jonesy", default=os.environ.get("JONESY",
+                                                       os.path.join(RAIZ, "target/release/jonesy")))
+    a = ap.parse_args()
+    if not sys.platform.startswith("linux"):
+        sys.exit("estres-sesiones: sólo Linux (lee /proc)")
+    if not os.access(a.jonesy, os.X_OK):
+        subprocess.run(["cargo", "build", "--release", "--quiet"], cwd=RAIZ, check=True)
+
+    base = tempfile.mkdtemp(prefix="jonesy-estres-")
+    sesiones = []
+    try:
+        print(f"── preparando {a.sesiones} proyectos en {base}")
+        dirs = [proyecto(base, i) for i in range(a.sesiones)]
+        print(f"── lanzando {a.sesiones} sesiones")
+        for d in dirs:
+            sesiones.append(lanzar(a.jonesy, d))
+        fds = [fd for _, fd in sesiones]
+        drenar(fds, a.calentamiento)
+
+        pids = descendientes([p for p, _ in sesiones])
+        ticks0, _ = cpu_y_rss(pids)
+        t0 = time.monotonic()
+        drenar(fds, a.segundos)
+        transcurrido = time.monotonic() - t0
+        pids = descendientes([p for p, _ in sesiones])
+        ticks1, rss = cpu_y_rss(pids)
+
+        vivas = sum(1 for p, _ in sesiones if os.waitpid(p, os.WNOHANG) == (0, 0))
+        nucleos = os.cpu_count() or 1
+        cpu = (ticks1 - ticks0) / TICKS / (transcurrido * nucleos) * 100
+        gib = rss / 2**30
+        tope_mem = 5.5 * a.sesiones / 100
+        print(f"sesiones vivas: {vivas}/{a.sesiones} ({len(pids)} procesos)")
+        print(f"memoria total: {gib:.2f} GiB ({rss / 2**20 / a.sesiones:.1f} MiB por sesión)"
+              f"  presupuesto ≤ {tope_mem:.2f} GiB")
+        print(f"CPU global en reposo: {cpu:.3f} % de {nucleos} núcleos"
+              f" en {transcurrido:.0f} s  presupuesto < 1,5 %")
+        ok = vivas == a.sesiones and gib <= tope_mem and cpu < 1.5
+    finally:
+        for p, _ in sesiones:
+            try:
+                os.kill(p, signal.SIGHUP)
+            except ProcessLookupError:
+                pass
+        fin = time.monotonic() + 10
+        for p, fd in sesiones:
+            while time.monotonic() < fin and os.waitpid(p, os.WNOHANG) == (0, 0):
+                drenar([fd], 0.05)
+            try:
+                os.kill(p, signal.SIGKILL)
+                os.waitpid(p, 0)
+            except (ProcessLookupError, ChildProcessError):
+                pass
+            os.close(fd)
+        shutil.rmtree(base, ignore_errors=True)
+    print("✓ dentro del presupuesto" if ok else "✗ excede el presupuesto")
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

@@ -86,7 +86,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: El worker y el plugin de ejemplo compilan
-        run: python -m py_compile tools/jonesy-worker-py/jonesy_worker.py docs/plugin-ejemplo.py
+        run: python -m py_compile tools/jonesy-worker-py/jonesy_worker.py docs/plugin-ejemplo.py bin/estres-sesiones
       - name: Smoke test del worker por JSON-RPC
         run: |
           respuesta=$(printf '%s\n' \
@@ -153,3 +153,5 @@ jobs:
         env:
           SEGUNDOS: "3"
           SHELL: /bin/sh
+      - name: Estrés de §12.5 (20 sesiones en reposo; el presupuesto de memoria se escala)
+        run: bin/estres-sesiones --sesiones 20 --calentamiento 3 --segundos 10

@@ -231,6 +231,12 @@ si alguno se excede. Medido en release (Fedora 44, x86-64):
 | `git status` con 500 archivos | ≤ 30 ms | 3,3 ms |
 | Primer render de Markdown (la especificación entera) | ≤ 15 ms | 2,9 ms |
 | Tamaño del binario | ≤ 25 MiB | 3,2 MiB |
+| 100 sesiones en reposo (§12.5): memoria total | ≤ 5,5 GiB | 0,55 GiB |
+| 100 sesiones en reposo (§12.5): CPU global | < 1,5 % | ~0 % (16 núcleos, 30 s) |
+
+`bin/estres-sesiones [--sesiones 100] [--segundos 30]` mide lo de §12.5: levanta
+jonesy reales, cada uno en su terminal virtual y con su copia de un proyecto
+(repo git, consigna, telemetría), y suma RSS y CPU de todos sus procesos.
 
 En reposo el bucle duerme en el canal de avisos: sin eventos sólo despierta
 cada 2 s para mirar las fechas de `.git/HEAD` e índice (y cada 1 s en examen,
