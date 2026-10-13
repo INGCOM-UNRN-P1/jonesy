@@ -19,6 +19,7 @@ pub mod estructura;
 pub mod fallos;
 pub mod gdb;
 pub mod glosario;
+pub mod hex;
 pub mod integraciones;
 pub mod precedencia;
 pub mod preferencias;
@@ -55,7 +56,7 @@ pub fn canonica(p: &std::path::Path) -> std::path::PathBuf {
 /// SHA-256 en hexadecimal.
 pub fn sha256_hex(datos: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    hex::encode(Sha256::digest(datos))
+    ::hex::encode(Sha256::digest(datos))
 }
 
 /// Usuario del sistema (para la telemetría y la entrega).

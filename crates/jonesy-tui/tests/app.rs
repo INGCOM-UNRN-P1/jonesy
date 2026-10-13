@@ -3074,3 +3074,79 @@ fn objetivo_de_make_con_el_teclado() {
     let p = pantalla(&mut a, 160, 40);
     assert!(p.contains("make: biblioteca lista › all"), "{p}");
 }
+
+#[test]
+#[cfg(unix)] // usa gcc
+fn visor_hexadecimal_de_binarios() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let ok = std::process::Command::new("gcc")
+        .current_dir(dir.path())
+        .args(["-c", "main.c", "-o", "main.o"])
+        .status()
+        .is_ok_and(|s| s.success())
+        && std::process::Command::new("gcc")
+            .current_dir(dir.path())
+            .args(["main.o", "-o", "prog"])
+            .status()
+            .is_ok_and(|s| s.success());
+    if !ok {
+        return; // sin gcc
+    }
+    let (mut a, _rx) = app(dir.path(), false);
+    // Abrir un ejecutable no lo carga en el editor: abre el visor.
+    assert!(a.abrir_archivo(&dir.path().join("prog"), true).is_none());
+    assert!(matches!(a.modal, Some(Modal::Hex(_))));
+    let p = pantalla(&mut a, 120, 40);
+    assert!(
+        p.contains("ELF de 64 bits") || p.contains("ELF de 32 bits"),
+        "{p}"
+    );
+    assert!(
+        p.contains("00000000  7f 45 4c 46") && p.contains("|.ELF"),
+        "{p}"
+    );
+    assert!(p.contains("byte 0x7f = 127"), "{p}");
+    // g: ir a un offset.
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::NONE);
+    escribir(&mut a, "0x10");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("offset 0x10 (16)"), "{p}");
+    // /: buscar texto.
+    tecla(&mut a, KeyCode::Char('/'), KeyModifiers::NONE);
+    escribir(&mut a, "main");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Encontrado en 0x"), "{p}");
+    // i: secciones del ELF explicadas; Esc vuelve a los bytes.
+    tecla(&mut a, KeyCode::Char('i'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(
+        p.contains(".text") && p.contains("código de máquina"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(matches!(a.modal, Some(Modal::Hex(_))));
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    assert!(a.modal.is_none());
+    assert!(a
+        .buffers
+        .iter()
+        .all(|b| b.buf.ruta.as_deref() != Some(&dir.path().join("prog"))));
+    // Ver → Visor hexadecimal: elegir entre los binarios del proyecto.
+    a.accion(jonesy_tui::accion::Accion::VisorHex);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(
+        p.contains("main.o — ELF") && p.contains("objeto reubicable"),
+        "{p}"
+    );
+    assert!(p.contains("prog — ELF"), "{p}");
+    assert!(!p.contains("main.c —"), "{p}");
+    escribir(&mut a, "main.o");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("main.o · ELF"), "{p}");
+    // A 70 columnas, 8 bytes por fila.
+    let p = pantalla(&mut a, 70, 30);
+    assert!(p.contains("00000008  "), "{p}");
+}

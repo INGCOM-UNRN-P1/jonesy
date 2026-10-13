@@ -3555,6 +3555,7 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             dibujar_diff(f, area, &titulo, &filas, desplazamiento, lado_a_lado, ctx);
             None
         }
+        Modal::Hex(_) => dibujar_hex(f, app, area),
         Modal::Bienvenida { siempre, faltan } => {
             let alto = (24 + faltan.len() as u16).min(area.height.saturating_sub(2));
             let r = centrado(area, 78, alto);
@@ -3887,4 +3888,200 @@ fn lista_modal(
         i.x + (UnicodeWidthStr::width(entrada.as_str()) as u16).min(i.width.saturating_sub(1)),
         i.y,
     ))
+}
+
+/// El visor hexadecimal: offset · bytes · ASCII, con el cursor, la última coincidencia y
+/// una línea con el valor del byte del cursor.
+fn dibujar_hex(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
+    let r = Rect {
+        x: area.x + 1,
+        y: area.y + 1,
+        width: area.width.saturating_sub(2),
+        height: area.height.saturating_sub(2),
+    };
+    limpiar(f, r);
+    let raiz = app.proyecto.raiz.clone();
+    let Some(crate::app::Modal::Hex(v)) = &mut app.modal else {
+        return None;
+    };
+    let nombre = v
+        .ruta
+        .strip_prefix(&raiz)
+        .unwrap_or(&v.ruta)
+        .display()
+        .to_string();
+    let b = bloque(format!(" {nombre} · {} ", v.resumen), true);
+    let i = b.inner(r);
+    f.render_widget(b, r);
+    if i.height < 3 {
+        return None;
+    }
+    let cuerpo = Rect {
+        height: i.height - 2,
+        ..i
+    };
+    let pie = Rect {
+        y: i.y + i.height - 2,
+        height: 2,
+        ..i
+    };
+    let tenue = Style::default().fg(tema::atenuado());
+    let mut cursor_pos = None;
+    if let Some((titulo, lineas, desp)) = &v.detalle {
+        let mut l: Vec<Line> = vec![Line::styled(
+            titulo.clone(),
+            Style::default()
+                .fg(tema::acento())
+                .add_modifier(Modifier::BOLD),
+        )];
+        l.extend(
+            lineas
+                .iter()
+                .skip(*desp)
+                .take(cuerpo.height as usize - 1)
+                .map(|x| Line::raw(x.clone())),
+        );
+        f.render_widget(Paragraph::new(l).wrap(Wrap { trim: false }), cuerpo);
+        f.render_widget(
+            Paragraph::new(Line::styled(
+                "↑ ↓ RePág AvPág desplazan · g ir a un offset · Esc vuelve a los bytes",
+                tenue,
+            )),
+            Rect {
+                y: pie.y + 1,
+                height: 1,
+                ..pie
+            },
+        );
+    } else {
+        let ancho = jonesy_core::hex::ancho_para(cuerpo.width as usize);
+        let alto = cuerpo.height as usize;
+        // Si cambió el ancho, la primera fila se alinea al nuevo.
+        if v.ancho != ancho {
+            v.ancho = ancho;
+            v.inicio = v.inicio / ancho * ancho;
+        }
+        v.alto = alto;
+        let ir = v.cursor;
+        v.ir(ir);
+        let (cursor, marca) = (v.cursor, v.marca);
+        let en_marca = |o: usize| marca > 0 && o > cursor && o < cursor + marca;
+        let mut l: Vec<Line> = vec![];
+        for fila in 0..alto {
+            let base = v.inicio + fila * ancho;
+            if base >= v.datos.len() && !(v.datos.is_empty() && fila == 0) {
+                break;
+            }
+            let mut spans = vec![Span::styled(format!("{base:08x}  "), tenue)];
+            let mut ascii = vec![Span::styled("|", tenue)];
+            for k in 0..ancho {
+                let o = base + k;
+                let estilo_byte = |b: u8| {
+                    let s = if b == 0 {
+                        tenue
+                    } else if (0x20..0x7f).contains(&b) {
+                        Style::default().fg(tema::texto())
+                    } else {
+                        Style::default().fg(tema::acento())
+                    };
+                    if o == cursor {
+                        s.add_modifier(Modifier::REVERSED)
+                    } else if en_marca(o) {
+                        s.bg(tema::advertencia()).fg(tema::sobre_acento())
+                    } else {
+                        s
+                    }
+                };
+                match v.datos.get(o) {
+                    Some(&b) => {
+                        spans.push(Span::styled(format!("{b:02x}"), estilo_byte(b)));
+                        ascii.push(Span::styled(
+                            jonesy_core::hex::visible(b).to_string(),
+                            estilo_byte(b),
+                        ));
+                    }
+                    None => {
+                        spans.push(Span::raw("  "));
+                        ascii.push(Span::raw(" "));
+                    }
+                }
+                spans.push(Span::raw(if k % 8 == 7 && k + 1 < ancho {
+                    "  "
+                } else {
+                    " "
+                }));
+            }
+            ascii.push(Span::styled("|", tenue));
+            spans.push(Span::raw(" "));
+            spans.extend(ascii);
+            l.push(Line::from(spans));
+        }
+        if v.datos.is_empty() {
+            l = vec![Line::styled("(archivo vacío)", tenue)];
+        }
+        f.render_widget(Paragraph::new(l), cuerpo);
+        // El byte del cursor: hexadecimal, decimal, carácter y como int de 4 bytes.
+        let info = match v.datos.get(cursor) {
+            Some(&b) => {
+                let int = v
+                    .datos
+                    .get(cursor..cursor + 4)
+                    .map(|x| {
+                        format!(
+                            " · int desde acá: {}",
+                            i32::from_le_bytes([x[0], x[1], x[2], x[3]])
+                        )
+                    })
+                    .unwrap_or_default();
+                format!(
+                    "offset 0x{cursor:x} ({cursor}) de {} · byte 0x{b:02x} = {b} = {:?}{int}",
+                    v.datos.len(),
+                    jonesy_core::hex::visible(b)
+                )
+            }
+            None => String::new(),
+        };
+        f.render_widget(
+            Paragraph::new(Line::styled(info, Style::default().fg(tema::texto()))),
+            Rect { height: 1, ..pie },
+        );
+        let ayuda =
+            "g ir a · / buscar · n siguiente · i información · s símbolos · ? atajos · Esc cerrar";
+        f.render_widget(
+            Paragraph::new(Line::styled(ayuda, tenue)),
+            Rect {
+                y: pie.y + 1,
+                height: 1,
+                ..pie
+            },
+        );
+    }
+    // El campo de «ir a» o de búsqueda, sobre el pie.
+    if let Some((ir, texto)) = &v.entrada {
+        let etiqueta = if *ir {
+            "Ir al offset (0x1f0, 1f0h o decimal): "
+        } else {
+            "Buscar (texto o bytes: 7f 45 4c 46): "
+        };
+        let linea = format!("{etiqueta}{texto}");
+        let fila = Rect {
+            y: pie.y + 1,
+            height: 1,
+            ..pie
+        };
+        f.render_widget(Clear, fila);
+        f.render_widget(
+            Paragraph::new(Line::styled(
+                linea.clone(),
+                Style::default().fg(tema::acento()),
+            )),
+            fila,
+        );
+        cursor_pos = Some((
+            fila.x
+                + (UnicodeWidthStr::width(linea.as_str()) as u16).min(fila.width.saturating_sub(1)),
+            fila.y,
+        ));
+    }
+    cursor_pos
 }

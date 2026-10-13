@@ -137,6 +137,8 @@ pub enum QuePaleta {
     Objetivo(usize, String),
     /// Comando de tp.sh por índice.
     Tp(usize),
+    /// Abrir un binario en el visor hexadecimal.
+    Hex(PathBuf),
     /// Acción de una integración: (nombre, índice de la acción).
     Herramienta(String, usize),
     /// Ir a una línea (1-based) de un archivo: marcadores.
@@ -308,6 +310,8 @@ pub enum Modal {
         importar: bool,
         texto: String,
     },
+    /// Visor hexadecimal de un archivo binario.
+    Hex(Box<VisorHex>),
     /// Examen → Pausar: el código del docente (se muestra con asteriscos).
     CodigoPausa {
         texto: String,
@@ -536,6 +540,70 @@ pub struct Simulacro {
     con_errores: u32,
     ejecuciones: u32,
     pruebas: Option<(usize, usize)>,
+}
+
+/// El visor hexadecimal de un archivo binario (Ver → Visor hexadecimal, o abrir un
+/// ejecutable, un `.o` o un `.a`).
+#[derive(Debug, Clone)]
+pub struct VisorHex {
+    pub ruta: PathBuf,
+    pub datos: Vec<u8>,
+    pub resumen: String,
+    /// Offset de la primera fila visible.
+    pub inicio: usize,
+    /// Byte bajo el cursor.
+    pub cursor: usize,
+    /// Largo de la coincidencia de la última búsqueda (resaltada desde el cursor).
+    pub marca: usize,
+    /// Información o símbolos en lugar de los bytes: (título, líneas, desplazamiento).
+    pub detalle: Option<(String, Vec<String>, usize)>,
+    /// Campo abierto: (es «ir a», texto); si no, buscar.
+    pub entrada: Option<(bool, String)>,
+    pub buscado: Vec<u8>,
+    /// Bytes por fila y filas visibles del último dibujo.
+    pub ancho: usize,
+    pub alto: usize,
+}
+
+impl VisorHex {
+    fn abrir(ruta: &Path) -> std::io::Result<VisorHex> {
+        use std::io::Read;
+        let mut datos = vec![];
+        std::fs::File::open(ruta)?
+            .take(jonesy_core::hex::LIMITE as u64)
+            .read_to_end(&mut datos)?;
+        Ok(VisorHex {
+            resumen: jonesy_core::hex::resumen(ruta, &datos),
+            ruta: ruta.to_path_buf(),
+            datos,
+            inicio: 0,
+            cursor: 0,
+            marca: 0,
+            detalle: None,
+            entrada: None,
+            buscado: vec![],
+            ancho: 16,
+            alto: 20,
+        })
+    }
+
+    /// Mueve el cursor y desplaza para que se vea.
+    pub fn ir(&mut self, pos: usize) {
+        let ancho = self.ancho.max(1);
+        self.cursor = pos.min(self.datos.len().saturating_sub(1));
+        let fila = self.cursor / ancho * ancho;
+        if fila < self.inicio {
+            self.inicio = fila;
+        } else if fila >= self.inicio + ancho * self.alto.max(1) {
+            self.inicio = fila + ancho - ancho * self.alto.max(1);
+        }
+    }
+
+    fn mover(&mut self, delta: isize) {
+        let p = (self.cursor as isize + delta).max(0) as usize;
+        self.marca = 0;
+        self.ir(p);
+    }
 }
 
 /// Lo que espera a que se cargue el catálogo de reglas.
@@ -1276,6 +1344,11 @@ impl App {
                 self.cambiar_buffer(i);
             }
             return Some(i);
+        }
+        // Un ejecutable, un .o, un .a…: el visor hexadecimal, no el editor.
+        if ruta.is_file() && jonesy_core::hex::archivo_binario(&ruta) {
+            self.abrir_hex(&ruta);
+            return None;
         }
         let mut buf = if ruta.exists() {
             match Buffer::abrir(&ruta) {
@@ -3291,6 +3364,167 @@ impl App {
             if let Some(x) = self.integraciones.iter_mut().find(|x| x.nombre == *nombre) {
                 x.activa = *activa;
             }
+        }
+    }
+
+    /// Abre el visor hexadecimal de un archivo.
+    pub fn abrir_hex(&mut self, ruta: &Path) {
+        match VisorHex::abrir(ruta) {
+            Ok(v) => self.modal = Some(Modal::Hex(Box::new(v))),
+            Err(e) => self.avisar(
+                format!("No se pudo abrir {}: {e}", ruta.display()),
+                Nivel::Error,
+            ),
+        }
+    }
+
+    /// Ver → Visor hexadecimal: elegir uno de los binarios del proyecto.
+    fn elegir_binario(&mut self) {
+        let opciones: Vec<OpcionPaleta> = jonesy_core::hex::binarios(&self.proyecto.raiz, 500)
+            .into_iter()
+            .map(|r| {
+                let tipo = std::fs::read(&r)
+                    .map(|d| {
+                        jonesy_core::hex::resumen(&r, &d[..d.len().min(4096)])
+                            .split(" · ")
+                            .take(2)
+                            .collect::<Vec<_>>()
+                            .join(" · ")
+                    })
+                    .unwrap_or_default();
+                OpcionPaleta {
+                    titulo: format!("{} — {tipo}", self.proyecto.relativa(&r)),
+                    atajo: String::new(),
+                    que: QuePaleta::Hex(r),
+                }
+            })
+            .collect();
+        if opciones.is_empty() {
+            self.avisar(
+                "No hay binarios en el proyecto todavía: F6 compila y deja el ejecutable y los .o.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
+    }
+
+    /// Teclas del visor hexadecimal.
+    fn tecla_hex(&mut self, mut v: Box<VisorHex>, k: KeyEvent) {
+        let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
+        // Campo de «ir a» o de búsqueda.
+        if let Some((ir, mut texto)) = v.entrada.take() {
+            match k.code {
+                KeyCode::Esc => {}
+                KeyCode::Enter if ir => match jonesy_core::hex::offset(&texto) {
+                    Some(o) if o < v.datos.len() => {
+                        v.marca = 0;
+                        v.detalle = None;
+                        v.ir(o);
+                    }
+                    _ => self.avisar(
+                        format!(
+                            "«{texto}» no es un offset del archivo (0 a 0x{:x}).",
+                            v.datos.len().saturating_sub(1)
+                        ),
+                        Nivel::Aviso,
+                    ),
+                },
+                KeyCode::Enter => {
+                    v.buscado = jonesy_core::hex::patron(&texto);
+                    v.detalle = None;
+                    let desde = v.cursor;
+                    self.buscar_hex(&mut v, desde);
+                }
+                _ => {
+                    editar_campo(&mut texto, &k);
+                    v.entrada = Some((ir, texto));
+                }
+            }
+            self.modal = Some(Modal::Hex(v));
+            return;
+        }
+        let pagina = (v.ancho * v.alto.max(1)) as isize;
+        if let Some((_, lineas, desp)) = &mut v.detalle {
+            let n = lineas.len().saturating_sub(1);
+            match k.code {
+                KeyCode::Esc | KeyCode::Char('i' | 's') => v.detalle = None,
+                KeyCode::Up => *desp = desp.saturating_sub(1),
+                KeyCode::Down => *desp = (*desp + 1).min(n),
+                KeyCode::PageUp => *desp = desp.saturating_sub(v.alto.max(1)),
+                KeyCode::PageDown => *desp = (*desp + v.alto.max(1)).min(n),
+                KeyCode::Char('g') => v.entrada = Some((true, String::new())),
+                _ => {}
+            }
+            self.modal = Some(Modal::Hex(v));
+            return;
+        }
+        match k.code {
+            KeyCode::Esc | KeyCode::Char('q') => return,
+            KeyCode::Left => v.mover(-1),
+            KeyCode::Right => v.mover(1),
+            KeyCode::Up => v.mover(-(v.ancho as isize)),
+            KeyCode::Down => v.mover(v.ancho as isize),
+            KeyCode::PageUp => v.mover(-pagina),
+            KeyCode::PageDown => v.mover(pagina),
+            KeyCode::Home if ctrl => v.mover(isize::MIN / 2),
+            KeyCode::End if ctrl => v.mover(isize::MAX / 2),
+            KeyCode::Home => {
+                let p = v.cursor / v.ancho.max(1) * v.ancho.max(1);
+                v.ir(p);
+            }
+            KeyCode::End => {
+                let p = v.cursor / v.ancho.max(1) * v.ancho.max(1) + v.ancho - 1;
+                v.ir(p);
+            }
+            KeyCode::Char('g') => v.entrada = Some((true, String::new())),
+            KeyCode::Char('/') | KeyCode::Char('f') => v.entrada = Some((false, String::new())),
+            KeyCode::Char('n') => {
+                let desde = v.cursor + 1;
+                self.buscar_hex(&mut v, desde);
+            }
+            KeyCode::Char('i') => {
+                let info = jonesy_core::hex::informacion(&v.ruta, &v.datos);
+                v.detalle = Some(("Información".into(), info, 0));
+            }
+            KeyCode::Char('s') => match jonesy_core::hex::simbolos(&v.ruta) {
+                Ok(s) => v.detalle = Some(("Símbolos (nm)".into(), s, 0)),
+                Err(e) => self.avisar(e, Nivel::Aviso),
+            },
+            KeyCode::Char('?') => {
+                v.detalle = Some((
+                    "Atajos del visor hexadecimal".into(),
+                    crate::ayuda::ATAJOS_HEX
+                        .lines()
+                        .map(str::to_string)
+                        .collect(),
+                    0,
+                ))
+            }
+            _ => {}
+        }
+        self.modal = Some(Modal::Hex(v));
+    }
+
+    fn buscar_hex(&mut self, v: &mut VisorHex, desde: usize) {
+        if v.buscado.is_empty() {
+            self.avisar("/ busca texto o bytes (7f 45 4c 46).", Nivel::Info);
+            return;
+        }
+        match jonesy_core::hex::buscar(&v.datos, &v.buscado, desde) {
+            Some(p) => {
+                v.ir(p);
+                v.marca = v.buscado.len();
+                self.avisar(
+                    format!("Encontrado en 0x{p:x} (n busca el siguiente)."),
+                    Nivel::Info,
+                );
+            }
+            None => self.avisar("No aparece en el archivo.", Nivel::Aviso),
         }
     }
 
@@ -6342,6 +6576,7 @@ impl App {
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::ReportarProblema => self.reportar_problema(),
             Accion::ObjetivoMake => self.elegir_objetivo_make(),
+            Accion::VisorHex => self.elegir_binario(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7772,6 +8007,7 @@ impl App {
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         let cerrar = k.code == KeyCode::Esc;
         match modal {
+            Modal::Hex(v) => self.tecla_hex(v, k),
             Modal::Paleta {
                 mut filtro,
                 mut sel,
@@ -8535,6 +8771,7 @@ impl App {
         match q {
             QuePaleta::Accion(a) => self.accion(a),
             QuePaleta::Objetivo(m, o) => self.correr_objetivo(m, &o),
+            QuePaleta::Hex(r) => self.abrir_hex(&r),
             QuePaleta::Tp(i) => self.correr_tp(i),
             QuePaleta::Herramienta(nombre, n) => self.correr_accion_herramienta(&nombre, n),
             QuePaleta::Entrada(e) => {
@@ -8625,6 +8862,23 @@ impl App {
                     *desplazamiento = (*desplazamiento as isize + delta)
                         .clamp(0, filas.len().saturating_sub(1) as isize)
                         as usize;
+                    return;
+                }
+                if let Some(Modal::Hex(v)) = &mut self.modal {
+                    match &mut v.detalle {
+                        Some((_, lineas, d)) => {
+                            *d = (*d as isize + delta)
+                                .clamp(0, lineas.len().saturating_sub(1) as isize)
+                                as usize
+                        }
+                        None => {
+                            let ancho = v.ancho.max(1);
+                            let ultimo = v.datos.len().saturating_sub(1) / ancho * ancho;
+                            v.inicio = (v.inicio as isize + delta * ancho as isize)
+                                .clamp(0, ultimo as isize)
+                                as usize;
+                        }
+                    }
                     return;
                 }
                 if let Some(Modal::Visor {

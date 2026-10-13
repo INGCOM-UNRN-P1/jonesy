@@ -260,6 +260,22 @@ pub fn atajos_panel(p: Panel) -> (&'static str, &'static str) {
     }
 }
 
+/// Atajos del visor hexadecimal (`?` dentro del visor).
+pub const ATAJOS_HEX: &str = "\
+← → ↑ ↓          mover el cursor un byte o una fila
+RePág AvPág      una pantalla
+Inicio Fin       principio o fin de la fila
+Ctrl+Inicio/Fin  principio o fin del archivo
+g                ir a un offset (0x1f0, 1f0h o decimal)
+/ o f            buscar texto o bytes en hexadecimal (7f 45 4c 46; \"cafe\" busca el texto)
+n                siguiente coincidencia
+i                información: tipo de archivo, secciones de un ELF, objetos de un .a
+s                símbolos con nm (qué funciones define y cuáles usa de otro lado)
+Esc o q          cerrar (desde la información o los símbolos, volver a los bytes)
+
+Abajo, el byte del cursor en hexadecimal, decimal y como carácter, y los 4 bytes
+desde el cursor leídos como int (little endian, como en x86).";
+
 /// Zonas de la pantalla que recorre el recorrido guiado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Zona {

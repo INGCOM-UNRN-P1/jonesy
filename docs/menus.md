@@ -97,7 +97,7 @@ comprueba que esté al día.
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
 | Editar | [E]ditar | F10 y E | 24 |
-| Ver | [V]er | Alt+V (o F10 y V) | 16 |
+| Ver | [V]er | Alt+V (o F10 y V) | 17 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 11 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
 | Git | [G]it | F10 y G | 8 |
@@ -166,27 +166,28 @@ comprueba que esté al día.
 ## Ver
 
 ```text
-┌──────────────────────────────────────────────────────┐
-│ Modo código                                       F8 │
-│ Modo consigna                                     F7 │
-│ Modo terminal integrada                           F9 │
-├──────────────────────────────────────────────────────┤
-│ Explorador de archivos                         Alt+E │
-│ Esquema del archivo (funciones y tipos)        Alt+S │
-│ Problemas y diagnósticos                       Alt+P │
-│ Ir al problema siguiente                       Alt+N │
-│ Ir al problema anterior                  Alt+Shift+N │
-│ Salida de la compilación                       Alt+O │
-│ Terminal (deck)                                Alt+T │
-│ Abrir panel interactivo de Git                 Alt+G │
-│ Panel de reglas pedagógicas (ripley)           Alt+R │
-├──────────────────────────────────────────────────────┤
-│ Documentación contextual (quick-doc)              F4 │
-│ Vista previa de Markdown                      Ctrl+P │
-├──────────────────────────────────────────────────────┤
-│ Maximizar el panel actual (y volver)           Alt+Z │
-│ Restablecer disposición de paneles                   │
-└──────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────┐
+│ Modo código                                        F8 │
+│ Modo consigna                                      F7 │
+│ Modo terminal integrada                            F9 │
+├───────────────────────────────────────────────────────┤
+│ Explorador de archivos                          Alt+E │
+│ Esquema del archivo (funciones y tipos)         Alt+S │
+│ Problemas y diagnósticos                        Alt+P │
+│ Ir al problema siguiente                        Alt+N │
+│ Ir al problema anterior                   Alt+Shift+N │
+│ Salida de la compilación                        Alt+O │
+│ Terminal (deck)                                 Alt+T │
+│ Abrir panel interactivo de Git                  Alt+G │
+│ Panel de reglas pedagógicas (ripley)            Alt+R │
+├───────────────────────────────────────────────────────┤
+│ Documentación contextual (quick-doc)               F4 │
+│ Vista previa de Markdown                       Ctrl+P │
+│ Visor hexadecimal (ejecutables, .o, .a)…              │
+├───────────────────────────────────────────────────────┤
+│ Maximizar el panel actual (y volver)            Alt+Z │
+│ Restablecer disposición de paneles                    │
+└───────────────────────────────────────────────────────┘
 ```
 
 ## Construir

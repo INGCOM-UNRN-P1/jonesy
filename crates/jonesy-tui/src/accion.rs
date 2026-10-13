@@ -118,6 +118,7 @@ pub enum Accion {
     ImportarPreferencias,
     ReportarProblema,
     ObjetivoMake,
+    VisorHex,
 }
 
 pub struct Info {
@@ -205,6 +206,7 @@ impl Accion {
             Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
             ReportarProblema => ("Reportar un problema de jonesy…", ""),
             ObjetivoMake => ("Correr un objetivo de make…", "Shift+F9"),
+            VisorHex => ("Visor hexadecimal (ejecutables, .o, .a)…", ""),
             Bienvenida => ("Bienvenida", ""),
             Comentar => ("Comentar / descomentar líneas", "Ctrl+/"),
             DuplicarLinea => ("Duplicar línea", "Ctrl+D"),
@@ -326,6 +328,7 @@ impl Accion {
             Doctor,
             ReportarProblema,
             ObjetivoMake,
+            VisorHex,
             Bienvenida,
             Comentar,
             DuplicarLinea,
@@ -529,6 +532,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(QuickDoc),
                 A(PreviewMarkdown),
+                A(VisorHex),
                 SEP,
                 A(MaximizarPanel),
                 A(RestablecerPaneles),
@@ -716,6 +720,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
 | Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
 | Correr un objetivo de make (del ejercicio, las bibliotecas o el general) | Shift+F9 |
+| Visor hexadecimal de un ejecutable, .o o .a (también al abrirlo) | Ver → Visor hexadecimal |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
 | Paleta de comandos | Ctrl+K, F1 |
 | Explicar regla (sobre un diagnóstico) | F1 |
