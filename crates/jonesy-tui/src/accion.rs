@@ -114,6 +114,8 @@ pub enum Accion {
     RenombrarSimbolo,
     PausarExamen,
     AtajosPanel,
+    ExportarPreferencias,
+    ImportarPreferencias,
 }
 
 pub struct Info {
@@ -172,6 +174,8 @@ impl Accion {
             ExplicarRegla => ("Explicar error o regla actual", "F1"),
             Atajos => ("Atajos de teclado", ""),
             AtajosPanel => ("Atajos de este panel", "? en el panel"),
+            ExportarPreferencias => ("Exportar mis preferencias…", ""),
+            ImportarPreferencias => ("Importar preferencias…", ""),
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
             TamanosPaneles => ("Tamaños de paneles…", ""),
@@ -306,6 +310,8 @@ impl Accion {
             AbrirProyecto,
             Atajos,
             AtajosPanel,
+            ExportarPreferencias,
+            ImportarPreferencias,
             AcercaDe,
             Configuracion,
             LimpiarCompilacion,

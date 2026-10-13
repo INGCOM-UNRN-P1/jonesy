@@ -303,6 +303,11 @@ pub enum Modal {
         texto: String,
         error: Option<String>,
     },
+    /// Exportar o importar las preferencias: la ruta del archivo.
+    RutaPreferencias {
+        importar: bool,
+        texto: String,
+    },
     /// Examen → Pausar: el código del docente (se muestra con asteriscos).
     CodigoPausa {
         texto: String,
@@ -1037,6 +1042,8 @@ impl App {
                 self.entradas.insert(clave, self.proyecto.raiz.join(rel));
             }
             self.argumentos.extend(s.argumentos);
+        } else if let Some(p) = jonesy_core::preferencias::cargar_usuario() {
+            self.aplicar_preferencias(&p);
         }
         for a in archivos {
             let ruta = if a.is_absolute() {
@@ -3187,6 +3194,99 @@ impl App {
         })
     }
 
+    /// Una ruta escrita por el usuario: `~` es el directorio personal y las relativas son
+    /// del proyecto.
+    fn ruta_usuario_a_path(&self, texto: &str) -> PathBuf {
+        let t = texto.trim();
+        match (t.strip_prefix("~/"), std::env::var_os("HOME")) {
+            (Some(resto), Some(h)) => PathBuf::from(h).join(resto),
+            _ if Path::new(t).is_absolute() => PathBuf::from(t),
+            _ => self.proyecto.raiz.join(t),
+        }
+    }
+
+    /// Las preferencias que se ven ahora, con los manifiestos propios del usuario.
+    fn preferencias_actuales(&self) -> jonesy_core::preferencias::Preferencias {
+        let s = Sesion {
+            quickdoc_visible: self.quickdoc_visible,
+            quickdoc_posicion: Some(self.quickdoc_posicion),
+            preview_markdown: self.preview_markdown,
+            paneles: Some(self.paneles),
+            integraciones: self
+                .integraciones
+                .iter()
+                .map(|x| (x.nombre.clone(), x.activa))
+                .collect(),
+            tema: Some(tema::actual().nombre().into()),
+            ..Default::default()
+        };
+        jonesy_core::preferencias::desde_sesion(
+            &s,
+            jonesy_core::integraciones::dir_usuario().as_deref(),
+        )
+    }
+
+    fn exportar_preferencias(&mut self, ruta: &Path) {
+        let p = self.preferencias_actuales();
+        match jonesy_core::preferencias::escribir(&p, ruta) {
+            Ok(()) => self.avisar(
+                format!(
+                    "Preferencias exportadas en {} ({}).",
+                    ruta.display(),
+                    p.resumen()
+                ),
+                Nivel::Ok,
+            ),
+            Err(e) => self.avisar(format!("No pude exportar: {e}"), Nivel::Error),
+        }
+    }
+
+    fn importar_preferencias(&mut self, ruta: &Path) {
+        match jonesy_core::preferencias::importar(ruta) {
+            Ok((p, escritos)) => {
+                if !escritos.is_empty() {
+                    self.aplicar_config(QueConfig::ReleerIntegraciones);
+                }
+                self.aplicar_preferencias(&p);
+                self.guardar_sesion();
+                let extra = if escritos.is_empty() {
+                    String::new()
+                } else {
+                    format!(" Manifiestos instalados: {}.", escritos.join(", "))
+                };
+                self.avisar(
+                    format!("Preferencias importadas: {}.{extra}", p.resumen()),
+                    Nivel::Ok,
+                );
+            }
+            Err(e) => self.avisar(format!("No pude importar: {e}"), Nivel::Error),
+        }
+    }
+
+    /// Aplica preferencias importadas (o las del usuario, en un proyecto sin sesión).
+    fn aplicar_preferencias(&mut self, p: &jonesy_core::preferencias::Preferencias) {
+        if let Some(t) = p.tema.as_deref().and_then(tema::Tema::de_nombre) {
+            tema::usar(t);
+        }
+        if let Some(v) = p.quickdoc_visible {
+            self.quickdoc_visible = v;
+        }
+        if let Some(v) = p.quickdoc_posicion {
+            self.quickdoc_posicion = v;
+        }
+        if let Some(v) = p.preview_markdown {
+            self.preview_markdown = v;
+        }
+        if let Some(t) = p.paneles {
+            self.paneles = t.acotar();
+        }
+        for (nombre, activa) in &p.integraciones {
+            if let Some(x) = self.integraciones.iter_mut().find(|x| x.nombre == *nombre) {
+                x.activa = *activa;
+            }
+        }
+    }
+
     /// Ayuda → Atajos de este panel (o `?` en el panel).
     fn atajos_del_panel(&mut self) {
         let p = match (self.foco, self.pestana) {
@@ -4625,6 +4725,19 @@ impl App {
                     "los tamaños de .jonesy.toml o los predeterminados".into(),
                     QueConfig::Accion(Accion::RestablecerPaneles),
                 ),
+                fila(
+                    "Exportar mis preferencias…",
+                    String::new(),
+                    "tema, quick-doc, paneles, integraciones y manifiestos propios, a un .toml"
+                        .into(),
+                    QueConfig::Accion(Accion::ExportarPreferencias),
+                ),
+                fila(
+                    "Importar preferencias…",
+                    String::new(),
+                    "las de otra máquina; también quedan para los proyectos nuevos".into(),
+                    QueConfig::Accion(Accion::ImportarPreferencias),
+                ),
             ],
         }
     }
@@ -6023,6 +6136,22 @@ impl App {
                 });
             }
             Accion::AtajosPanel => self.atajos_del_panel(),
+            Accion::ExportarPreferencias | Accion::ImportarPreferencias => {
+                let importar = a == Accion::ImportarPreferencias;
+                if importar && self.examen.is_some() {
+                    self.avisar("En modo examen no se importan preferencias.", Nivel::Aviso);
+                    return;
+                }
+                let texto = std::env::var_os("HOME")
+                    .map(|h| {
+                        PathBuf::from(h)
+                            .join("jonesy-preferencias.toml")
+                            .display()
+                            .to_string()
+                    })
+                    .unwrap_or_else(|| "jonesy-preferencias.toml".into());
+                self.modal = Some(Modal::RutaPreferencias { importar, texto });
+            }
             Accion::AcercaDe => {
                 let texto = format!(
                     "# jonesy {}\n\nIDE de terminal para la cátedra de Programación I.\n\n- Proyecto: `{}`\n- Base quick-doc: {} funciones\n- Layout: modo {}\n- Telemetría: {}\n",
@@ -6693,6 +6822,7 @@ impl App {
                 | Modal::Renombrar { texto, .. }
                 | Modal::RenombrarSimbolo { texto, .. }
                 | Modal::CodigoPausa { texto }
+                | Modal::RutaPreferencias { texto, .. }
                 | Modal::Clonar {
                     url: texto,
                     campo: 0,
@@ -7781,6 +7911,25 @@ impl App {
                     })
                     .flatten();
                 self.modal = Some(Modal::RenombrarSimbolo { plan, texto, error });
+            }
+            Modal::RutaPreferencias {
+                importar,
+                mut texto,
+            } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    let ruta = self.ruta_usuario_a_path(&texto);
+                    if importar {
+                        self.importar_preferencias(&ruta);
+                    } else {
+                        self.exportar_preferencias(&ruta);
+                    }
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::RutaPreferencias { importar, texto });
             }
             Modal::CodigoPausa { mut texto } => {
                 if cerrar {

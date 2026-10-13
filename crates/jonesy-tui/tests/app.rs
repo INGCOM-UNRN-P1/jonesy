@@ -27,6 +27,8 @@ fn estado_de_prueba() {
     static ESTADO: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
     let d = ESTADO.get_or_init(|| tempfile::tempdir().unwrap());
     std::env::set_var("JONESY_ESTADO", d.path());
+    // Sin las preferencias ni los manifiestos de integraciones de quien corre las pruebas.
+    std::env::set_var("JONESY_CONFIG", d.path().join("config"));
 }
 
 fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
@@ -2960,4 +2962,26 @@ fn signo_de_pregunta_muestra_los_atajos_del_panel() {
     a.accion(jonesy_tui::accion::Accion::AtajosPanel);
     let p = pantalla(&mut a, 140, 40);
     assert!(p.contains("Atajos de jonesy"), "{p}");
+}
+
+#[test]
+fn exportar_preferencias_desde_la_configuracion() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.accion(jonesy_tui::accion::Accion::ExportarPreferencias);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Exportar preferencias a"), "{p}");
+    // Reemplaza la ruta propuesta por una del proyecto.
+    for _ in 0..200 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "prefs.toml");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let texto = std::fs::read_to_string(dir.path().join("prefs.toml")).unwrap();
+    assert!(
+        texto.contains("tema = ") && texto.contains("quickdoc_visible"),
+        "{texto}"
+    );
+    let leidas = jonesy_core::preferencias::leer(&dir.path().join("prefs.toml")).unwrap();
+    assert!(leidas.integraciones.contains_key("gaff"), "{leidas:?}");
 }

@@ -2982,6 +2982,26 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 y,
             ))
         }
+        Modal::RutaPreferencias { importar, texto } => {
+            let r = centrado(area, 76, 3);
+            limpiar(f, r);
+            let b = bloque(
+                if *importar {
+                    " Importar preferencias desde (Enter · Esc cancela) "
+                } else {
+                    " Exportar preferencias a (Enter · Esc cancela) "
+                },
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(Paragraph::new(texto.clone()), i);
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
+        }
         Modal::CodigoPausa { texto } => {
             let r = centrado(area, 56, 3);
             limpiar(f, r);

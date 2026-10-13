@@ -21,6 +21,7 @@ pub mod gdb;
 pub mod glosario;
 pub mod integraciones;
 pub mod precedencia;
+pub mod preferencias;
 pub mod proceso;
 pub mod proyecto;
 pub mod pruebas;

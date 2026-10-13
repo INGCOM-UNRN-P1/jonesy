@@ -16,6 +16,11 @@ Uso:
   jonesy doctor [--rapido] [--json] [directorio]
                      salud del entorno: compilar, depurar, memoria, git, terminal,
                      proyecto y ecosistema (--rapido saltea las pruebas de humo)
+  jonesy config exportar [archivo] [directorio]
+                     guarda tema, quick-doc, paneles, integraciones y manifiestos
+                     propios (jonesy-preferencias.toml) para llevarlos a otra máquina
+  jonesy config importar <archivo>
+                     los instala como punto de partida de los proyectos
 
 Opciones:
   --exam             modo examen (también JONESY_EXAM_MODE=1)
@@ -146,6 +151,46 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
             } else {
                 ExitCode::from(1)
             });
+        }
+        Some("config") => {
+            let libres: Vec<&String> = args
+                .iter()
+                .skip(2)
+                .filter(|a| !a.starts_with("--"))
+                .collect();
+            match args.get(1).map(String::as_str) {
+                Some("exportar") => {
+                    let archivo = libres
+                        .first()
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| PathBuf::from("jonesy-preferencias.toml"));
+                    let raiz = libres
+                        .get(1)
+                        .map(PathBuf::from)
+                        .unwrap_or(std::env::current_dir()?);
+                    let proyecto = jonesy_core::Proyecto::abrir(&raiz);
+                    let p = jonesy_core::preferencias::actuales(Some(&proyecto.dir_estado()));
+                    jonesy_core::preferencias::escribir(&p, &archivo)
+                        .map_err(anyhow::Error::msg)?;
+                    println!("Exportado en {}: {}.", archivo.display(), p.resumen());
+                }
+                Some("importar") => {
+                    let Some(archivo) = libres.first() else {
+                        anyhow::bail!("uso: jonesy config importar <archivo>")
+                    };
+                    let (p, escritos) = jonesy_core::preferencias::importar(Path::new(archivo))
+                        .map_err(anyhow::Error::msg)?;
+                    println!("Importado: {}.", p.resumen());
+                    for e in escritos {
+                        println!("  manifiesto instalado: {e}");
+                    }
+                    println!("Los proyectos sin sesión arrancan con estas preferencias; en uno ya abierto, Archivo → Configuración → Importar.");
+                }
+                _ => anyhow::bail!(
+                    "uso: jonesy config exportar [archivo] [directorio] | importar <archivo>"
+                ),
+            }
+            return Ok(ExitCode::SUCCESS);
         }
         Some("verificar") => {
             let Some(log) = args.get(1) else {

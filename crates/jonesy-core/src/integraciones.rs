@@ -195,16 +195,9 @@ pub fn de_fabrica() -> Vec<Integracion> {
 }
 
 /// Directorio del usuario: `$XDG_CONFIG_HOME/jonesy/integraciones` (o `~/.config`; en
-/// Windows `%APPDATA%\jonesy\integraciones`).
+/// Windows `%APPDATA%\jonesy\integraciones`; `$JONESY_CONFIG/integraciones` si está).
 pub fn dir_usuario() -> Option<PathBuf> {
-    let base = if cfg!(windows) {
-        std::env::var_os("APPDATA").map(PathBuf::from)
-    } else {
-        std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-    };
-    base.map(|b| b.join("jonesy").join("integraciones"))
+    crate::preferencias::dir_config().map(|b| b.join("integraciones"))
 }
 
 /// Lee los `*.toml` de `dir`; devuelve las integraciones y los errores de lectura.
