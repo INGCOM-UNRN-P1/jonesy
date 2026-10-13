@@ -113,6 +113,7 @@ pub enum Accion {
     Recorrido,
     RenombrarSimbolo,
     PausarExamen,
+    AtajosPanel,
 }
 
 pub struct Info {
@@ -170,6 +171,7 @@ impl Accion {
             Entregar => ("Entregar examen…", "F12"),
             ExplicarRegla => ("Explicar error o regla actual", "F1"),
             Atajos => ("Atajos de teclado", ""),
+            AtajosPanel => ("Atajos de este panel", "? en el panel"),
             AcercaDe => ("Acerca de jonesy", ""),
             Paleta => ("Paleta de comandos", "Ctrl+K"),
             TamanosPaneles => ("Tamaños de paneles…", ""),
@@ -303,6 +305,7 @@ impl Accion {
             NuevoArchivo,
             AbrirProyecto,
             Atajos,
+            AtajosPanel,
             AcercaDe,
             Configuracion,
             LimpiarCompilacion,
@@ -607,6 +610,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(Tablas),
             A(CatalogoReglas),
             A(Atajos),
+            A(AtajosPanel),
             A(Doctor),
             A(AcercaDe),
         ],

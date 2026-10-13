@@ -391,6 +391,7 @@ fn dibujar_navegador(f: &mut Frame, app: &mut App, r: Rect) {
                     "F2 renombrar",
                     "Supr borrar",
                     "r relee",
+                    "? atajos",
                 ],
                 i.width as usize,
             );
@@ -2072,9 +2073,9 @@ fn dibujar_git(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
         ),
     ])];
     let ayuda = if app.git.log.is_some() {
-        "Enter ver commit · m marca otro para comparar · z deshace el último · l volver"
+        "Enter ver commit · m marca otro para comparar · z deshace el último · l volver · ? atajos"
     } else {
-        "Espacio stage · a/u todo · c commit · l log · s subir · b traer · Enter diff"
+        "Espacio stage · a/u todo · c commit · l log · s subir · b traer · Enter diff · ? atajos"
     };
     cabecera.push(Line::styled(ayuda, Style::default().fg(tema::atenuado())));
     let alto_cab = cabecera.len() as u16;

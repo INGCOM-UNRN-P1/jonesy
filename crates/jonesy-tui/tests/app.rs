@@ -2936,3 +2936,28 @@ fn pausa_del_examen_con_codigo_del_docente() {
     let e = jonesy_core::sesion::EstadoExamen::cargar(&dir.path().join(".jonesy")).unwrap();
     assert!(e.pausado_desde.is_none());
 }
+
+#[test]
+fn signo_de_pregunta_muestra_los_atajos_del_panel() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::Explorador);
+    tecla(&mut a, KeyCode::Char('?'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("Atajos: archivos") && p.contains("carpeta nueva"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // En el editor `?` se escribe.
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    let antes = a.buf().buf.contenido();
+    tecla(&mut a, KeyCode::Char('?'), KeyModifiers::NONE);
+    assert!(a.modal.is_none());
+    assert_ne!(a.buf().buf.contenido(), antes);
+    // Desde el menú, en el editor: los atajos generales.
+    a.accion(jonesy_tui::accion::Accion::AtajosPanel);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("Atajos de jonesy"), "{p}");
+}

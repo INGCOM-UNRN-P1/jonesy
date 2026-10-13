@@ -3151,6 +3151,63 @@ impl App {
         }
     }
 
+    /// El panel con el foco, para sus atajos (`?`). None donde `?` se escribe (la terminal,
+    /// el programa, la consola de gdb).
+    fn panel_actual(&self) -> Option<crate::ayuda::Panel> {
+        use crate::ayuda::Panel;
+        Some(match self.foco {
+            Foco::Navegador => match self.navegador? {
+                PestanaNav::Archivos => Panel::Archivos,
+                PestanaNav::Proyecto => Panel::Proyecto,
+                PestanaNav::Esquema => Panel::Esquema,
+            },
+            Foco::Lateral => match self.lateral? {
+                Lateral::Git => Panel::Git,
+                Lateral::Reglas => Panel::Reglas,
+                _ => Panel::Editor,
+            },
+            Foco::Inferior => match self.pestana {
+                Pestana::Problemas => Panel::Problemas,
+                Pestana::Salida => Panel::Salida,
+                Pestana::Busqueda => Panel::Busqueda,
+                Pestana::Depurador
+                    if self
+                        .depuracion
+                        .as_ref()
+                        .is_some_and(|d| d.foco_consola || d.pty.is_some()) =>
+                {
+                    return None
+                }
+                Pestana::Depurador => Panel::Depurador,
+                Pestana::Terminal | Pestana::Ejecucion => return None,
+            },
+            Foco::Consigna => Panel::Consigna,
+            Foco::Preview => Panel::VistaPrevia,
+            Foco::Editor | Foco::Doc => Panel::Editor,
+        })
+    }
+
+    /// Ayuda → Atajos de este panel (o `?` en el panel).
+    fn atajos_del_panel(&mut self) {
+        let p = match (self.foco, self.pestana) {
+            (Foco::Inferior, Pestana::Depurador) => crate::ayuda::Panel::Depurador,
+            _ => self.panel_actual().unwrap_or(crate::ayuda::Panel::Editor),
+        };
+        let (titulo, texto) = crate::ayuda::atajos_panel(p);
+        let md = if p == crate::ayuda::Panel::Editor {
+            texto.to_string()
+        } else {
+            format!("# {titulo}\n\n{texto}\nTodos los atajos: Ayuda → Atajos de teclado.\n")
+        };
+        self.glosario_visor.clear();
+        let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+        self.modal = Some(Modal::Visor {
+            titulo: titulo.into(),
+            lineas: markdown::renderizar(&md, ancho, &self.sim).lineas,
+            desplazamiento: 0,
+        });
+    }
+
     fn entregar(&mut self) {
         self.guardar_todo();
         if let Some(e) = &mut self.examen {
@@ -5965,6 +6022,7 @@ impl App {
                     desplazamiento: 0,
                 });
             }
+            Accion::AtajosPanel => self.atajos_del_panel(),
             Accion::AcercaDe => {
                 let texto = format!(
                     "# jonesy {}\n\nIDE de terminal para la cátedra de Programación I.\n\n- Proyecto: `{}`\n- Base quick-doc: {} funciones\n- Layout: modo {}\n- Telemetría: {}\n",
@@ -6840,6 +6898,18 @@ impl App {
                 return;
             }
             self.accion(a);
+            return;
+        }
+        // `?` en un panel que no es de texto: sus atajos.
+        if k.code == KeyCode::Char('?')
+            && !k
+                .modifiers
+                .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT)
+            && self.foco != Foco::Editor
+            && self.panel_actual() != Some(crate::ayuda::Panel::Editor)
+            && self.panel_actual().is_some()
+        {
+            self.atajos_del_panel();
             return;
         }
         match self.foco {

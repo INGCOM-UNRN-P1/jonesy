@@ -132,6 +132,134 @@ pub fn tablas() -> String {
     s
 }
 
+/// Paneles con atajos propios (tecla `?` con el foco en el panel).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Panel {
+    Archivos,
+    Proyecto,
+    Esquema,
+    Git,
+    Reglas,
+    Problemas,
+    Salida,
+    Busqueda,
+    Depurador,
+    Consigna,
+    VistaPrevia,
+    Editor,
+}
+
+/// Título y atajos de un panel, en Markdown.
+pub fn atajos_panel(p: Panel) -> (&'static str, &'static str) {
+    match p {
+        Panel::Archivos => (
+            "Atajos: archivos",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág Inicio Fin | moverse |\n\
+| Enter · Espacio | abrir el archivo o desplegar la carpeta |\n\
+| → · ← | desplegar · plegar (o ir a la carpeta de arriba) |\n\
+| n · m | archivo nuevo · carpeta nueva |\n\
+| F2 | renombrar o mover |\n\
+| Supr | borrar (pide confirmación) |\n\
+| r | releer el disco y git |\n\
+| Tab · Shift+Tab | pestaña proyecto · esquema |\n\
+| Esc | volver al editor |\n",
+        ),
+        Panel::Proyecto => (
+            "Atajos: proyecto",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág Inicio Fin | moverse |\n\
+| Enter · Espacio | desplegar el ejercicio o correr el objetivo de make (o el comando de tp.sh) |\n\
+| → · ← | desplegar · plegar |\n\
+| r | releer los Makefile y tp.sh |\n\
+| Tab · Shift+Tab | pestaña esquema · archivos |\n\
+| Esc | volver al editor |\n",
+        ),
+        Panel::Esquema => (
+            "Atajos: esquema",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág Inicio Fin | moverse por las funciones, tipos y macros |\n\
+| Enter | ir a la definición y volver al editor |\n\
+| → · Espacio | mostrarla sin dejar el esquema |\n\
+| Tab · Shift+Tab | pestaña archivos · proyecto |\n\
+| Esc | volver al editor |\n",
+        ),
+        Panel::Git => (
+            "Atajos: git",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ | moverse |\n\
+| Espacio | agregar o sacar el archivo del próximo commit (stage) |\n\
+| a · u | agregar todo · sacar todo |\n\
+| c | commit |\n\
+| Enter | ver el cambio (diff) del archivo o del commit |\n\
+| l | historial (log); m marca un commit para comparar |\n\
+| z | deshacer el último commit (los cambios quedan) |\n\
+| s · b | subir (push) · bajar (pull) |\n\
+| r | refrescar |\n\
+| Esc · Tab | volver al editor |\n",
+        ),
+        Panel::Reglas => (
+            "Atajos: reglas",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ | moverse por los hallazgos, agrupados por regla |\n\
+| Enter | ir a la línea |\n\
+| F1 | explicar la regla («así no / así sí») |\n\
+| Esc · Tab | volver al editor |\n",
+        ),
+        Panel::Problemas => (
+            "Atajos: problemas",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ | moverse |\n\
+| Enter | ir a la línea del problema |\n\
+| F1 | explicar el error o la regla |\n\
+| Alt+N · Alt+Shift+N | siguiente · anterior (desde el editor) |\n\
+| Esc · Tab | volver al editor |\n",
+        ),
+        Panel::Salida => (
+            "Atajos: salida",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág | desplazar la salida |\n\
+| Esc · Tab | volver al editor |\n",
+        ),
+        Panel::Busqueda => (
+            "Atajos: búsqueda",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág | moverse por los resultados |\n\
+| Enter | abrir el archivo en esa línea |\n\
+| Esc · Tab | volver al editor |\n",
+        ),
+        Panel::Depurador => (
+            "Atajos: depurador",
+            "| Tecla | Hace |\n|---|---|\n\
+| F5 · Shift+F5 | continuar · detener |\n\
+| F10 · F11 · Shift+F11 | paso · entrar a la función · salir de la función |\n\
+| Ctrl+F10 | correr hasta el cursor |\n\
+| Ctrl+B | breakpoint en la línea del editor |\n\
+| Tab | alternar entre el programa y la consola de gdb |\n\
+| Esc Esc | volver al editor |\n",
+        ),
+        Panel::Consigna => (
+            "Atajos: consigna",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág Inicio | desplazar |\n\
+| Tab · Shift+Tab | recorrer los enlaces (sin enlaces, Tab vuelve al editor) |\n\
+| Enter | seguir el enlace |\n\
+| F7 · F8 | mostrar la consigna · volver al código (pantallas chicas) |\n\
+| Esc | volver al editor |\n",
+        ),
+        Panel::VistaPrevia => (
+            "Atajos: vista previa",
+            "| Tecla | Hace |\n|---|---|\n\
+| ↑ ↓ RePág AvPág Inicio | desplazar |\n\
+| Tab · Shift+Tab | recorrer los enlaces |\n\
+| Enter | seguir el enlace |\n\
+| Ctrl+P | cerrar la vista previa |\n\
+| Esc | volver al editor |\n",
+        ),
+        Panel::Editor => ("Atajos de jonesy", crate::accion::AYUDA_ATAJOS),
+    }
+}
+
 /// Zonas de la pantalla que recorre el recorrido guiado.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Zona {
