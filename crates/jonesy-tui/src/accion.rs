@@ -116,6 +116,7 @@ pub enum Accion {
     AtajosPanel,
     ExportarPreferencias,
     ImportarPreferencias,
+    ReportarProblema,
 }
 
 pub struct Info {
@@ -201,6 +202,7 @@ impl Accion {
             EstadoEntrega => ("Verificar estado de entrega", ""),
             ConfigurarPlugins => ("Configurar plugins…", ""),
             Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
+            ReportarProblema => ("Reportar un problema de jonesy…", ""),
             Bienvenida => ("Bienvenida", ""),
             Comentar => ("Comentar / descomentar líneas", "Ctrl+/"),
             DuplicarLinea => ("Duplicar línea", "Ctrl+D"),
@@ -320,6 +322,7 @@ impl Accion {
             EstadoEntrega,
             ConfigurarPlugins,
             Doctor,
+            ReportarProblema,
             Bienvenida,
             Comentar,
             DuplicarLinea,
@@ -618,6 +621,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(Atajos),
             A(AtajosPanel),
             A(Doctor),
+            A(ReportarProblema),
             A(AcercaDe),
         ],
     ));

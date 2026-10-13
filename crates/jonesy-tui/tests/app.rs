@@ -2985,3 +2985,38 @@ fn exportar_preferencias_desde_la_configuracion() {
     let leidas = jonesy_core::preferencias::leer(&dir.path().join("prefs.toml")).unwrap();
     assert!(leidas.integraciones.contains_key("gaff"), "{leidas:?}");
 }
+
+#[test]
+fn reportar_un_problema() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n[interfaz]\nosc52 = false\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.avisar(
+        "No se pudo armar el paquete: disco lleno",
+        jonesy_tui::app::Nivel::Error,
+    );
+    a.accion(jonesy_tui::accion::Accion::ReportarProblema);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 140, 60);
+    assert!(
+        p.contains("Reporte de jonesy") && p.contains("copiado"),
+        "{p}"
+    );
+    let guardado = std::fs::read_dir(dir.path().join(".jonesy"))
+        .unwrap()
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().starts_with("reporte-"))
+        .map(|e| std::fs::read_to_string(e.path()).unwrap())
+        .expect("el reporte queda en .jonesy/");
+    assert!(
+        guardado.contains("disco lleno") && guardado.contains("[ripley]"),
+        "{guardado}"
+    );
+}

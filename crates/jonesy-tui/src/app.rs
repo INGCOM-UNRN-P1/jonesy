@@ -711,6 +711,8 @@ pub struct App {
     esquema_cache: Option<(Option<PathBuf>, u64, Vec<jonesy_core::simbolos::Simbolo>)>,
     /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
     inicio_pruebas: Option<std::time::SystemTime>,
+    /// El último aviso de error (para Ayuda → Reportar un problema).
+    ultimo_error: Option<String>,
     /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
     ultima_compilacion: Option<(Instant, usize)>,
     /// Últimas pruebas: cuándo, cuántas pasan, cuántas fallan y si compilaron.
@@ -906,6 +908,7 @@ impl App {
             esquema_cache: None,
             inicio_pruebas: None,
             ultima_compilacion: None,
+            ultimo_error: None,
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -1153,7 +1156,11 @@ impl App {
     // ------------------------------------------------------------ utilidades
 
     pub fn avisar(&mut self, texto: impl Into<String>, nivel: Nivel) {
-        self.mensaje = Some((texto.into(), nivel, Instant::now()));
+        let texto = texto.into();
+        if nivel == Nivel::Error {
+            self.ultimo_error = Some(texto.clone());
+        }
+        self.mensaje = Some((texto, nivel, Instant::now()));
     }
 
     fn tel(&self, e: TelemetryEvent) {
@@ -4958,6 +4965,55 @@ impl App {
         );
     }
 
+    /// Ayuda → Reportar un problema: arma el informe (como `jonesy reporte`), lo guarda en
+    /// `.jonesy/` y lo copia.
+    pub fn reportar_problema(&mut self) {
+        let proyecto = jonesy_core::Proyecto::abrir(&self.proyecto.raiz);
+        let integraciones = self.integraciones.clone();
+        let errores = self.errores_integraciones.clone();
+        let ctx = jonesy_core::reporte::Contexto {
+            tamano: Some(self.tam),
+            ultimo_error: self.ultimo_error.clone(),
+            examen: self.examen.is_some(),
+        };
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let r = jonesy_core::reporte::generar(
+                env!("CARGO_PKG_VERSION"),
+                &proyecto,
+                &integraciones,
+                &errores,
+                &ctx,
+            );
+            let _ = tx.send(Aviso::Reporte(r));
+        });
+        self.avisar("Armando el reporte…", Nivel::Info);
+    }
+
+    fn mostrar_reporte(&mut self, texto: String) {
+        let dir = self.proyecto.dir_estado();
+        let ruta = dir.join(format!("reporte-{}.md", jonesy_core::ahora_unix()));
+        let guardado = std::fs::create_dir_all(&dir)
+            .and_then(|_| std::fs::write(&ruta, &texto))
+            .is_ok();
+        self.copiar_texto(texto.clone());
+        let donde = if guardado {
+            format!("Guardado en `{}` y copiado", self.proyecto.relativa(&ruta))
+        } else {
+            "Copiado".to_string()
+        };
+        let md = format!(
+            "{donde}: pegalo en el aviso del problema (o mandalo a la cátedra).\n\n{texto}"
+        );
+        let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
+        self.glosario_visor.clear();
+        self.modal = Some(Modal::Visor {
+            titulo: "Reporte de un problema".into(),
+            lineas: markdown::renderizar(&md, ancho, &self.sim).lineas,
+            desplazamiento: 0,
+        });
+    }
+
     /// Examen → Verificar estado de entrega.
     pub fn estado_entrega(&mut self) {
         let Some(e) = &self.examen else {
@@ -6223,6 +6279,7 @@ impl App {
             }
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
+            Accion::ReportarProblema => self.reportar_problema(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -6781,6 +6838,7 @@ impl App {
                     desplazamiento: 0,
                 });
             }
+            Aviso::Reporte(texto) => self.mostrar_reporte(texto),
             Aviso::Senal(s) => {
                 self.finalizar(sistema::nombre_senal(s));
                 self.salir = true;

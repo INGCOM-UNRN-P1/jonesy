@@ -16,6 +16,9 @@ Uso:
   jonesy doctor [--rapido] [--json] [directorio]
                      salud del entorno: compilar, depurar, memoria, git, terminal,
                      proyecto y ecosistema (--rapido saltea las pruebas de humo)
+  jonesy reporte [directorio] [--salida archivo.md]
+                     informe para reportar un problema de jonesy: versión, sistema,
+                     terminal, doctor rápido, .jonesy.toml, último pánico
   jonesy config exportar [archivo] [directorio]
                      guarda tema, quick-doc, paneles, integraciones y manifiestos
                      propios (jonesy-preferencias.toml) para llevarlos a otra máquina
@@ -151,6 +154,38 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
             } else {
                 ExitCode::from(1)
             });
+        }
+        Some("reporte") => {
+            let salida = valor("--salida");
+            let raiz = args
+                .iter()
+                .skip(1)
+                .filter(|a| !a.starts_with("--") && Some(*a) != salida.as_ref())
+                .map(PathBuf::from)
+                .next()
+                .unwrap_or(std::env::current_dir()?);
+            let proyecto = jonesy_core::Proyecto::abrir(&raiz);
+            let (integraciones, errores) = jonesy_core::integraciones::cargar(
+                &proyecto.dir_estado(),
+                &proyecto.config.integraciones,
+            );
+            let texto = jonesy_core::reporte::generar(
+                env!("CARGO_PKG_VERSION"),
+                &proyecto,
+                &integraciones,
+                &errores,
+                &jonesy_core::reporte::Contexto::default(),
+            );
+            match salida {
+                Some(s) => {
+                    std::fs::write(&s, &texto)?;
+                    println!(
+                        "Reporte guardado en {s}: revisalo y adjuntalo al aviso del problema."
+                    );
+                }
+                None => print!("{texto}"),
+            }
+            return Ok(ExitCode::SUCCESS);
         }
         Some("config") => {
             let libres: Vec<&String> = args

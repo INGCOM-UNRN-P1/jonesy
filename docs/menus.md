@@ -103,7 +103,7 @@ comprueba que esté al día.
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 3 |
-| Ayuda | A[y]uda | F10 y Y | 12 |
+| Ayuda | A[y]uda | F10 y Y | 13 |
 
 ## Archivo
 
@@ -292,6 +292,7 @@ Sólo en modo examen (`--exam`).
 │ Atajos de teclado                                                     │
 │ Atajos de este panel                                    ? en el panel │
 │ Diagnóstico del entorno (jonesy doctor)                               │
+│ Reportar un problema de jonesy…                                       │
 │ Acerca de jonesy                                                      │
 └───────────────────────────────────────────────────────────────────────┘
 ```

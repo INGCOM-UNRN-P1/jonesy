@@ -21,6 +21,8 @@ pub enum Aviso {
     Senal(i32),
     /// Terminó el diagnóstico del entorno (Ayuda → Diagnóstico del entorno): Markdown.
     Doctor(String),
+    /// Está listo el reporte de Ayuda → Reportar un problema: Markdown.
+    Reporte(String),
     /// Terminaron los casos de Construir → Comparar con las salidas esperadas.
     Casos(Vec<jonesy_core::casos::ResultadoCaso>),
     /// Se cargaron los catálogos de reglas de las herramientas.
@@ -57,6 +59,8 @@ pub fn instalar_gancho_panico() {
     let previo = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         restaurar();
+        // Queda para el próximo `jonesy reporte`.
+        jonesy_core::reporte::registrar_panico(env!("CARGO_PKG_VERSION"), &info.to_string());
         previo(info);
     }));
 }
