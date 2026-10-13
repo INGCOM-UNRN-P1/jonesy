@@ -104,6 +104,11 @@ jonesy replay .jonesy/telemetry.log            # reproductor interactivo
 jonesy replay .jonesy/telemetry.log --resumen  # resumen de auditoría
 jonesy replay .jonesy/telemetry.log --json
 jonesy verificar .jonesy/telemetry.log         # código 1 si la cadena está rota
+
+jonesy doctor                                  # ¿falta algo en el entorno?
+jonesy reporte --salida reporte.md             # informe para reportar un problema
+jonesy config exportar prefs.toml              # tema, paneles, integraciones…
+jonesy config importar prefs.toml              # en otra máquina
 ```
 
 ### Atajos principales
