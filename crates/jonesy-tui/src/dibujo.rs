@@ -959,6 +959,9 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
     }
     let foco = app.foco == Foco::Editor && app.modal.is_none();
     let activo = app.activo;
+    if app.buffers[activo].hex.is_some() {
+        return dibujar_hex(f, app, r, foco);
+    }
     let ruta = app.buffers[activo].buf.ruta.clone();
     let lineas_total = app.buffers[activo].buf.lineas();
     let digitos = lineas_total.max(1).to_string().len().max(3) as u16;
@@ -2468,10 +2471,11 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         format!(" {}{} ", b.nombre(), if b.modificado() { "*" } else { "" }),
         fondo.add_modifier(Modifier::BOLD),
     ));
-    izq.push(Span::styled(
-        format!("Ln {}, Col {} ", l + 1, c + 1),
-        fondo.fg(tema::atenuado()),
-    ));
+    let posicion = match app.buf().hex.as_deref() {
+        Some(v) => format!("offset 0x{:x} ", v.cursor),
+        None => format!("Ln {}, Col {} ", l + 1, c + 1),
+    };
+    izq.push(Span::styled(posicion, fondo.fg(tema::atenuado())));
     // Módulo (biblioteca o ejercicio) del archivo activo: ahí actúan F6, Ctrl+F5 y F5.
     if let Some(m) = app.proyecto.modulo_activo(app.buf().buf.ruta.as_deref()) {
         izq.push(Span::styled(
@@ -3555,7 +3559,6 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
             dibujar_diff(f, area, &titulo, &filas, desplazamiento, lado_a_lado, ctx);
             None
         }
-        Modal::Hex(_) => dibujar_hex(f, app, area),
         Modal::Bienvenida { siempre, faltan } => {
             let alto = (24 + faltan.len() as u16).min(area.height.saturating_sub(2));
             let r = centrado(area, 78, alto);
@@ -3890,32 +3893,34 @@ fn lista_modal(
     ))
 }
 
-/// El visor hexadecimal: offset · bytes · ASCII, con el cursor, la última coincidencia y
-/// una línea con el valor del byte del cursor.
-fn dibujar_hex(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
-    let r = Rect {
-        x: area.x + 1,
-        y: area.y + 1,
-        width: area.width.saturating_sub(2),
-        height: area.height.saturating_sub(2),
-    };
-    limpiar(f, r);
-    let raiz = app.proyecto.raiz.clone();
-    let Some(crate::app::Modal::Hex(v)) = &mut app.modal else {
-        return None;
-    };
-    let nombre = v
-        .ruta
-        .strip_prefix(&raiz)
-        .unwrap_or(&v.ruta)
-        .display()
-        .to_string();
-    let b = bloque(format!(" {nombre} · {} ", v.resumen), true);
-    let i = b.inner(r);
-    f.render_widget(b, r);
-    if i.height < 3 {
+/// El visor hexadecimal en la zona del editor (pestaña de un binario): una línea con
+/// qué es el archivo, offset · bytes · ASCII con el cursor y la última coincidencia, y
+/// al pie el valor del byte del cursor y las teclas.
+fn dibujar_hex(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Option<(u16, u16)> {
+    app.zonas.editor = Some(ZonaEditor {
+        texto: r,
+        gutter: Rect { width: 0, ..r },
+    });
+    let activo = app.activo;
+    let v = app.buffers[activo].hex.as_deref_mut()?;
+    if r.height < 4 {
         return None;
     }
+    f.render_widget(
+        Paragraph::new(Line::styled(
+            format!(" {}", v.resumen),
+            Style::default()
+                .fg(tema::acento())
+                .add_modifier(Modifier::BOLD),
+        )),
+        Rect { height: 1, ..r },
+    );
+    let i = Rect {
+        x: r.x + 1,
+        y: r.y + 1,
+        width: r.width.saturating_sub(1),
+        height: r.height - 1,
+    };
     let cuerpo = Rect {
         height: i.height - 2,
         ..i
@@ -4046,7 +4051,7 @@ fn dibujar_hex(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
             Rect { height: 1, ..pie },
         );
         let ayuda =
-            "g ir a · / buscar · n siguiente · i información · s símbolos · ? atajos · Esc cerrar";
+            "g ir a · / buscar · n siguiente · i información · s símbolos · ? atajos · Ctrl+W cierra";
         f.render_widget(
             Paragraph::new(Line::styled(ayuda, tenue)),
             Rect {
@@ -4077,7 +4082,7 @@ fn dibujar_hex(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
             )),
             fila,
         );
-        cursor_pos = Some((
+        cursor_pos = foco.then_some((
             fila.x
                 + (UnicodeWidthStr::width(linea.as_str()) as u16).min(fila.width.saturating_sub(1)),
             fila.y,

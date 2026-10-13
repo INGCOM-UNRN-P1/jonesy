@@ -266,12 +266,16 @@ pub const ATAJOS_HEX: &str = "\
 RePág AvPág      una pantalla
 Inicio Fin       principio o fin de la fila
 Ctrl+Inicio/Fin  principio o fin del archivo
-g                ir a un offset (0x1f0, 1f0h o decimal)
-/ o f            buscar texto o bytes en hexadecimal (7f 45 4c 46; \"cafe\" busca el texto)
+g o Ctrl+G       ir a un offset (0x1f0, 1f0h o decimal)
+/, f o Ctrl+F    buscar texto o bytes en hexadecimal (7f 45 4c 46; \"cafe\" busca el texto)
 n                siguiente coincidencia
 i                información: tipo de archivo, secciones de un ELF, objetos de un .a
 s                símbolos con nm (qué funciones define y cuáles usa de otro lado)
-Esc o q          cerrar (desde la información o los símbolos, volver a los bytes)
+Esc              cancelar el campo o volver de la información a los bytes
+Ctrl+W           cerrar la pestaña (Ctrl+Tab, Alt+1…9 cambian de pestaña)
+
+El binario se abre en una pestaña más: los paneles, el explorador y la barra de
+estado siguen como estaban, y el archivo nunca se modifica.
 
 Abajo, el byte del cursor en hexadecimal, decimal y como carácter, y los 4 bytes
 desde el cursor leídos como int (little endian, como en x86).";

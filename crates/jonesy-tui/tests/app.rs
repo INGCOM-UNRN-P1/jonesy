@@ -3092,11 +3092,17 @@ fn visor_hexadecimal_de_binarios() {
     if !ok {
         return; // sin gcc
     }
+    let original = std::fs::read(dir.path().join("prog")).unwrap();
     let (mut a, _rx) = app(dir.path(), false);
-    // Abrir un ejecutable no lo carga en el editor: abre el visor.
-    assert!(a.abrir_archivo(&dir.path().join("prog"), true).is_none());
-    assert!(matches!(a.modal, Some(Modal::Hex(_))));
-    let p = pantalla(&mut a, 120, 40);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Con el explorador abierto, abrir el ejecutable lo muestra en una pestaña más,
+    // con el resto de la pantalla como estaba.
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    let i = a.abrir_archivo(&dir.path().join("prog"), true).unwrap();
+    a.foco = Foco::Editor;
+    assert_eq!(a.activo, i);
+    assert!(a.modal.is_none() && a.buf().hex.is_some());
+    let p = pantalla(&mut a, 140, 40);
     assert!(
         p.contains("ELF de 64 bits") || p.contains("ELF de 32 bits"),
         "{p}"
@@ -3106,47 +3112,68 @@ fn visor_hexadecimal_de_binarios() {
         "{p}"
     );
     assert!(p.contains("byte 0x7f = 127"), "{p}");
+    assert!(
+        p.contains("Archivos") && p.contains("main.c"),
+        "explorador: {p}"
+    );
+    assert!(
+        p.contains("[F6 Compilar]") && p.contains("offset 0x0"),
+        "barra: {p}"
+    );
     // g: ir a un offset.
     tecla(&mut a, KeyCode::Char('g'), KeyModifiers::NONE);
     escribir(&mut a, "0x10");
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
-    let p = pantalla(&mut a, 120, 40);
+    let p = pantalla(&mut a, 140, 40);
     assert!(p.contains("offset 0x10 (16)"), "{p}");
-    // /: buscar texto.
-    tecla(&mut a, KeyCode::Char('/'), KeyModifiers::NONE);
+    // Ctrl+F: buscar texto.
+    tecla(&mut a, KeyCode::Char('f'), KeyModifiers::CONTROL);
     escribir(&mut a, "main");
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
-    let p = pantalla(&mut a, 120, 40);
+    let p = pantalla(&mut a, 140, 40);
     assert!(p.contains("Encontrado en 0x"), "{p}");
     // i: secciones del ELF explicadas; Esc vuelve a los bytes.
     tecla(&mut a, KeyCode::Char('i'), KeyModifiers::NONE);
-    let p = pantalla(&mut a, 120, 40);
+    let p = pantalla(&mut a, 140, 40);
     assert!(
         p.contains(".text") && p.contains("código de máquina"),
         "{p}"
     );
     tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
-    assert!(matches!(a.modal, Some(Modal::Hex(_))));
-    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
-    assert!(a.modal.is_none());
-    assert!(a
-        .buffers
-        .iter()
-        .all(|b| b.buf.ruta.as_deref() != Some(&dir.path().join("prog"))));
+    assert!(a.buf().hex.as_ref().unwrap().detalle.is_none());
+    // Tipear no edita ni guarda nada.
+    escribir(&mut a, "xyz");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    a.accion(jonesy_tui::accion::Accion::GuardarTodo);
+    assert_eq!(std::fs::read(dir.path().join("prog")).unwrap(), original);
+    // Ctrl+Tab vuelve al código y la pestaña del binario sigue ahí.
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::CONTROL);
+    assert!(a.buf().hex.is_none());
+    tecla(&mut a, KeyCode::Tab, KeyModifiers::CONTROL);
+    assert!(a.buf().hex.is_some());
+    // Ctrl+W la cierra.
+    tecla(&mut a, KeyCode::Char('w'), KeyModifiers::CONTROL);
+    assert!(a.buffers.iter().all(|b| b.hex.is_none()));
     // Ver → Visor hexadecimal: elegir entre los binarios del proyecto.
     a.accion(jonesy_tui::accion::Accion::VisorHex);
-    let p = pantalla(&mut a, 120, 40);
+    let p = pantalla(&mut a, 140, 40);
     assert!(
         p.contains("main.o — ELF") && p.contains("objeto reubicable"),
         "{p}"
     );
-    assert!(p.contains("prog — ELF"), "{p}");
-    assert!(!p.contains("main.c —"), "{p}");
+    assert!(p.contains("prog — ELF") && !p.contains("main.c —"), "{p}");
     escribir(&mut a, "main.o");
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
-    let p = pantalla(&mut a, 120, 40);
-    assert!(p.contains("main.o · ELF"), "{p}");
-    // A 70 columnas, 8 bytes por fila.
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("objeto reubicable") && a.buf().hex.is_some(),
+        "{p}"
+    );
+    // Angosto: 8 bytes por fila.
     let p = pantalla(&mut a, 70, 30);
     assert!(p.contains("00000008  "), "{p}");
+    // Queda en la sesión como cualquier pestaña.
+    a.guardar_sesion();
+    let (b, _rx) = app(dir.path(), false);
+    assert!(b.buffers.iter().any(|x| x.hex.is_some()));
 }

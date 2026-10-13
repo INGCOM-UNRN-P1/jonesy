@@ -310,8 +310,6 @@ pub enum Modal {
         importar: bool,
         texto: String,
     },
-    /// Visor hexadecimal de un archivo binario.
-    Hex(Box<VisorHex>),
     /// Examen → Pausar: el código del docente (se muestra con asteriscos).
     CodigoPausa {
         texto: String,
@@ -471,6 +469,8 @@ pub struct BufferAbierto {
     /// Enlace elegido con Tab en la vista previa.
     pub preview_enlace: Option<usize>,
     pub ultimo_cambio: Instant,
+    /// Un binario: la pestaña muestra el visor hexadecimal en lugar del texto.
+    pub hex: Option<Box<VisorHex>>,
 }
 
 impl BufferAbierto {
@@ -482,6 +482,7 @@ impl BufferAbierto {
             preview_desplazamiento: 0,
             preview_enlace: None,
             ultimo_cambio: Instant::now(),
+            hex: None,
         }
     }
 }
@@ -1347,8 +1348,7 @@ impl App {
         }
         // Un ejecutable, un .o, un .a…: el visor hexadecimal, no el editor.
         if ruta.is_file() && jonesy_core::hex::archivo_binario(&ruta) {
-            self.abrir_hex(&ruta);
-            return None;
+            return self.abrir_pestana_hex(&ruta, activar);
         }
         let mut buf = if ruta.exists() {
             match Buffer::abrir(&ruta) {
@@ -3369,13 +3369,40 @@ impl App {
 
     /// Abre el visor hexadecimal de un archivo.
     pub fn abrir_hex(&mut self, ruta: &Path) {
-        match VisorHex::abrir(ruta) {
-            Ok(v) => self.modal = Some(Modal::Hex(Box::new(v))),
-            Err(e) => self.avisar(
-                format!("No se pudo abrir {}: {e}", ruta.display()),
-                Nivel::Error,
-            ),
+        self.abrir_archivo(ruta, true);
+    }
+
+    /// Una pestaña con el visor hexadecimal: el buffer queda vacío y de solo lectura
+    /// (nunca se escribe sobre el binario).
+    fn abrir_pestana_hex(&mut self, ruta: &Path, activar: bool) -> Option<usize> {
+        let v = match VisorHex::abrir(ruta) {
+            Ok(v) => v,
+            Err(e) => {
+                self.avisar(
+                    format!("No se pudo abrir {}: {e}", ruta.display()),
+                    Nivel::Error,
+                );
+                return None;
+            }
+        };
+        let mut buf = Buffer::desde_texto("");
+        buf.ruta = Some(ruta.to_path_buf());
+        buf.lenguaje = Lenguaje::Texto;
+        buf.solo_lectura = true;
+        if self.buffers.len() == 1
+            && self.buffers[0].buf.ruta.is_none()
+            && !self.buffers[0].buf.modificado()
+        {
+            self.buffers.clear();
         }
+        let mut b = BufferAbierto::nuevo(buf);
+        b.hex = Some(Box::new(v));
+        self.buffers.push(b);
+        let i = self.buffers.len() - 1;
+        if activar {
+            self.cambiar_buffer(i);
+        }
+        Some(i)
     }
 
     /// Ver → Visor hexadecimal: elegir uno de los binarios del proyecto.
@@ -3413,8 +3440,9 @@ impl App {
         });
     }
 
-    /// Teclas del visor hexadecimal.
-    fn tecla_hex(&mut self, mut v: Box<VisorHex>, k: KeyEvent) {
+    /// Teclas del visor hexadecimal (pestaña activa). Las globales (F-teclas, Alt, menús)
+    /// ya se atendieron antes.
+    fn tecla_hex(&mut self, v: &mut VisorHex, k: KeyEvent) {
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);
         // Campo de «ir a» o de búsqueda.
         if let Some((ir, mut texto)) = v.entrada.take() {
@@ -3438,21 +3466,20 @@ impl App {
                     v.buscado = jonesy_core::hex::patron(&texto);
                     v.detalle = None;
                     let desde = v.cursor;
-                    self.buscar_hex(&mut v, desde);
+                    self.buscar_hex(v, desde);
                 }
                 _ => {
                     editar_campo(&mut texto, &k);
                     v.entrada = Some((ir, texto));
                 }
             }
-            self.modal = Some(Modal::Hex(v));
             return;
         }
         let pagina = (v.ancho * v.alto.max(1)) as isize;
         if let Some((_, lineas, desp)) = &mut v.detalle {
             let n = lineas.len().saturating_sub(1);
             match k.code {
-                KeyCode::Esc | KeyCode::Char('i' | 's') => v.detalle = None,
+                KeyCode::Esc | KeyCode::Char('i' | 's' | '?') => v.detalle = None,
                 KeyCode::Up => *desp = desp.saturating_sub(1),
                 KeyCode::Down => *desp = (*desp + 1).min(n),
                 KeyCode::PageUp => *desp = desp.saturating_sub(v.alto.max(1)),
@@ -3460,11 +3487,9 @@ impl App {
                 KeyCode::Char('g') => v.entrada = Some((true, String::new())),
                 _ => {}
             }
-            self.modal = Some(Modal::Hex(v));
             return;
         }
         match k.code {
-            KeyCode::Esc | KeyCode::Char('q') => return,
             KeyCode::Left => v.mover(-1),
             KeyCode::Right => v.mover(1),
             KeyCode::Up => v.mover(-(v.ancho as isize)),
@@ -3482,10 +3507,10 @@ impl App {
                 v.ir(p);
             }
             KeyCode::Char('g') => v.entrada = Some((true, String::new())),
-            KeyCode::Char('/') | KeyCode::Char('f') => v.entrada = Some((false, String::new())),
+            KeyCode::Char('/' | 'f') => v.entrada = Some((false, String::new())),
             KeyCode::Char('n') => {
                 let desde = v.cursor + 1;
-                self.buscar_hex(&mut v, desde);
+                self.buscar_hex(v, desde);
             }
             KeyCode::Char('i') => {
                 let info = jonesy_core::hex::informacion(&v.ruta, &v.datos);
@@ -3505,9 +3530,13 @@ impl App {
                     0,
                 ))
             }
+            KeyCode::Char(_) | KeyCode::Enter | KeyCode::Backspace | KeyCode::Delete => self
+                .avisar(
+                    "Es un archivo binario: se mira, no se edita (? muestra las teclas del visor).",
+                    Nivel::Info,
+                ),
             _ => {}
         }
-        self.modal = Some(Modal::Hex(v));
     }
 
     fn buscar_hex(&mut self, v: &mut VisorHex, desde: usize) {
@@ -7938,6 +7967,41 @@ impl App {
             (KeyCode::F(1), _, _) => Some(Accion::ExplicarRegla),
             _ => None,
         };
+        // Pestaña de un binario: las teclas van al visor hexadecimal. Ctrl+F y Ctrl+G
+        // buscan y van a un offset; cerrar, abrir y cambiar de pestaña siguen andando.
+        if self.buffers[self.activo].hex.is_some() {
+            let idx = self.activo;
+            match accion {
+                Some(Accion::Buscar | Accion::IrALinea) => {
+                    if let Some(v) = &mut self.buffers[idx].hex {
+                        v.entrada = Some((accion == Some(Accion::IrALinea), String::new()));
+                    }
+                }
+                Some(
+                    a @ (Accion::CerrarBuffer
+                    | Accion::Abrir
+                    | Accion::SiguienteBuffer
+                    | Accion::AnteriorBuffer
+                    | Accion::ExplicarRegla
+                    | Accion::GuardarTodo),
+                ) => self.accion(a),
+                Some(_) => {}
+                None if alt => {
+                    if k.code == KeyCode::Left {
+                        self.accion(Accion::Volver);
+                    }
+                }
+                None => {
+                    if let Some(mut v) = self.buffers[idx].hex.take() {
+                        self.tecla_hex(&mut v, k);
+                        if let Some(b) = self.buffers.get_mut(idx) {
+                            b.hex = Some(v);
+                        }
+                    }
+                }
+            }
+            return;
+        }
         if let Some(a) = accion {
             self.accion(a);
             return;
@@ -8007,7 +8071,6 @@ impl App {
         let alt = k.modifiers.contains(KeyModifiers::ALT);
         let cerrar = k.code == KeyCode::Esc;
         match modal {
-            Modal::Hex(v) => self.tecla_hex(v, k),
             Modal::Paleta {
                 mut filtro,
                 mut sel,
@@ -8864,23 +8927,6 @@ impl App {
                         as usize;
                     return;
                 }
-                if let Some(Modal::Hex(v)) = &mut self.modal {
-                    match &mut v.detalle {
-                        Some((_, lineas, d)) => {
-                            *d = (*d as isize + delta)
-                                .clamp(0, lineas.len().saturating_sub(1) as isize)
-                                as usize
-                        }
-                        None => {
-                            let ancho = v.ancho.max(1);
-                            let ultimo = v.datos.len().saturating_sub(1) / ancho * ancho;
-                            v.inicio = (v.inicio as isize + delta * ancho as isize)
-                                .clamp(0, ultimo as isize)
-                                as usize;
-                        }
-                    }
-                    return;
-                }
                 if let Some(Modal::Visor {
                     desplazamiento,
                     lineas,
@@ -8891,6 +8937,26 @@ impl App {
                         .clamp(0, lineas.len().saturating_sub(1) as isize)
                         as usize;
                     return;
+                }
+                if let (Some(z), Some(v)) = (self.zonas.editor, &mut self.buffers[self.activo].hex)
+                {
+                    if dentro(z.texto) {
+                        match &mut v.detalle {
+                            Some((_, lineas, d)) => {
+                                *d = (*d as isize + delta)
+                                    .clamp(0, lineas.len().saturating_sub(1) as isize)
+                                    as usize
+                            }
+                            None => {
+                                let ancho = v.ancho.max(1);
+                                let ultimo = v.datos.len().saturating_sub(1) / ancho * ancho;
+                                v.inicio = (v.inicio as isize + delta * ancho as isize)
+                                    .clamp(0, ultimo as isize)
+                                    as usize;
+                            }
+                        }
+                        return;
+                    }
                 }
                 if self.areas.izquierdo.is_some_and(dentro) {
                     let paso = delta.signum();
