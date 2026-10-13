@@ -307,9 +307,10 @@ la invoca.
 
 - **Disparador:** abrir un binario desde el explorador o la línea de comandos, o Ver →
   Visor hexadecimal, que lista los binarios del proyecto.
-- **Flujo:** en lugar de cargarlo como texto, el visor muestra offset, bytes y ASCII.
-  Las flechas mueven el cursor; abajo se ve el byte en hexadecimal, decimal y como
-  carácter, y los 4 bytes desde ahí leídos como `int`. `g` va a un offset, `/` busca
+- **Flujo:** el binario se abre en una pestaña más del editor (los paneles, el
+  explorador y la barra de estado siguen como estaban; Ctrl+W la cierra) que muestra
+  offset, bytes y ASCII en lugar de cargarlo como texto. Las flechas mueven el cursor; abajo se ve el byte en hexadecimal, decimal y como
+  carácter, y los 4 bytes desde ahí leídos como `int`. `g` (o Ctrl+G) va a un offset, `/` (o Ctrl+F) busca
   texto o bytes (`7f 45 4c 46`) y `n` la siguiente coincidencia. `i` describe el
   archivo: tipo (ejecutable, objeto reubicable, biblioteca), arquitectura y las
   secciones del ELF explicadas (`.text`, `.data`, `.bss`, `.rodata`…) con su offset, o
