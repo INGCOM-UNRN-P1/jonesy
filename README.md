@@ -47,6 +47,9 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
 - **Explorador de archivos**, pestañas con cierre y desborde, paneles que se
   redimensionan con el mouse o desde las opciones, archivo nuevo, abrir otro
   proyecto (con recientes) y autoformato con `gaff` o `clang-format`.
+- **Visor hexadecimal** para ejecutables, `.o` y `.a`: bytes y ASCII, ir a un
+  offset, buscar, las secciones del ELF explicadas, los objetos de una
+  biblioteca y sus símbolos con `nm`.
 - **Git** desde el panel lateral: stage, commit, log y clonar repositorios, con
   diff lado a lado (o unificado) de archivos, commits y del buffer sin guardar.
 - **Modo examen**: consigna de solo lectura, cronómetro, autoguardado,

@@ -51,6 +51,7 @@ la invoca.
 | CU-25 | Ajustar la apariencia y llevarla a otra máquina | Alumno |
 | CU-26 | Recuperar el trabajo tras un corte | Alumno |
 | CU-27 | Practicar con un simulacro de examen | Alumno |
+| CU-38 | Mirar por dentro un ejecutable, un `.o` o un `.a` | Alumno |
 | CU-28 | Rendir un examen | Alumno en examen |
 | CU-29 | Revisar y confirmar la entrega | Alumno en examen |
 | CU-30 | Pausar el cronómetro del examen | Docente (en la máquina del alumno) |
@@ -301,6 +302,22 @@ la invoca.
   sellado. F12 lo termina y muestra cómo fue (compilaciones, cuántas con errores,
   ejecuciones, pruebas).
 - **Resultado:** el alumno llega al examen sabiendo cómo funciona.
+
+### CU-38 · Mirar por dentro un ejecutable, un `.o` o un `.a`
+
+- **Disparador:** abrir un binario desde el explorador o la línea de comandos, o Ver →
+  Visor hexadecimal, que lista los binarios del proyecto.
+- **Flujo:** en lugar de cargarlo como texto, el visor muestra offset, bytes y ASCII.
+  Las flechas mueven el cursor; abajo se ve el byte en hexadecimal, decimal y como
+  carácter, y los 4 bytes desde ahí leídos como `int`. `g` va a un offset, `/` busca
+  texto o bytes (`7f 45 4c 46`) y `n` la siguiente coincidencia. `i` describe el
+  archivo: tipo (ejecutable, objeto reubicable, biblioteca), arquitectura y las
+  secciones del ELF explicadas (`.text`, `.data`, `.bss`, `.rodata`…) con su offset, o
+  los objetos que contiene un `.a`. `s` muestra los símbolos con `nm`: las funciones
+  que define (T) y las que usa de otro lado (U), lo que explica un «undefined
+  reference». `?` muestra todos los atajos.
+- **Resultado:** el alumno ve qué produce el compilador y qué busca el enlazador; el
+  binario no se modifica.
 
 ---
 
