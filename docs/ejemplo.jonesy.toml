@@ -25,6 +25,8 @@ duracion_min = 120
 # Verificación de la entrega (vacío = "make test" si el Makefile lo define, si no el
 # «verificar» del entorno de la cátedra).
 verificar = "make test"
+# Con el paquete de la práctica, la verificación de ripley:
+# verificar = "ripley run *.c --practica examen.ripkg"
 # Archivos de la entrega (vacío = *.c, *.h, *.md y el Makefile, también en src/, test/, include/).
 archivos = ["*.c", "*.h", "Makefile"]
 # SHA-256 de los plugins Python que la cátedra autoriza durante el examen.

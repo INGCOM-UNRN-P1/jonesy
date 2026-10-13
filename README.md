@@ -310,8 +310,13 @@ shell del deck domina la cifra; `SHELL=/bin/sh` aísla la del IDE.
   procesos, el deck, GDB y los plugins usan hilos dedicados y un canal único de
   avisos. Cumple lo mismo (no bloquear el teclado) sin runtime asíncrono ni
   dependencias extra.
-- **Verificación de la entrega**: `dredd eval --local` no existe; la entrega
-  corre `examen.verificar` o, por defecto, `make test`.
+- **Verificación de la entrega**: la especificación (§RF-6) corre
+  `dredd eval --local`, pero dredd es una herramienta del perfil docente. Del lado
+  del alumno el equivalente es `ripley run`, que compila, corre los casos
+  públicos y aplica los checks de la práctica. La entrega corre
+  `[examen] verificar` (por ejemplo
+  `ripley run *.c --practica examen.ripkg`) o, si no está, `make test` o el
+  `verificar` del entorno de la cátedra.
 - **Reglas de ripley**: se muestran los códigos reales de cátedra (`0x3001h`, …)
   en lugar de los `P1-MEM-01` de ejemplo de la especificación, y las categorías
   del panel salen del primer dígito del código.
