@@ -702,6 +702,10 @@ pub struct App {
     esquema_cache: Option<(Option<PathBuf>, u64, Vec<jonesy_core::simbolos::Simbolo>)>,
     /// Cuándo se lanzaron las últimas pruebas (para el SARIF de `[pruebas] sarif`).
     inicio_pruebas: Option<std::time::SystemTime>,
+    /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
+    ultima_compilacion: Option<(Instant, usize)>,
+    /// Últimas pruebas: cuándo, cuántas pasan, cuántas fallan y si compilaron.
+    ultimas_pruebas: Option<(Instant, usize, usize, bool)>,
     /// Correr hasta el cursor sin depuración en curso: dónde detenerse al arrancar.
     hasta_linea: Option<(PathBuf, usize)>,
     /// Push o pull corriendo en la terminal (al terminar se interpreta el resultado).
@@ -892,6 +896,8 @@ impl App {
             sel_busqueda: 0,
             esquema_cache: None,
             inicio_pruebas: None,
+            ultima_compilacion: None,
+            ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
             maximizado: false,
@@ -2981,13 +2987,78 @@ impl App {
             .proyecto
             .comando_verificar()
             .unwrap_or_else(|| "(sin verificación configurada)".into());
+        let mut mensaje = self.vista_previa_entrega();
+        mensaje.push_str(&format!(
+            "\nSe guardan todos los archivos, se corre «{verificar}», se sella la bitácora y se arma el paquete. Después ya no vas a poder editar. ¿Confirmás la entrega? (s/n)"
+        ));
         self.modal = Some(Modal::Confirmar {
             titulo: "Entregar examen".into(),
-            mensaje: format!(
-                "Se guardan todos los archivos, se corre «{verificar}», se sella la bitácora y se arma el paquete final. Después ya no vas a poder editar. ¿Confirmás la entrega? (s/n)"
-            ),
+            mensaje,
             que: Confirmacion::Entregar,
         });
+    }
+
+    /// Qué archivos van en el paquete y cómo quedaron la última compilación y las últimas
+    /// pruebas, para revisar antes de confirmar la entrega.
+    fn vista_previa_entrega(&self) -> String {
+        let archivos = entrega::archivos_de_entrega(&self.proyecto);
+        let mut s = format!("Van en el paquete ({}):\n", archivos.len());
+        const MAX: usize = 12;
+        for a in archivos.iter().take(MAX) {
+            s.push_str(&format!("  · {a}\n"));
+        }
+        if archivos.len() > MAX {
+            s.push_str(&format!("  … y {} más\n", archivos.len() - MAX));
+        }
+        if archivos.is_empty() {
+            s.push_str("  ⚠ ninguno: revisá [examen] archivos en .jonesy.toml\n");
+        }
+        // Lo que editaste y no entra en el paquete.
+        for b in &self.buffers {
+            let Some(ruta) = &b.buf.ruta else { continue };
+            if !ruta.starts_with(&self.proyecto.raiz) || b.buf.lenguaje != Lenguaje::C {
+                continue;
+            }
+            let rel = self.proyecto.relativa(ruta);
+            if !archivos.contains(&rel) {
+                s.push_str(&format!(
+                    "  ⚠ «{rel}» está abierto pero NO entra en el paquete\n"
+                ));
+            }
+        }
+        let ultimo_cambio = self.buffers.iter().map(|b| b.ultimo_cambio).max();
+        let despues = |t: Instant| {
+            if ultimo_cambio.is_some_and(|c| c > t) {
+                " (pero cambiaste el código después)"
+            } else {
+                ""
+            }
+        };
+        s.push('\n');
+        match self.ultima_compilacion {
+            None => s.push_str("· Todavía no compilaste en esta sesión (F6).\n"),
+            Some((t, 0)) => s.push_str(&format!("✓ La última compilación anduvo{}.\n", despues(t))),
+            Some((t, n)) => s.push_str(&format!(
+                "✗ La última compilación FALLÓ ({n} error{}){}: así no compila.\n",
+                if n == 1 { "" } else { "es" },
+                despues(t)
+            )),
+        }
+        match self.ultimas_pruebas {
+            None => s.push_str("· No corriste las pruebas en esta sesión (Ctrl+F6).\n"),
+            Some((t, _, _, false)) => {
+                s.push_str(&format!("✗ Las pruebas no compilaron{}.\n", despues(t)))
+            }
+            Some((t, p, 0, true)) => {
+                s.push_str(&format!("✓ Pasan las {p} pruebas{}.\n", despues(t)))
+            }
+            Some((t, p, f, true)) => s.push_str(&format!(
+                "✗ FALLAN {f} prueba{} ({p} pasan){}.\n",
+                if f == 1 { "" } else { "s" },
+                despues(t)
+            )),
+        }
+        s
     }
 
     fn entregar(&mut self) {
@@ -3205,6 +3276,10 @@ impl App {
                     .filter(|d| d.severidad == Severidad::Error)
                     .count();
                 let advertencias = self.diag_compilador.len() - errores;
+                self.ultima_compilacion = Some((
+                    Instant::now(),
+                    if codigo == Some(0) { 0 } else { errores.max(1) },
+                ));
                 if let Some(s) = &mut self.simulacro {
                     s.compilaciones += 1;
                     if codigo != Some(0) {
@@ -5024,6 +5099,16 @@ impl App {
         let compila = !self.diag_compilador.iter().any(|d| {
             d.origen == jonesy_core::Origen::Compilador && d.severidad == Severidad::Error
         });
+        self.ultimas_pruebas = Some((
+            Instant::now(),
+            r.pasan,
+            if codigo == Some(0) || r.fallan > 0 {
+                r.fallan
+            } else {
+                r.fallan.max(1)
+            },
+            compila,
+        ));
         let (texto, nivel) = if !compila {
             (
                 "Las pruebas no compilan: mirá Problemas.".to_string(),

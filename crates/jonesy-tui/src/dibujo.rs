@@ -3287,7 +3287,13 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
         Modal::Confirmar {
             titulo, mensaje, ..
         } => {
-            let r = centrado(area, 64, 7);
+            // Alto según el texto (la entrega muestra la lista de archivos).
+            let filas: usize = mensaje
+                .split('\n')
+                .map(|l| UnicodeWidthStr::width(l).div_ceil(62).max(1))
+                .sum();
+            let alto = (filas as u16 + 2).clamp(7, area.height.saturating_sub(2).max(7));
+            let r = centrado(area, 64, alto);
             limpiar(f, r);
             let b = bloque(format!(" {titulo} "), true)
                 .border_style(Style::default().fg(tema::advertencia()));

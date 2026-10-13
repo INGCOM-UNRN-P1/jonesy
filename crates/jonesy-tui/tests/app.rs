@@ -235,6 +235,14 @@ fn examen_registra_pegado_y_entrega() {
     a.evento(Event::Paste("int pegado = 1;\n".into()));
     tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
     assert!(matches!(a.modal, Some(Modal::Confirmar { .. })));
+    // Vista previa: qué va en el paquete y que todavía no se compiló.
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Van en el paquete (3)")
+            && p.contains("· main.c")
+            && p.contains("Todavía no compilaste"),
+        "{p}"
+    );
     tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
     esperar(&mut a, &rx, |a| a.examen_entregado());
     let e = &a.examen.as_ref().unwrap().estado;
@@ -2863,4 +2871,31 @@ fn renombrar_en_su_ambito() {
     // Un solo Ctrl+Z vuelve todo atrás.
     tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
     assert!(!a.buf().buf.contenido().contains("copia"));
+}
+
+#[test]
+#[cfg(unix)] // usa sh y make
+fn entrega_avisa_si_no_compila() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        ("Makefile", "all:\n\tfalse\n"),
+        (
+            ".jonesy.toml",
+            "[examen]\nduracion_min = 90\n[ripley]\nactivo = false\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), true);
+    a.accion(jonesy_tui::accion::Accion::Compilar);
+    esperar(&mut a, &rx, |a| {
+        a.salida.iter().any(|l| l.0.contains("falló"))
+    });
+    tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("compilación FALLÓ") && p.contains("No corriste las pruebas"),
+        "{p}"
+    );
+    // Cancelar no entrega.
+    tecla(&mut a, KeyCode::Char('n'), KeyModifiers::NONE);
+    assert!(!a.examen_entregado());
 }
