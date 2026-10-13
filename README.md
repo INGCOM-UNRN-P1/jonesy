@@ -126,7 +126,7 @@ jonesy config importar prefs.toml              # en otra máquina
 | Menú                                     | Alt+letra subrayada, F10 y la letra, o clic ([docs/menus.md](docs/menus.md))                  |
 | Configuración del entorno                | Archivo → Configuración (integraciones, plugins, compilador, apariencia)                      |
 | Compilar · ejecutar · probar             | F6 · Ctrl+F5 · Ctrl+F6                                                                        |
-| Objetivo de make (ejercicio, libs, general)| Shift+F9 o Construir → Correr un objetivo de make; también en F1                              |
+| Objetivo de make (ejercicio o general)   | Shift+F9 o Construir → Correr un objetivo de make; también en F1                              |
 | Depurar                                  | F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener · Ctrl+B breakpoint |
 | Memoria (cat-scan)                       | Alt+M                                                                                         |
 | quick-doc                                | F4; Shift+F4 alterna derecha ⟷ inferior                                                       |
