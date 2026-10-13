@@ -36,7 +36,7 @@ depurar, memoria). Lo de docentes e infraestructura queda en segundo plano.
 Cien mejoras chicas pensadas para el alumno, tipificadas por área (las 50 primeras y
 otras 50 sumadas después, #51 a #100). **Impacto**: cuánto cambia el día a día de quien
 cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día o dos), L (más). Hechas
-28 de 100 (ver el historial de git para cada una). Por tipo: Edición 16 · Navegación 9 · Compilación 10 · Ejecución 9 · Pruebas 7 · Depuración 9 · Memoria 5 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 · Mantenimiento 5.
+41 de 100 (ver el historial de git para cada una). Por tipo: Edición 16 · Navegación 9 · Compilación 10 · Ejecución 9 · Pruebas 7 · Depuración 9 · Memoria 5 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 · Mantenimiento 5.
 
 | #   | Mejora                                                                                                     | Tipo          | Impacto | Esfuerzo | Estado |
 | --- | ---------------------------------------------------------------------------------------------------------- | ------------- | ------- | -------- | ------ |
@@ -80,17 +80,17 @@ cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día o dos), L (más).
 | 38  | Revisar el mensaje de commit (no vacío, primera línea corta) con una plantilla                             | Git           | bajo    | S        | hecho  |
 | 39  | Push y pull desde el panel de git, con el estado adelante/atrás y qué hacer ante un conflicto              | Git           | medio   | M        | hecho  |
 | 40  | Recordar hacer commit tras un rato con cambios sin confirmar                                               | Git           | bajo    | S        | hecho  |
-| 41  | Unificar F1 de ripley, gaff y las demás herramientas con el formato «así no / así sí» de gcc               | Aprendizaje   | medio   | M        | falta  |
+| 41  | Unificar F1 de ripley, gaff y las demás herramientas con el formato «así no / así sí» de gcc               | Aprendizaje   | medio   | M        | hecho  |
 | 42  | Ejemplos en el quick-doc que se copian al editor con una tecla                                             | Aprendizaje   | medio   | S        | falta  |
-| 43  | Glosario de C (puntero, heap, stack, segfault, fuga…) enlazado desde las explicaciones                     | Aprendizaje   | bajo    | M        | falta  |
-| 44  | Recorrido guiado la primera vez (marcar en pantalla dónde está cada panel)                                 | Aprendizaje   | bajo    | M        | falta  |
+| 43  | Glosario de C (puntero, heap, stack, segfault, fuga…) enlazado desde las explicaciones                     | Aprendizaje   | bajo    | M        | hecho  |
+| 44  | Recorrido guiado la primera vez (marcar en pantalla dónde está cada panel)                                 | Aprendizaje   | bajo    | M        | hecho  |
 | 45  | Maximizar temporalmente el panel actual y volver (alternar con una tecla)                                  | Interfaz      | medio   | S        | hecho  |
 | 46  | Tema apto para daltonismo (sin depender de rojo/verde para errores y aciertos)                             | Interfaz      | medio   | S        | falta  |
 | 47  | Atajos configurables en `.jonesy.toml` (por ejemplo, para terminales que no pasan F-keys)                  | Interfaz      | bajo    | M        | falta  |
 | 48  | Mostrar en la barra cuándo fue el último autoguardado del examen                                           | Examen        | medio   | S        | hecho  |
 | 49  | Simulacro de examen: modo práctica con cronómetro y entrega sin sellar                                     | Examen        | medio   | M        | hecho  |
 | 50  | Avisar cuando hay una versión nueva de jonesy y cómo actualizar (`cargo install …`)                        | Mantenimiento | bajo    | S        | falta  |
-| 51  | Renombrar una variable o función en todo el archivo (y en el proyecto) con una tecla                       | Edición       | alto    | M        | falta  |
+| 51  | Renombrar una variable o función en todo el archivo (y en el proyecto) con una tecla                       | Edición       | alto    | M        | hecho  |
 | 52  | Ir del `.c` a su `.h` y del `.h` al `.c` con una tecla                                                     | Navegación    | medio   | S        | falta  |
 | 53  | Buscar dónde se usa una función o variable (referencias) en todo el proyecto                               | Navegación    | alto    | M        | falta  |
 | 54  | Archivos recientes del proyecto con una tecla, para volver al anterior rápido                              | Navegación    | medio   | S        | falta  |
@@ -124,22 +124,27 @@ cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día o dos), L (más).
 | 82  | Iniciar un repositorio desde el IDE (`git init`, primer commit)                                            | Git           | medio   | S        | falta  |
 | 83  | Proponer un `.gitignore` para C (binarios, `.o`, `test_bin`) al iniciar o si falta                         | Git           | medio   | S        | falta  |
 | 84  | Etiquetar versiones (`git tag`) desde el panel, por ejemplo para cada entrega                              | Git           | bajo    | S        | falta  |
-| 85  | Catálogo navegable de las reglas de estilo de la cátedra, con ejemplos                                     | Aprendizaje   | medio   | M        | falta  |
+| 85  | Catálogo navegable de las reglas de estilo de la cátedra, con ejemplos                                     | Aprendizaje   | medio   | M        | hecho  |
 | 86  | «¿Qué hace esta línea?»: descripción en español de una línea de C por patrones (sin IA)                    | Aprendizaje   | medio   | L        | falta  |
-| 87  | Tablas de consulta en la ayuda: ASCII, tamaños y rangos de tipos, especificadores de printf/scanf          | Aprendizaje   | medio   | S        | falta  |
-| 88  | Mostrar la precedencia de una expresión con sus paréntesis implícitos                                      | Aprendizaje   | bajo    | M        | falta  |
+| 87  | Tablas de consulta en la ayuda: ASCII, tamaños y rangos de tipos, especificadores de printf/scanf          | Aprendizaje   | medio   | S        | hecho  |
+| 88  | Mostrar la precedencia de una expresión con sus paréntesis implícitos                                      | Aprendizaje   | bajo    | M        | hecho  |
 | 89  | Ejercicios de práctica cortos integrados, con sus casos                                                    | Aprendizaje   | bajo    | L        | falta  |
 | 90  | Dividir el editor en dos (el mismo archivo u otro) lado a lado                                             | Interfaz      | medio   | M        | falta  |
-| 91  | Ver los atajos disponibles en contexto con una tecla (por ejemplo `?` en cada panel)                       | Interfaz      | medio   | S        | falta  |
+| 91  | Ver los atajos disponibles en contexto con una tecla (por ejemplo `?` en cada panel)                       | Interfaz      | medio   | S        | hecho  |
 | 92  | Avisar con una señal visual o sonora cuando termina una compilación o prueba larga                         | Interfaz      | bajo    | S        | falta  |
 | 93  | Modo accesible para lectores de pantalla (sin cajas, anuncios en la barra de estado)                       | Interfaz      | medio   | L        | falta  |
-| 94  | Vista previa de la entrega: qué archivos van en el paquete antes de confirmar                              | Examen        | medio   | S        | falta  |
-| 95  | Avisar al entregar si el código no compila o si hay pruebas que fallan                                     | Examen        | alto    | S        | falta  |
-| 96  | Pausa del cronómetro del examen autorizada por el docente (con un código)                                  | Examen        | bajo    | M        | falta  |
-| 97  | Exportar e importar la configuración del usuario (tema, integraciones, atajos)                             | Mantenimiento | bajo    | S        | falta  |
-| 98  | Informe para reportar un problema de jonesy con un comando (versión, entorno, último error)                | Mantenimiento | medio   | S        | falta  |
+| 94  | Vista previa de la entrega: qué archivos van en el paquete antes de confirmar                              | Examen        | medio   | S        | hecho  |
+| 95  | Avisar al entregar si el código no compila o si hay pruebas que fallan                                     | Examen        | alto    | S        | hecho  |
+| 96  | Pausa del cronómetro del examen autorizada por el docente (con un código)                                  | Examen        | bajo    | M        | hecho  |
+| 97  | Exportar e importar la configuración del usuario (tema, integraciones, atajos)                             | Mantenimiento | bajo    | S        | hecho  |
+| 98  | Informe para reportar un problema de jonesy con un comando (versión, entorno, último error)                | Mantenimiento | medio   | S        | hecho  |
 | 99  | Registro de rendimiento opcional (tiempos de dibujo y de herramientas) para diagnosticar lentitud          | Mantenimiento | bajo    | S        | falta  |
 | 100 | Novedades al actualizar: qué cambió desde la versión anterior                                              | Mantenimiento | bajo    | S        | falta  |
+
+Notas: #51 renombra dentro del ámbito de la declaración en el archivo abierto (Ctrl+R);
+entre archivos del proyecto todavía no. #97 exporta tema, quick-doc, paneles,
+integraciones y manifiestos propios: los atajos no se pueden cambiar, así que no hay
+atajos que exportar.
 
 ## Lo que queda (fuera del perfil estudiante)
 
