@@ -303,6 +303,10 @@ pub enum Modal {
         texto: String,
         error: Option<String>,
     },
+    /// Examen → Pausar: el código del docente (se muestra con asteriscos).
+    CodigoPausa {
+        texto: String,
+    },
     /// Nombre del archivo (o carpeta) nuevo, relativo a la raíz.
     NuevoArchivo {
         texto: String,
@@ -1189,6 +1193,12 @@ impl App {
         id
     }
 
+    pub fn examen_en_pausa(&self) -> bool {
+        self.examen
+            .as_ref()
+            .is_some_and(|e| e.estado.pausado_desde.is_some())
+    }
+
     pub fn examen_entregado(&self) -> bool {
         self.examen.as_ref().is_some_and(|e| e.estado.entregado)
     }
@@ -1314,6 +1324,13 @@ impl App {
 
     /// Aplica una edición al buffer activo y la registra en la telemetría.
     fn editar(&mut self, f: impl FnOnce(&mut Buffer) -> Option<Delta>) {
+        if self.examen_en_pausa() {
+            self.avisar(
+                "El examen está en pausa: no se puede editar hasta que se reanude.",
+                Nivel::Aviso,
+            );
+            return;
+        }
         if self.buf().buf.solo_lectura {
             self.avisar("Archivo de solo lectura.", Nivel::Aviso);
             return;
@@ -3059,6 +3076,79 @@ impl App {
             )),
         }
         s
+    }
+
+    /// Examen → Pausar: el docente pausa el cronómetro con su código (el SHA-256 está en
+    /// `[examen] pausa_sha256`). Reanudar no pide código: sólo le devuelve tiempo a correr.
+    fn pedir_pausa_examen(&mut self) {
+        let Some(e) = &self.examen else {
+            self.avisar("La pausa sólo existe en modo examen.", Nivel::Aviso);
+            return;
+        };
+        if e.estado.entregado {
+            self.avisar("El examen ya se entregó.", Nivel::Info);
+        } else if e.estado.pausado_desde.is_some() {
+            self.alternar_pausa_examen();
+        } else if self.proyecto.config.examen.pausa_sha256.trim().is_empty() {
+            self.avisar(
+                "Este examen no admite pausas (falta [examen] pausa_sha256 en .jonesy.toml).",
+                Nivel::Aviso,
+            );
+        } else {
+            self.modal = Some(Modal::CodigoPausa {
+                texto: String::new(),
+            });
+        }
+    }
+
+    fn pausar_examen(&mut self, codigo: &str) {
+        let esperado = self
+            .proyecto
+            .config
+            .examen
+            .pausa_sha256
+            .trim()
+            .to_lowercase();
+        if jonesy_core::sha256_hex(codigo.trim().as_bytes()) != esperado {
+            self.tel(TelemetryEvent::CommandExec {
+                command: "jonesy: pausa del examen rechazada (código incorrecto)".into(),
+                exit_code: Some(1),
+            });
+            self.avisar(
+                "Código incorrecto: la pausa la autoriza el docente.",
+                Nivel::Error,
+            );
+            return;
+        }
+        self.alternar_pausa_examen();
+    }
+
+    fn alternar_pausa_examen(&mut self) {
+        self.guardar_todo();
+        let dir = self.proyecto.dir_estado();
+        let Some(e) = &mut self.examen else { return };
+        e.estado.alternar_pausa(jonesy_core::ahora_unix());
+        let _ = e.estado.guardar(&dir);
+        let (pausa, total) = (e.estado.pausado_desde.is_some(), e.estado.pausado_s);
+        self.tel(TelemetryEvent::CommandExec {
+            command: if pausa {
+                "jonesy: examen en pausa (autorizada por el docente)".into()
+            } else {
+                format!("jonesy: examen reanudado ({total} s en pausa en total)")
+            },
+            exit_code: Some(0),
+        });
+        if pausa {
+            self.avisar(
+                "Examen en pausa: el cronómetro no corre y no se puede editar. Examen → Reanudar sigue.",
+                Nivel::Aviso,
+            );
+        } else {
+            self.avisar(
+                "Examen reanudado: el cronómetro sigue corriendo.",
+                Nivel::Ok,
+            );
+        }
     }
 
     fn entregar(&mut self) {
@@ -5545,7 +5635,9 @@ impl App {
     fn abrir_paleta(&mut self) {
         let mut opciones: Vec<OpcionPaleta> = Accion::todas()
             .iter()
-            .filter(|a| self.examen.is_some() || **a != Accion::Entregar)
+            .filter(|a| {
+                self.examen.is_some() || !matches!(a, Accion::Entregar | Accion::PausarExamen)
+            })
             .map(|a| {
                 let i = a.info();
                 OpcionPaleta {
@@ -5948,6 +6040,7 @@ impl App {
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
             Accion::RenombrarSimbolo => self.pedir_renombrar_simbolo(),
+            Accion::PausarExamen => self.pedir_pausa_examen(),
             Accion::Precedencia => {
                 let b = &self.buf().buf;
                 let expr = b
@@ -6541,6 +6634,7 @@ impl App {
                 | Modal::NuevoArchivo { texto, .. }
                 | Modal::Renombrar { texto, .. }
                 | Modal::RenombrarSimbolo { texto, .. }
+                | Modal::CodigoPausa { texto }
                 | Modal::Clonar {
                     url: texto,
                     campo: 0,
@@ -7617,6 +7711,17 @@ impl App {
                     })
                     .flatten();
                 self.modal = Some(Modal::RenombrarSimbolo { plan, texto, error });
+            }
+            Modal::CodigoPausa { mut texto } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.pausar_examen(&texto);
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::CodigoPausa { texto });
             }
             Modal::NuevoArchivo { mut texto, carpeta } => {
                 if cerrar {

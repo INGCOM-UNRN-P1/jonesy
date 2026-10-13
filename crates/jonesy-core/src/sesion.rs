@@ -70,6 +70,10 @@ pub struct EstadoExamen {
     pub entregado: bool,
     pub paquete: Option<String>,
     pub sha256: Option<String>,
+    /// En pausa autorizada por el docente desde este momento (el cronómetro no corre).
+    pub pausado_desde: Option<u64>,
+    /// Segundos que estuvo en pausa (se suman al final del examen).
+    pub pausado_s: u64,
 }
 
 impl EstadoExamen {
@@ -86,10 +90,21 @@ impl EstadoExamen {
         guardar_atomico(&Self::ruta(dir_estado), json.as_bytes()).map(|_| ())
     }
 
-    /// Segundos restantes (negativo si se pasó el tiempo); None sin cronómetro.
+    /// Segundos restantes (negativo si se pasó el tiempo); None sin cronómetro. Las
+    /// pausas no cuentan: en pausa queda fijo.
     pub fn restante_s(&self, ahora_unix: u64) -> Option<i64> {
-        (self.duracion_min > 0)
-            .then(|| (self.inicio_unix + self.duracion_min * 60) as i64 - ahora_unix as i64)
+        let ahora = self.pausado_desde.unwrap_or(ahora_unix);
+        (self.duracion_min > 0).then(|| {
+            (self.inicio_unix + self.duracion_min * 60 + self.pausado_s) as i64 - ahora as i64
+        })
+    }
+
+    /// Pausa (o reanuda) el cronómetro.
+    pub fn alternar_pausa(&mut self, ahora_unix: u64) {
+        match self.pausado_desde.take() {
+            Some(desde) => self.pausado_s += ahora_unix.saturating_sub(desde),
+            None => self.pausado_desde = Some(ahora_unix),
+        }
     }
 }
 
@@ -133,6 +148,21 @@ pub fn ruta_recuperacion(dir_estado: &Path, relativa: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn la_pausa_frena_el_cronometro() {
+        let mut e = EstadoExamen {
+            inicio_unix: 1000,
+            duracion_min: 10,
+            ..Default::default()
+        };
+        assert_eq!(e.restante_s(1100), Some(500));
+        e.alternar_pausa(1100);
+        assert_eq!(e.restante_s(1400), Some(500));
+        e.alternar_pausa(1400);
+        assert_eq!(e.pausado_s, 300);
+        assert_eq!(e.restante_s(1500), Some(400));
+    }
 
     #[test]
     fn ida_y_vuelta() {

@@ -112,6 +112,7 @@ pub enum Accion {
     Precedencia,
     Recorrido,
     RenombrarSimbolo,
+    PausarExamen,
 }
 
 pub struct Info {
@@ -232,6 +233,7 @@ impl Accion {
             ),
             Recorrido => ("Recorrido guiado por la pantalla", ""),
             RenombrarSimbolo => ("Renombrar en su ámbito…", "Ctrl+R"),
+            PausarExamen => ("Pausar / reanudar el cronómetro (código del docente)…", ""),
         };
         Info { titulo, atajo }
     }
@@ -341,6 +343,7 @@ impl Accion {
             Precedencia,
             Recorrido,
             RenombrarSimbolo,
+            PausarExamen,
             Salir,
         ]
     }
@@ -584,7 +587,11 @@ pub fn menus(examen: bool) -> Vec<Menu> {
         ),
     ];
     if examen {
-        m.push(menu("Examen", 'x', vec![A(Entregar), A(EstadoEntrega)]));
+        m.push(menu(
+            "Examen",
+            'x',
+            vec![A(Entregar), A(EstadoEntrega), SEP, A(PausarExamen)],
+        ));
     }
     m.push(menu(
         "Ayuda",

@@ -2899,3 +2899,40 @@ fn entrega_avisa_si_no_compila() {
     tecla(&mut a, KeyCode::Char('n'), KeyModifiers::NONE);
     assert!(!a.examen_entregado());
 }
+
+#[test]
+fn pausa_del_examen_con_codigo_del_docente() {
+    let hash = jonesy_core::sha256_hex(b"profe123");
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (
+            ".jonesy.toml",
+            &format!("[examen]\nduracion_min = 90\npausa_sha256 = \"{hash}\"\n[ripley]\nactivo = false\n"),
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), true);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::PausarExamen);
+    escribir(&mut a, "otro");
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("****") && !p.contains("otro"), "{p}");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(!a.examen_en_pausa());
+    a.accion(jonesy_tui::accion::Accion::PausarExamen);
+    escribir(&mut a, "profe123");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.examen_en_pausa());
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("EN PAUSA"), "{p}");
+    // En pausa no se edita.
+    let antes = a.buf().buf.contenido();
+    escribir(&mut a, "x");
+    assert_eq!(a.buf().buf.contenido(), antes);
+    // Reanudar no pide código.
+    a.accion(jonesy_tui::accion::Accion::PausarExamen);
+    assert!(!a.examen_en_pausa());
+    escribir(&mut a, "x");
+    assert_ne!(a.buf().buf.contenido(), antes);
+    let e = jonesy_core::sesion::EstadoExamen::cargar(&dir.path().join(".jonesy")).unwrap();
+    assert!(e.pausado_desde.is_none());
+}

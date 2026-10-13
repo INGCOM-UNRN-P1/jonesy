@@ -88,6 +88,8 @@ pub struct Examen {
     pub plugins_permitidos: Vec<String>,
     /// Archivos que forman la entrega (globs simples `*.c`); vacío = *.c, *.h, *.md, Makefile.
     pub archivos: Vec<String>,
+    /// SHA-256 del código con el que el docente pausa el cronómetro (vacío = sin pausa).
+    pub pausa_sha256: String,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]

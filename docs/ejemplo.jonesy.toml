@@ -29,6 +29,9 @@ verificar = "make test"
 archivos = ["*.c", "*.h", "Makefile"]
 # SHA-256 de los plugins Python que la cátedra autoriza durante el examen.
 plugins_permitidos = []
+# SHA-256 del código con el que el docente pausa el cronómetro (Examen → Pausar).
+# Se calcula con: printf '%s' 'el-codigo' | sha256sum   (vacío = no se puede pausar).
+pausa_sha256 = ""
 
 [interfaz]
 # Posición del quick-doc: "derecha" o "inferior".

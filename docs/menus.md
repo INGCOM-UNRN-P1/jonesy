@@ -102,7 +102,7 @@ comprueba que esté al día.
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
-| Examen | E[x]amen | Alt+X (o F10 y X) | 2 |
+| Examen | E[x]amen | Alt+X (o F10 y X) | 3 |
 | Ayuda | A[y]uda | F10 y Y | 11 |
 
 ## Archivo
@@ -268,10 +268,12 @@ comprueba que esté al día.
 Sólo en modo examen (`--exam`).
 
 ```text
-┌──────────────────────────────────┐
-│ Entregar examen…             F12 │
-│ Verificar estado de entrega      │
-└──────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│ Entregar examen…                                       F12 │
+│ Verificar estado de entrega                                │
+├────────────────────────────────────────────────────────────┤
+│ Pausar / reanudar el cronómetro (código del docente)…      │
+└────────────────────────────────────────────────────────────┘
 ```
 
 ## Ayuda

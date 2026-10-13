@@ -192,6 +192,15 @@ fn dibujar_menu(f: &mut Frame, app: &mut App, r: Rect) {
                     .add_modifier(Modifier::BOLD),
             ));
         } else {
+            if e.estado.pausado_desde.is_some() {
+                derecha.push(Span::styled(
+                    " EN PAUSA ",
+                    Style::default()
+                        .bg(tema::advertencia())
+                        .fg(tema::sobre_acento())
+                        .add_modifier(Modifier::BOLD),
+                ));
+            }
             if let Some(s) = e.estado.restante_s(jonesy_core::ahora_unix()) {
                 let (h, m, seg) = (s.max(0) / 3600, (s.max(0) % 3600) / 60, s.max(0) % 60);
                 let color = if s <= 300 {
@@ -2970,6 +2979,20 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
                     .min(i.width.saturating_sub(1)),
                 y,
+            ))
+        }
+        Modal::CodigoPausa { texto } => {
+            let r = centrado(area, 56, 3);
+            limpiar(f, r);
+            let b = bloque(" Código del docente para pausar · Esc cancela ", true)
+                .border_style(Style::default().fg(tema::advertencia()));
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            let oculto = "*".repeat(texto.chars().count());
+            f.render_widget(Paragraph::new(oculto.clone()), i);
+            Some((
+                i.x + (oculto.len() as u16).min(i.width.saturating_sub(1)),
+                i.y,
             ))
         }
         Modal::NuevoArchivo { texto, carpeta } => {

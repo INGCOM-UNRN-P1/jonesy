@@ -14,6 +14,24 @@ bitácora con `SessionEnd` y arma `.jonesy/entrega/entrega-<usuario>-<ts>.tar`:
 
 Junto al paquete queda `<paquete>.tar.sha256`, y el SHA-256 se le muestra al alumno.
 
+Antes de confirmar, la ventana de la entrega lista los archivos que van en el paquete
+(avisa si un `.c` abierto queda afuera) y cómo terminaron la última compilación y las
+últimas pruebas de la sesión.
+
+## Pausa autorizada por el docente
+
+Si hace falta frenar el cronómetro (un corte de luz, una consulta larga), el docente
+elige Examen → Pausar y escribe su código en la máquina del alumno. En `.jonesy.toml`
+va sólo el SHA-256 del código, nunca el código:
+
+```bash
+printf '%s' 'el-codigo' | sha256sum      # → [examen] pausa_sha256 = "…"
+```
+
+En pausa el cronómetro no corre (la pausa sobrevive a un reinicio) y no se puede
+editar; reanudar no pide código. La bitácora registra cada pausa, cada reanudación (con
+el total de segundos en pausa) y cada código rechazado.
+
 ## Cómo verificarla (dredd, docentes)
 
 ```bash
