@@ -31,6 +31,7 @@ archivos = ["*.c", "*.h", "Makefile"]
 plugins_permitidos = []
 # SHA-256 del código con el que el docente pausa el cronómetro (Examen → Pausar).
 # Se calcula con: printf '%s' 'el-codigo' | sha256sum   (vacío = no se puede pausar).
+# Usá un código largo y al azar: el hash queda a la vista del alumno.
 pausa_sha256 = ""
 
 [interfaz]

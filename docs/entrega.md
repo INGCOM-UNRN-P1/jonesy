@@ -28,6 +28,11 @@ va sólo el SHA-256 del código, nunca el código:
 printf '%s' 'el-codigo' | sha256sum      # → [examen] pausa_sha256 = "…"
 ```
 
+El alumno puede leer `.jonesy.toml`, así que el hash queda a la vista: usá un código
+largo y al azar (por ejemplo cuatro palabras sueltas o 12 caracteres o más), que no se
+pueda adivinar probando. Uno corto, como un número de cuatro cifras, se descubre en
+segundos.
+
 En pausa el cronómetro no corre (la pausa sobrevive a un reinicio) y no se puede
 editar; reanudar no pide código. La bitácora registra cada pausa, cada reanudación (con
 el total de segundos en pausa) y cada código rechazado.
