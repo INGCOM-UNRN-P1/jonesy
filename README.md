@@ -55,7 +55,8 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
 - **Extensiones** nativas en Rust y plugins Python en un proceso aparte, con
   tiempo límite y reinicio.
 
-La especificación completa está en [`jonesy_spec.md`](jonesy_spec.md).
+La especificación completa está en [`jonesy_spec.md`](jonesy_spec.md); qué se hace
+con jonesy, caso por caso, en [`docs/casos_de_uso.md`](docs/casos_de_uso.md).
 
 ## Instalación
 
