@@ -117,6 +117,7 @@ pub enum Accion {
     ExportarPreferencias,
     ImportarPreferencias,
     ReportarProblema,
+    ObjetivoMake,
 }
 
 pub struct Info {
@@ -203,6 +204,7 @@ impl Accion {
             ConfigurarPlugins => ("Configurar plugins…", ""),
             Doctor => ("Diagnóstico del entorno (jonesy doctor)", ""),
             ReportarProblema => ("Reportar un problema de jonesy…", ""),
+            ObjetivoMake => ("Correr un objetivo de make…", "Shift+F9"),
             Bienvenida => ("Bienvenida", ""),
             Comentar => ("Comentar / descomentar líneas", "Ctrl+/"),
             DuplicarLinea => ("Duplicar línea", "Ctrl+D"),
@@ -323,6 +325,7 @@ impl Accion {
             ConfigurarPlugins,
             Doctor,
             ReportarProblema,
+            ObjetivoMake,
             Bienvenida,
             Comentar,
             DuplicarLinea,
@@ -543,6 +546,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Probar),
                 A(ProbarAqui),
                 SEP,
+                A(ObjetivoMake),
                 A(LimpiarCompilacion),
                 A(GenerarDoc),
                 SEP,
@@ -711,6 +715,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Herramientas del ecosistema (gaff fix, tetsuo, motoko…) | Alt+H |
 | Nuevo archivo · abrir (Tab marca varios) | Ctrl+N · Ctrl+O |
 | Explorador de archivos · proyecto (make y tp.sh) | Alt+E · Alt+Y (Tab alterna) |
+| Correr un objetivo de make (del ejercicio, las bibliotecas o el general) | Shift+F9 |
 | Pestañas | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+RePág/AvPág; clic del medio o × cierra |
 | Paleta de comandos | Ctrl+K, F1 |
 | Explicar regla (sobre un diagnóstico) | F1 |

@@ -2876,7 +2876,16 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 .map(|&i| (opciones[i].titulo.clone(), opciones[i].atajo.clone()))
                 .collect();
             let (filtro, sel) = (filtro.clone(), *sel);
-            lista_modal(f, app, area, " Comandos ", &filtro, &items, sel)
+            let solo_make = !opciones.is_empty()
+                && opciones
+                    .iter()
+                    .all(|o| matches!(o.que, crate::app::QuePaleta::Objetivo(..)));
+            let titulo = if solo_make {
+                " Objetivos de make (escribí para filtrar · Enter corre) "
+            } else {
+                " Comandos "
+            };
+            lista_modal(f, app, area, titulo, &filtro, &items, sel)
         }
         Modal::Abrir {
             filtro,

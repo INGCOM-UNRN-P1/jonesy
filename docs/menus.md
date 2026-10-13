@@ -98,7 +98,7 @@ comprueba que esté al día.
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
 | Editar | [E]ditar | F10 y E | 24 |
 | Ver | [V]er | Alt+V (o F10 y V) | 16 |
-| Construir | [C]onstruir | Alt+C (o F10 y C) | 10 |
+| Construir | [C]onstruir | Alt+C (o F10 y C) | 11 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
@@ -201,6 +201,7 @@ comprueba que esté al día.
 │ Correr pruebas (make test)                                Ctrl+F6 │
 │ Correr la prueba del cursor                              Shift+F6 │
 ├───────────────────────────────────────────────────────────────────┤
+│ Correr un objetivo de make…                              Shift+F9 │
 │ Limpiar compilación (make clean)                                  │
 │ Generar documentación (make doc)                                  │
 ├───────────────────────────────────────────────────────────────────┤

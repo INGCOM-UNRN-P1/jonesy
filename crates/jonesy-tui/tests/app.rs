@@ -606,7 +606,7 @@ fn navegador_de_archivos_y_proyecto_con_objetivos() {
     tecla(&mut a, KeyCode::Char('k'), KeyModifiers::CONTROL);
     escribir(&mut a, "make ej1 test");
     let p = pantalla(&mut a, 160, 40);
-    assert!(p.contains("make: ej1 › test"), "{p}");
+    assert!(p.contains("make: ej1 (actual) › test"), "{p}");
     tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
     // La barra queda en la sesión.
     a.guardar_sesion();
@@ -3019,4 +3019,58 @@ fn reportar_un_problema() {
         guardado.contains("disco lleno") && guardado.contains("[ripley]"),
         "{guardado}"
     );
+}
+
+#[test]
+#[cfg(unix)] // usa make
+fn objetivo_de_make_con_el_teclado() {
+    let dir = proyecto(&[
+        (
+            "Makefile",
+            "# Compila todo\nall:\n\t@echo general\n# Borra todo\nclean:\n\t@echo limpio\n",
+        ),
+        (
+            "libs/lista/Makefile",
+            "# Compila la biblioteca\nall:\n\t@echo lista\n",
+        ),
+        (
+            "ejercicios/ej1/Makefile",
+            "# Corre las pruebas\ntest:\n\t@echo pruebas ej1\n",
+        ),
+        (
+            "ejercicios/ej2/Makefile",
+            "# Corre las pruebas\ntest:\n\t@echo pruebas ej2\n",
+        ),
+        ("ejercicios/ej2/main.c", MAIN),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej2/main.c"), true);
+    // Shift+F9 (también Construir → Correr un objetivo de make): sólo los objetivos,
+    // primero los del ejercicio del archivo activo.
+    tecla(&mut a, KeyCode::F(9), KeyModifiers::SHIFT);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Objetivos de make"), "{p}");
+    let ej2 = p.find("ej2 (actual) › test").expect(&p);
+    let general = p.find("general › all").expect(&p);
+    let lista = p.find("biblioteca lista › all").expect(&p);
+    let ej1 = p.find("ej1 › test").expect(&p);
+    assert!(ej2 < general && general < lista && lista < ej1, "{p}");
+    // Filtrar y correr con Enter.
+    escribir(&mut a, "general clean");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| a.salida.iter().any(|(l, _)| l == "limpio"));
+    assert!(a.salida.iter().any(|(l, _)| l.contains("make clean")));
+    // También desde el menú Construir, sin mouse: Alt+C y la entrada.
+    tecla(&mut a, KeyCode::Char('c'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Correr un objetivo de make…") && p.contains("Shift+F9"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    // F1 sin un diagnóstico en la línea abre los comandos, que incluyen los objetivos.
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    escribir(&mut a, "make lista all");
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("make: biblioteca lista › all"), "{p}");
 }

@@ -5880,20 +5880,7 @@ impl App {
                 que: QuePaleta::Plugin(c.clone()),
             });
         }
-        for (i, m) in self.proyecto.estructura.modulos.iter().enumerate() {
-            let nombre = if m.rel.is_empty() {
-                "proyecto".to_string()
-            } else {
-                m.nombre.clone()
-            };
-            for o in &m.objetivos {
-                opciones.push(OpcionPaleta {
-                    titulo: format!("make: {nombre} › {} — {}", o.nombre, o.descripcion),
-                    atajo: m.comando(&o.nombre),
-                    que: QuePaleta::Objetivo(i, o.nombre.clone()),
-                });
-            }
-        }
+        opciones.extend(self.opciones_make("make: "));
         for (nombre, n, titulo) in self.acciones_disponibles() {
             opciones.push(OpcionPaleta {
                 titulo: format!("{nombre}: {titulo}"),
@@ -5912,6 +5899,80 @@ impl App {
             if let Some(p) = &self.plugins {
                 p.pedir(PedidoPlugin::Comandos);
             }
+        }
+        self.modal = Some(Modal::Paleta {
+            filtro: String::new(),
+            sel: 0,
+            opciones,
+        });
+    }
+
+    /// Los objetivos de todos los Makefile del proyecto: primero los del ejercicio (o la
+    /// biblioteca) del archivo activo, después el Makefile general, las bibliotecas y
+    /// los demás ejercicios.
+    fn opciones_make(&self, prefijo: &str) -> Vec<OpcionPaleta> {
+        use jonesy_core::estructura::TipoModulo;
+        let activo = self.activo_ruta();
+        let actual = activo
+            .as_deref()
+            .and_then(|r| self.proyecto.modulo_activo(Some(r)))
+            .map(|m| m.dir.clone());
+        let mut modulos: Vec<(usize, &jonesy_core::estructura::Modulo)> = self
+            .proyecto
+            .estructura
+            .modulos
+            .iter()
+            .enumerate()
+            .collect();
+        modulos.sort_by_key(|(i, m)| {
+            let grupo = if Some(&m.dir) == actual.as_ref() {
+                0
+            } else {
+                match m.tipo {
+                    TipoModulo::Raiz => 1,
+                    TipoModulo::Libreria => 2,
+                    TipoModulo::Ejercicio => 3,
+                    TipoModulo::Otro => 4,
+                }
+            };
+            (grupo, *i)
+        });
+        let mut v = vec![];
+        for (i, m) in modulos {
+            let mut nombre = match m.tipo {
+                TipoModulo::Raiz => "general".to_string(),
+                TipoModulo::Libreria => format!("biblioteca {}", m.nombre),
+                _ => m.nombre.clone(),
+            };
+            if Some(&m.dir) == actual.as_ref() {
+                nombre.push_str(" (actual)");
+            }
+            for o in &m.objetivos {
+                let descripcion = if o.descripcion.is_empty() {
+                    String::new()
+                } else {
+                    format!(" — {}", o.descripcion)
+                };
+                v.push(OpcionPaleta {
+                    titulo: format!("{prefijo}{nombre} › {}{descripcion}", o.nombre),
+                    atajo: m.comando(&o.nombre),
+                    que: QuePaleta::Objetivo(i, o.nombre.clone()),
+                });
+            }
+        }
+        v
+    }
+
+    /// Construir → Correr un objetivo de make (Shift+F9): la lista de objetivos sola,
+    /// para elegir con el teclado.
+    fn elegir_objetivo_make(&mut self) {
+        let opciones = self.opciones_make("");
+        if opciones.is_empty() {
+            self.avisar(
+                "Este proyecto no tiene Makefile: F6 compila el archivo activo con gcc.",
+                Nivel::Aviso,
+            );
+            return;
         }
         self.modal = Some(Modal::Paleta {
             filtro: String::new(),
@@ -6280,6 +6341,7 @@ impl App {
             Accion::EstadoEntrega => self.estado_entrega(),
             Accion::Doctor => self.diagnostico_entorno(),
             Accion::ReportarProblema => self.reportar_problema(),
+            Accion::ObjetivoMake => self.elegir_objetivo_make(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7020,6 +7082,8 @@ impl App {
             (KeyCode::F(6), _, _, _) => Some(Accion::Compilar),
             (KeyCode::F(7), _, _, _) => Some(Accion::VistaConsigna),
             (KeyCode::F(8), _, _, _) => Some(Accion::VistaCodigo),
+            // Shift+F9 llega como F21 en algunas terminales.
+            (KeyCode::F(9), _, _, true) | (KeyCode::F(21), _, _, _) => Some(Accion::ObjetivoMake),
             (KeyCode::F(9), _, _, _) => Some(Accion::VistaTerminal),
             // F12: entregar en el examen, terminar el simulacro; fuera, ir a la definición.
             (KeyCode::F(12), _, _, _) => Some(if self.examen.is_some() {
