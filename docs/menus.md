@@ -99,7 +99,7 @@ comprueba que esté al día.
 | Editar | [E]ditar | F10 y E | 29 |
 | Ver | [V]er | Alt+V (o F10 y V) | 17 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 12 |
-| Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
+| Depurar | [D]epurar | Alt+D (o F10 y D) | 11 |
 | Git | [G]it | F10 y G | 8 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 3 |
@@ -219,20 +219,21 @@ comprueba que esté al día.
 ## Depurar
 
 ```text
-┌───────────────────────────────────────────────────────────┐
-│ Iniciar depuración / continuar                         F5 │
-│ Detener depuración                               Shift+F5 │
-│ Poner / quitar breakpoint                          Ctrl+B │
-├───────────────────────────────────────────────────────────┤
-│ Paso a paso (siguiente línea)                         F10 │
-│ Entrar en la función (step into)                      F11 │
-│ Salir de la función (step out)                  Shift+F11 │
-│ Correr hasta el cursor                           Ctrl+F10 │
-├───────────────────────────────────────────────────────────┤
-│ Revisar memoria con valgrind (fugas y accesos)            │
-│ Inspección visual de memoria (cat-scan)             Alt+M │
-│ Exportar traza de memoria (reporte HTML)                  │
-└───────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────┐
+│ Iniciar depuración / continuar                             F5 │
+│ Detener depuración                                   Shift+F5 │
+│ Poner / quitar breakpoint                              Ctrl+B │
+├───────────────────────────────────────────────────────────────┤
+│ Paso a paso (siguiente línea)                             F10 │
+│ Entrar en la función (step into)                          F11 │
+│ Salir de la función (step out)                      Shift+F11 │
+│ Correr hasta el cursor                               Ctrl+F10 │
+│ Vigilar una expresión (se recalcula en cada paso)…            │
+├───────────────────────────────────────────────────────────────┤
+│ Revisar memoria con valgrind (fugas y accesos)                │
+│ Inspección visual de memoria (cat-scan)                 Alt+M │
+│ Exportar traza de memoria (reporte HTML)                      │
+└───────────────────────────────────────────────────────────────┘
 ```
 
 ## Git

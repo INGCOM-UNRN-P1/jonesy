@@ -312,6 +312,10 @@ pub enum Modal {
         opciones: Vec<jonesy_core::completar::Candidato>,
         sel: usize,
     },
+    /// Depurar → Vigilar: la expresión a agregar (o a quitar, si ya está).
+    Vigilar {
+        texto: String,
+    },
     /// Exportar o importar las preferencias: la ruta del archivo.
     RutaPreferencias {
         importar: bool,
@@ -791,6 +795,12 @@ pub struct App {
     ultimo_error: Option<String>,
     /// Cómo terminó cada prueba en la última corrida (✓/✗ junto a su `TEST`).
     pub resultados_pruebas: HashMap<String, bool>,
+    /// Expresiones vigiladas del depurador y su valor en la última parada.
+    pub vigiladas: Vec<(String, Option<Result<String, String>>)>,
+    /// El nombre bajo el cursor (o el mouse) mientras se depura y su valor.
+    pub valor_cursor: Option<(String, Option<Result<String, String>>)>,
+    /// Palabra bajo el mouse en el editor (gana a la del cursor hasta la próxima tecla).
+    hover: Option<String>,
     /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
     ultima_compilacion: Option<(Instant, usize)>,
     /// Últimas pruebas: cuándo, cuántas pasan, cuántas fallan y si compilaron.
@@ -988,6 +998,9 @@ impl App {
             ultima_compilacion: None,
             ultimo_error: None,
             resultados_pruebas: HashMap::new(),
+            vigiladas: vec![],
+            valor_cursor: None,
+            hover: None,
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -3007,6 +3020,11 @@ impl App {
                             ir = Some((a, l));
                         }
                         let _ = d.gdb.pedir_estado();
+                        for (i, (e, _)) in self.vigiladas.iter().enumerate() {
+                            let _ = d.gdb.evaluar(e, i);
+                        }
+                        // El valor bajo el cursor se vuelve a pedir en esta parada.
+                        self.valor_cursor = None;
                     }
                 }
                 EventoGdb::Corriendo => d.estado = "corriendo".into(),
@@ -3033,6 +3051,13 @@ impl App {
                     }
                 }
                 EventoGdb::Variables(v) => d.variables = v,
+                EventoGdb::Valores(valores) => {
+                    for (nombre, valor) in valores {
+                        if let Some(x) = d.variables.iter_mut().find(|x| x.nombre == nombre) {
+                            x.valor = valor;
+                        }
+                    }
+                }
                 EventoGdb::Consola(t) => {
                     for l in t.lines() {
                         // Los tabs de GDB («4\tint *p») dejarían celdas sin pisar.
@@ -3044,6 +3069,15 @@ impl App {
                 }
                 EventoGdb::Error(m) => d.consola.push(format!("error: {m}")),
                 EventoGdb::BreakpointCreado { .. } => {}
+                EventoGdb::Evaluado { indice, valor } => {
+                    if indice == usize::MAX {
+                        if let Some((_, v)) = &mut self.valor_cursor {
+                            *v = Some(valor);
+                        }
+                    } else if let Some((_, v)) = self.vigiladas.get_mut(indice) {
+                        *v = Some(valor);
+                    }
+                }
                 EventoGdb::Salio => fin = true,
             }
         }
@@ -6669,6 +6703,15 @@ impl App {
             Accion::CrearPrueba => self.crear_prueba(),
             Accion::Autocompletar => self.autocompletar(true),
             Accion::ArregloRapido => self.arreglo_rapido(),
+            Accion::Vigilar => {
+                let b = &self.buf().buf;
+                let texto = b
+                    .texto_seleccionado()
+                    .filter(|t| !t.contains('\n'))
+                    .or_else(|| b.palabra_en(b.cursor))
+                    .unwrap_or_default();
+                self.modal = Some(Modal::Vigilar { texto });
+            }
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7157,6 +7200,65 @@ impl App {
         );
     }
 
+    /// Depurar → Vigilar: agrega la expresión (y la evalúa si el programa está detenido) o
+    /// la quita si ya estaba.
+    fn alternar_vigilada(&mut self, expresion: &str) {
+        if expresion.is_empty() {
+            return;
+        }
+        if let Some(i) = self.vigiladas.iter().position(|(e, _)| e == expresion) {
+            self.vigiladas.remove(i);
+            self.avisar(format!("Ya no se vigila «{expresion}»."), Nivel::Info);
+            return;
+        }
+        self.vigiladas.push((expresion.to_string(), None));
+        let i = self.vigiladas.len() - 1;
+        if let Some(d) = self.depuracion.as_mut().filter(|d| !d.gdb.corriendo) {
+            let _ = d.gdb.evaluar(expresion, i);
+        }
+        self.lateral = Some(Lateral::Variables);
+        self.avisar(
+            format!("Vigilando «{expresion}»: se recalcula en cada paso (repetirla la quita)."),
+            Nivel::Ok,
+        );
+    }
+
+    /// Con el programa detenido, pide el valor del nombre bajo el cursor (o el mouse) si
+    /// cambió (#31). Sale en la barra de estado.
+    fn pedir_valor_cursor(&mut self) {
+        let Some(d) = self.depuracion.as_mut() else {
+            self.valor_cursor = None;
+            return;
+        };
+        if d.gdb.corriendo || d.ubicacion.is_none() {
+            return;
+        }
+        let b = &self.buffers[self.activo].buf;
+        let palabra = self
+            .hover
+            .clone()
+            .or_else(|| b.palabra_en(b.cursor))
+            .filter(|p| {
+                p.chars()
+                    .next()
+                    .is_some_and(|c| c.is_alphabetic() || c == '_')
+                    && !jonesy_core::completar::es_reservada(p)
+            });
+        let Some(palabra) = palabra else {
+            self.valor_cursor = None;
+            return;
+        };
+        if self
+            .valor_cursor
+            .as_ref()
+            .is_some_and(|(n, _)| *n == palabra)
+        {
+            return;
+        }
+        let _ = d.gdb.evaluar(&palabra, usize::MAX);
+        self.valor_cursor = Some((palabra, None));
+    }
+
     /// Abre el resultado `i` de la búsqueda en el proyecto.
     fn abrir_hallazgo(&mut self, i: usize) {
         let Some(h) = self
@@ -7288,6 +7390,7 @@ impl App {
             .as_ref()
             .map(|d| (d.estado.clone(), d.ubicacion.clone(), d.consola.len()))
             .hash(&mut h);
+        format!("{:?}{:?}", self.vigiladas, self.valor_cursor).hash(&mut h);
         // El cronómetro del examen cambia cada segundo.
         if let Some(e) = self.examen.as_ref().filter(|e| !e.estado.entregado) {
             e.estado.restante_s(jonesy_core::ahora_unix()).hash(&mut h);
@@ -7405,6 +7508,7 @@ impl App {
         self.tic_examen();
         self.sondear_git();
         self.eventos_gdb();
+        self.pedir_valor_cursor();
         if self.mensaje.as_ref().is_some_and(|(_, n, t)| {
             t.elapsed() > Duration::from_secs(if *n == Nivel::Error { 12 } else { 6 })
         }) {
@@ -7506,6 +7610,7 @@ impl App {
                 | Modal::Renombrar { texto, .. }
                 | Modal::RenombrarSimbolo { texto, .. }
                 | Modal::CodigoPausa { texto }
+                | Modal::Vigilar { texto }
                 | Modal::RutaPreferencias { texto, .. }
                 | Modal::Clonar {
                     url: texto,
@@ -7600,6 +7705,7 @@ impl App {
 
     pub fn tecla(&mut self, k: KeyEvent) {
         self.registrar_tecla(&k);
+        self.hover = None;
         self.desplazado_por_mouse = false;
         if self.modal.is_some() {
             self.tecla_modal(k);
@@ -8706,6 +8812,17 @@ impl App {
                 editar_campo(&mut texto, &k);
                 self.modal = Some(Modal::RutaPreferencias { importar, texto });
             }
+            Modal::Vigilar { mut texto } => {
+                if cerrar {
+                    return;
+                }
+                if k.code == KeyCode::Enter {
+                    self.alternar_vigilada(texto.trim());
+                    return;
+                }
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::Vigilar { texto });
+            }
             Modal::CodigoPausa { mut texto } => {
                 if cerrar {
                     return;
@@ -9381,6 +9498,16 @@ impl App {
                 }
             }
             MouseEventKind::Down(MouseButton::Left) => self.clic(x, y, m.modifiers),
+            // Mientras se depura, el valor de lo que está bajo el mouse (#31).
+            MouseEventKind::Moved if self.depuracion.is_some() => {
+                let palabra = self
+                    .zonas
+                    .editor
+                    .filter(|z| dentro(z.texto))
+                    .and_then(|_| self.posicion_en_editor(x, y))
+                    .and_then(|p| self.buf().buf.palabra_en(p));
+                self.hover = palabra;
+            }
             MouseEventKind::Drag(MouseButton::Left) => match self.arrastre {
                 Some(Arrastre::Seleccion) => {
                     if let Some(p) = self.posicion_en_editor(x, y) {

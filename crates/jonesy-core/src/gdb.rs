@@ -303,6 +303,13 @@ pub enum EventoGdb {
         archivo: PathBuf,
         linea: usize,
     },
+    /// Nombre y valor completo de cada variable (completa los de `Variables`).
+    Valores(Vec<(String, String)>),
+    /// El valor de una expresión pedida con `Gdb::evaluar` (o por qué no se pudo).
+    Evaluado {
+        indice: usize,
+        valor: Result<String, String>,
+    },
     Salio,
 }
 
@@ -335,9 +342,14 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
         Registro::Ejecucion { clase, .. } if clase == "running" => vec![EventoGdb::Corriendo],
         Registro::Consola(t) | Registro::Programa(t) => vec![EventoGdb::Consola(t.clone())],
         Registro::Resultado { clase, datos, .. } if clase == "error" => {
-            vec![EventoGdb::Error(
-                datos.texto("msg").unwrap_or("error de GDB").to_string(),
-            )]
+            let msg = datos.texto("msg").unwrap_or("error de GDB").to_string();
+            match pedido {
+                Some(Pedido::Evaluar(indice)) => vec![EventoGdb::Evaluado {
+                    indice: *indice,
+                    valor: Err(msg),
+                }],
+                _ => vec![EventoGdb::Error(msg)],
+            }
         }
         Registro::Resultado { clase, .. } if clase == "exit" => vec![EventoGdb::Salio],
         Registro::Resultado { datos, .. } => match pedido {
@@ -360,6 +372,23 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
                                 tipo: x.texto("type").unwrap_or("").into(),
                                 valor: x.texto("value").unwrap_or("…").into(),
                                 argumento: x.texto("arg") == Some("1"),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            )],
+            Some(Pedido::Evaluar(indice)) => vec![EventoGdb::Evaluado {
+                indice: *indice,
+                valor: Ok(datos.texto("value").unwrap_or("").to_string()),
+            }],
+            Some(Pedido::Valores) => vec![EventoGdb::Valores(
+                datos
+                    .get("variables")
+                    .map(|v| {
+                        v.lista()
+                            .iter()
+                            .filter_map(|x| {
+                                Some((x.texto("name")?.to_string(), x.texto("value")?.to_string()))
                             })
                             .collect()
                     })
@@ -388,6 +417,10 @@ pub enum Pedido {
     Marcos,
     Variables,
     Breakpoint,
+    /// `-data-evaluate-expression`: el índice dice a qué expresión corresponde.
+    Evaluar(usize),
+    /// Los valores completos de las variables (arreglos y structs incluidos).
+    Valores,
     Otro,
 }
 
@@ -573,14 +606,26 @@ impl Gdb {
     /// Pide marcos y variables del marco actual (las respuestas llegan como eventos).
     pub fn pedir_estado(&mut self) -> std::io::Result<()> {
         self.enviar("-stack-list-frames 0 20", Pedido::Marcos)?;
+        // --simple-values trae los tipos; --all-values, el valor de arreglos y structs.
         self.enviar("-stack-list-variables --simple-values", Pedido::Variables)?;
+        self.enviar("-stack-list-variables --all-values", Pedido::Valores)?;
         Ok(())
+    }
+
+    /// Evalúa una expresión en la parada actual (`indice` vuelve en `EventoGdb::Evaluado`).
+    pub fn evaluar(&mut self, expresion: &str, indice: usize) -> std::io::Result<()> {
+        self.enviar(
+            &format!("-data-evaluate-expression {}", comillas_mi(expresion)),
+            Pedido::Evaluar(indice),
+        )
+        .map(|_| ())
     }
 
     /// Pasa al marco `nivel` de la pila (sus variables pasan a ser las locales).
     pub fn seleccionar_marco(&mut self, nivel: usize) -> std::io::Result<()> {
         self.enviar(&format!("-stack-select-frame {nivel}"), Pedido::Otro)?;
         self.enviar("-stack-list-variables --simple-values", Pedido::Variables)?;
+        self.enviar("-stack-list-variables --all-values", Pedido::Valores)?;
         Ok(())
     }
 
@@ -642,6 +687,87 @@ impl Drop for Gdb {
 }
 
 /// Cadena C para un argumento MI.
+/// Cómo mostrar el valor de una variable en el panel.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Presentacion {
+    Texto(String),
+    /// Una cadena de C, ya sin comillas ni los `\000` del final.
+    Cadena(String),
+    /// Un arreglo: cada elemento en orden (los `<repeats N times>` expandidos).
+    Tabla(Vec<String>),
+}
+
+/// Separa por comas de primer nivel (fuera de llaves y comillas).
+fn elementos(interior: &str) -> Vec<String> {
+    let (mut v, mut actual, mut nivel, mut en_cadena, mut escape) =
+        (vec![], String::new(), 0, false, false);
+    for c in interior.chars() {
+        if en_cadena {
+            actual.push(c);
+            if escape {
+                escape = false;
+            } else if c == '\\' {
+                escape = true;
+            } else if c == '"' {
+                en_cadena = false;
+            }
+            continue;
+        }
+        match c {
+            '"' => en_cadena = true,
+            '{' => nivel += 1,
+            '}' => nivel -= 1,
+            ',' if nivel == 0 => {
+                v.push(actual.trim().to_string());
+                actual.clear();
+                continue;
+            }
+            _ => {}
+        }
+        actual.push(c);
+    }
+    if !actual.trim().is_empty() {
+        v.push(actual.trim().to_string());
+    }
+    v
+}
+
+/// Arreglos como tabla y cadenas como texto (#30); el resto, como lo da gdb.
+pub fn presentar(tipo: &str, valor: &str) -> Presentacion {
+    let es_char = tipo.contains("char");
+    let es_arreglo = tipo.contains('[');
+    // `0x4005d4 "hola"` (char *) o `"hola", '\000' <repeats 15 times>` (char [20]).
+    if es_char && (es_arreglo || tipo.contains('*')) {
+        if let (Some(i), Some(j)) = (valor.find('"'), valor.rfind('"')) {
+            if j > i {
+                let mut s = valor[i + 1..j].to_string();
+                while let Some(r) = s.strip_suffix("\\000") {
+                    s = r.to_string();
+                }
+                return Presentacion::Cadena(s);
+            }
+        }
+    }
+    if es_arreglo && valor.starts_with('{') && valor.ends_with('}') && !es_char {
+        let mut v = vec![];
+        for e in elementos(&valor[1..valor.len() - 1]) {
+            match e.split_once(" <repeats ") {
+                Some((x, resto)) => {
+                    let n: usize = resto
+                        .trim_end_matches(" times>")
+                        .trim()
+                        .parse()
+                        .unwrap_or(1);
+                    v.extend(std::iter::repeat_n(x.trim().to_string(), n.min(1000)));
+                }
+                None => v.push(e),
+            }
+        }
+        return Presentacion::Tabla(v);
+    }
+    Presentacion::Texto(valor.to_string())
+}
+
 pub fn comillas_mi(s: &str) -> String {
     let mut out = String::from("\"");
     for c in s.chars() {
@@ -659,6 +785,53 @@ pub fn comillas_mi(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn arreglos_como_tabla_y_cadenas_como_texto() {
+        assert_eq!(
+            presentar("int [5]", "{1, 2, 0 <repeats 3 times>}"),
+            Presentacion::Tabla(vec![
+                "1".into(),
+                "2".into(),
+                "0".into(),
+                "0".into(),
+                "0".into()
+            ])
+        );
+        assert_eq!(
+            presentar("char [10]", "\"hola\", '\\000' <repeats 5 times>"),
+            Presentacion::Cadena("hola".into())
+        );
+        assert_eq!(
+            presentar("char *", "0x4006d4 \"hola, mundo\""),
+            Presentacion::Cadena("hola, mundo".into())
+        );
+        assert_eq!(presentar("int", "5"), Presentacion::Texto("5".into()));
+        assert_eq!(
+            presentar("struct punto [2]", "{{x = 1, y = 2}, {x = 3, y = 4}}"),
+            Presentacion::Tabla(vec!["{x = 1, y = 2}".into(), "{x = 3, y = 4}".into()])
+        );
+    }
+
+    #[test]
+    fn evaluar_responde_con_su_indice() {
+        let ok = parsear_linea("5^done,value=\"42\"");
+        assert_eq!(
+            interpretar(&ok, Some(&Pedido::Evaluar(3))),
+            vec![EventoGdb::Evaluado {
+                indice: 3,
+                valor: Ok("42".into())
+            }]
+        );
+        let mal = parsear_linea("6^error,msg=\"No symbol \\\"z\\\" in current context.\"");
+        match &interpretar(&mal, Some(&Pedido::Evaluar(1)))[0] {
+            EventoGdb::Evaluado {
+                indice: 1,
+                valor: Err(m),
+            } => assert!(m.contains("No symbol")),
+            otro => panic!("{otro:?}"),
+        }
+    }
     use std::time::{Duration, Instant};
 
     #[test]

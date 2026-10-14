@@ -3408,3 +3408,64 @@ fn arreglo_rapido_con_alt_enter() {
             .any(|l| l.0.contains("compilación correcta"))
     });
 }
+
+#[test]
+#[cfg(unix)] // gcc y gdb
+fn depurador_vigiladas_arreglos_cadenas_y_valor_del_cursor() {
+    for herramienta in ["gcc", "gdb"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    let codigo = "#include <stdio.h>\n\nint main(void)\n{\n    int v[4] = {7, 8, 0, 0};\n    char nombre[10] = \"ana\";\n    int total = v[0] + v[1];\n    printf(\"%s %d\\n\", nombre, total);\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Breakpoint en el printf (línea 8) y F5.
+    let pos = a.buf().buf.linea_columna_a_pos(7, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Char('b'), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion.as_ref().is_some_and(|d| {
+            d.ubicacion.as_ref().is_some_and(|(_, l)| *l == 8) && d.variables.len() >= 3
+        })
+    });
+    // #29: una expresión vigilada.
+    a.accion(jonesy_tui::accion::Accion::Vigilar);
+    for _ in 0..40 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "v[0] * 2");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(
+        &mut a,
+        &rx,
+        |a| matches!(a.vigiladas.first(), Some((_, Some(Ok(v)))) if v == "14"),
+    );
+    // #31: el valor del nombre bajo el cursor, en la barra.
+    let pos = a.buf().buf.linea_columna_a_pos(6, 9);
+    a.buf_mut().buf.mover_a(pos, false);
+    esperar(
+        &mut a,
+        &rx,
+        |a| matches!(&a.valor_cursor, Some((n, Some(Ok(v)))) if n == "total" && v == "15"),
+    );
+    // #30: el arreglo como tabla y la cadena como texto.
+    let p = pantalla(&mut a, 160, 45);
+    assert!(p.contains("v[0] * 2 = 14"), "{p}");
+    assert!(p.contains("total = 15"), "barra: {p}");
+    assert!(p.contains("«ana»") && p.contains("(3 car.)"), "{p}");
+    assert!(
+        p.contains("4 elementos") && p.contains("[0]") && p.contains("[3]"),
+        "{p}"
+    );
+    a.accion(jonesy_tui::accion::Accion::Detener);
+}

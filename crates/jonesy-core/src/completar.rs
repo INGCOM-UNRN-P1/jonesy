@@ -19,6 +19,11 @@ const RESERVADAS: &[&str] = &[
     "ifndef", "ifdef", "endif", "pragma", "NULL",
 ];
 
+/// ¿Palabra reservada de C (o del preprocesador)?
+pub fn es_reservada(palabra: &str) -> bool {
+    RESERVADAS.contains(&palabra)
+}
+
 fn es_id(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }

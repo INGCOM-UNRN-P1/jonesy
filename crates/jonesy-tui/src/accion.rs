@@ -125,6 +125,7 @@ pub enum Accion {
     CrearPrueba,
     Autocompletar,
     ArregloRapido,
+    Vigilar,
 }
 
 pub struct Info {
@@ -258,6 +259,7 @@ impl Accion {
             CrearPrueba => ("Crear una prueba para esta función", ""),
             Autocompletar => ("Autocompletar el nombre", "Ctrl+Espacio"),
             ArregloRapido => ("Arreglar el error de la línea (si es simple)", "Alt+Enter"),
+            Vigilar => ("Vigilar una expresión (se recalcula en cada paso)…", ""),
         };
         Info { titulo, atajo }
     }
@@ -380,6 +382,7 @@ impl Accion {
             CrearPrueba,
             Autocompletar,
             ArregloRapido,
+            Vigilar,
             Salir,
         ]
     }
@@ -595,6 +598,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Entrar),
                 A(SalirFuncion),
                 A(CorrerHastaCursor),
+                A(Vigilar),
                 SEP,
                 A(RevisarMemoria),
                 A(CatScan),

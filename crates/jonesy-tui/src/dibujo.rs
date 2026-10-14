@@ -2354,6 +2354,28 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             Span::styled(format!(" {ubic}"), Style::default().fg(tema::atenuado())),
         ]));
     }
+    if !app.vigiladas.is_empty() {
+        l.push(Line::raw(""));
+        l.push(Line::styled(
+            "Vigiladas",
+            Style::default()
+                .fg(tema::acento())
+                .add_modifier(Modifier::BOLD),
+        ));
+        for (e, v) in &app.vigiladas {
+            let (texto, estilo) = match v {
+                Some(Ok(x)) => (x.clone(), estilo_clase(resaltado::Clase::Numero)),
+                Some(Err(m)) => (m.clone(), Style::default().fg(tema::advertencia())),
+                None => ("…".to_string(), Style::default().fg(tema::atenuado())),
+            };
+            l.push(Line::from(vec![
+                Span::styled(" ◉ ", Style::default().fg(tema::atenuado())),
+                Span::styled(e.clone(), Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" = "),
+                Span::styled(texto, estilo),
+            ]));
+        }
+    }
     l.push(Line::raw(""));
     l.push(Line::styled(
         "Variables",
@@ -2361,8 +2383,9 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             .fg(tema::acento())
             .add_modifier(Modifier::BOLD),
     ));
+    let ancho = i.width as usize;
     for v in &d.variables {
-        l.push(Line::from(vec![
+        let mut cabeza = vec![
             Span::styled(
                 if v.argumento { " ⇢ " } else { "   " },
                 Style::default().fg(tema::atenuado()),
@@ -2373,8 +2396,63 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
             Span::raw(" = "),
-            Span::styled(v.valor.clone(), estilo_clase(resaltado::Clase::Numero)),
-        ]));
+        ];
+        match jonesy_core::gdb::presentar(&v.tipo, &v.valor) {
+            jonesy_core::gdb::Presentacion::Texto(t) => {
+                cabeza.push(Span::styled(t, estilo_clase(resaltado::Clase::Numero)));
+                l.push(Line::from(cabeza));
+            }
+            jonesy_core::gdb::Presentacion::Cadena(s) => {
+                cabeza.push(Span::styled(
+                    format!("«{s}»"),
+                    estilo_clase(resaltado::Clase::Cadena),
+                ));
+                cabeza.push(Span::styled(
+                    format!(" ({} car.)", s.chars().count()),
+                    Style::default().fg(tema::atenuado()),
+                ));
+                l.push(Line::from(cabeza));
+            }
+            jonesy_core::gdb::Presentacion::Tabla(elems) => {
+                cabeza.push(Span::styled(
+                    format!("{} elementos", elems.len()),
+                    Style::default().fg(tema::atenuado()),
+                ));
+                l.push(Line::from(cabeza));
+                // Índices arriba, valores abajo, en tantas filas como haga falta.
+                let anchos: Vec<usize> = elems
+                    .iter()
+                    .enumerate()
+                    .map(|(k, e)| k.to_string().len().max(e.chars().count()).min(24))
+                    .collect();
+                let mut k = 0;
+                while k < elems.len() {
+                    let mut usado = 5;
+                    let mut fin = k;
+                    while fin < elems.len() && (fin == k || usado + anchos[fin] + 3 <= ancho) {
+                        usado += anchos[fin] + 3;
+                        fin += 1;
+                    }
+                    let mut idx = vec![Span::styled("     ", Style::default())];
+                    let mut val = vec![Span::styled("     ", Style::default())];
+                    for j in k..fin {
+                        let w = anchos[j];
+                        let e: String = elems[j].chars().take(w).collect();
+                        idx.push(Span::styled(
+                            format!("[{j:^w$}]"),
+                            Style::default().fg(tema::atenuado()),
+                        ));
+                        val.push(Span::styled(
+                            format!(" {e:^w$} "),
+                            estilo_clase(resaltado::Clase::Numero),
+                        ));
+                    }
+                    l.push(Line::from(idx));
+                    l.push(Line::from(val));
+                    k = fin;
+                }
+            }
+        }
     }
     if d.traza.is_some() {
         l.push(Line::raw(""));
@@ -2496,6 +2574,14 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         None => format!("Ln {}, Col {} ", l + 1, c + 1),
     };
     izq.push(Span::styled(posicion, fondo.fg(tema::atenuado())));
+    // Depurando: el valor del nombre bajo el cursor o el mouse.
+    if let Some((nombre, Some(Ok(valor)))) = &app.valor_cursor {
+        let corto: String = valor.chars().take(40).collect();
+        izq.push(Span::styled(
+            format!("{nombre} = {corto} "),
+            fondo.fg(tema::acento()).add_modifier(Modifier::BOLD),
+        ));
+    }
     // Módulo (biblioteca o ejercicio) del archivo activo: ahí actúan F6, Ctrl+F5 y F5.
     if let Some(m) = app.proyecto.modulo_activo(app.buf().buf.ruta.as_deref()) {
         izq.push(Span::styled(
@@ -3073,6 +3159,22 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 .collect();
             f.render_widget(Paragraph::new(lineas), i);
             Some((x_cursor, y_cursor))
+        }
+        Modal::Vigilar { texto } => {
+            let r = centrado(area, 64, 3);
+            limpiar(f, r);
+            let b = bloque(
+                " Vigilar una expresión (x, v[i], *p, p->campo) · Enter ",
+                true,
+            );
+            let i = b.inner(r);
+            f.render_widget(b, r);
+            f.render_widget(Paragraph::new(texto.clone()), i);
+            Some((
+                i.x + (UnicodeWidthStr::width(texto.as_str()) as u16)
+                    .min(i.width.saturating_sub(1)),
+                i.y,
+            ))
         }
         Modal::RutaPreferencias { importar, texto } => {
             let r = centrado(area, 76, 3);
