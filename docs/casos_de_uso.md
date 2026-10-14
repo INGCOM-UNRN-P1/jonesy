@@ -98,10 +98,15 @@ la invoca.
 
 > Grabación: [CU-03-leer-la-consigna.cast](casos/CU-03-leer-la-consigna.cast) · [qué muestra](casos/CU-03-leer-la-consigna.md)
 
-- **Disparador:** el ejercicio tiene `consigna.md`, `enunciado.md` o `README.md`.
+- **Disparador:** el ejercicio tiene `consigna.md`, `enunciado.md` o `README.md`, o es
+  un ejercicio de deckard (carpeta del banco con `ejercicio.yaml` o starter kit con
+  `metadata.json`).
 - **Flujo:** la consigna se muestra de solo lectura al lado del código, con el
   Markdown dibujado. Tab y Shift+Tab recorren sus enlaces y Enter los sigue. En
-  pantallas chicas F7 la muestra y F8 vuelve al código.
+  pantallas chicas F7 la muestra y F8 vuelve al código. En un ejercicio de deckard,
+  la consigna suma el tema, el nivel de Bloom, el tiempo estimado y las funciones a
+  implementar, y las pistas se ven de a una con `p` (o Ayuda → Ver la siguiente
+  pista); en una guía con varios ejercicios sigue al archivo activo.
 - **Resultado:** no hace falta salir del IDE ni abrir un navegador para leer el
   enunciado.
 

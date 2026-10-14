@@ -44,6 +44,12 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   `ejercicios/*`), `library.json` y `tp.sh`, y muestra bibliotecas, ejercicios y
   qué hace cada objetivo de make, listos para correr. F6, Ctrl+F5 y F5 actúan
   sobre el módulo del archivo activo (compilando antes las bibliotecas que usa).
+- **Ejercicios de deckard**: una carpeta del banco (`ejercicio.yaml`,
+  `enunciado.md`, `tests/`) o un starter kit (`metadata.json`, `README.md`) se ve
+  como la consigna, con el tema, el nivel de Bloom, el tiempo estimado, las
+  funciones a implementar y las pistas de a una (`p` en la consigna); los casos de
+  `tests/` entran en Comparar con las salidas esperadas y nunca se abre
+  `solucion.c`.
 - **Explorador de archivos**, pestañas con cierre y desborde, paneles que se
   redimensionan con el mouse o desde las opciones, archivo nuevo, abrir otro
   proyecto (con recientes) y autoformato con `gaff` o `clang-format`.
