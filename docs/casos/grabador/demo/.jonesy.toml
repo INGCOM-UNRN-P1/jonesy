@@ -1,0 +1,8 @@
+# Proyecto de demostración de las grabaciones de jonesy (docs/casos).
+
+[examen]
+duracion_min = 90
+verificar = "make test"
+archivos = ["*.md", "Makefile", "libs/*/*.c", "libs/*/*.h", "ejercicios/*/*.c"]
+# Código de pausa de la demo: «pausa-demo-larga» (en un examen real, uno largo y al azar).
+pausa_sha256 = "0ccf61012f2c6df1f09abfcdee8afa42633244a44c45ea902829f0fc53c74e19"

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Graba los casos de uso de jonesy (docs/casos) con asciinema. Ver docs/casos/README.md.
+#   bin/grabar-casos [CU-08 CU-14 ...]
+set -euo pipefail
+raiz="$(cd "$(dirname "$0")/.." && pwd)"
+cargo build --release -q -p jonesy-bin --manifest-path "$raiz/Cargo.toml"
+# El PATH de quien graba (uv antepone el suyo, que puede tapar herramientas).
+export GRABAR_PATH="$PATH"
+exec uv run --quiet --no-project --with pyte python "$raiz/docs/casos/grabador/grabar.py" "$@"
