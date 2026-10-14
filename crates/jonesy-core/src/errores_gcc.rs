@@ -135,7 +135,16 @@ fn expandir(plantilla: &str, capturas: &[String]) -> String {
     for (i, c) in capturas.iter().enumerate() {
         s = s.replace(&format!("{{{}}}", i + 1), c.trim());
     }
-    s
+    // Un patrón sin captura (gcc a veces no nombra lo que falla): sin el marcador a la vista.
+    for n in 1..=9 {
+        s = s
+            .replace(&format!("«{{{n}}}»"), "eso")
+            .replace(&format!("{{{n}}}"), "eso");
+    }
+    match s.strip_prefix("eso ") {
+        Some(resto) => format!("Eso {resto}"),
+        None => s,
+    }
 }
 
 /// Reconoce un mensaje de gcc o del enlazador (sin «archivo:línea:col: error:»).
@@ -232,6 +241,23 @@ mod tests {
     }
 
     /// Mensajes reales de gcc 16 en inglés (LC_MESSAGES=C) y el id que les corresponde.
+    #[test]
+    fn sin_captura_no_quedan_marcadores() {
+        let e = explicar("called object is not a function").unwrap();
+        assert!(!e.resumen.contains('{'), "{}", e.resumen);
+        assert!(
+            e.resumen.starts_with("Eso no es una función"),
+            "{}",
+            e.resumen
+        );
+        let e = explicar("called object 'suma' is not a function").unwrap();
+        assert!(
+            e.resumen.starts_with("«suma» no es una función"),
+            "{}",
+            e.resumen
+        );
+    }
+
     #[test]
     fn mensajes_reales() {
         let casos = [
