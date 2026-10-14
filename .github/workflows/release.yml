@@ -1,0 +1,149 @@
+name: Release
+
+# Publica los binarios de jonesy para Linux y Windows.
+#
+# - Con un tag `vX.Y.Z` (git tag v0.2.0 && git push origin v0.2.0): compila, prueba que
+#   cada binario arranque y crea el release de GitHub con los paquetes y SHA256SUMS.
+#   El tag tiene que coincidir con `version` de Cargo.toml.
+# - A mano (Actions → Release → Run workflow): compila y deja los paquetes como
+#   artefactos del run, sin publicar nada.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    name: versión del tag
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Leer la versión y compararla con el tag
+        id: v
+        shell: bash
+        run: |
+          version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$GITHUB_REF_NAME" != "v$version" ]]; then
+            echo "::error::El tag $GITHUB_REF_NAME no coincide con la versión de Cargo.toml (v$version)."
+            exit 1
+          fi
+
+  pruebas:
+    name: pruebas (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-24.04, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Herramientas de las pruebas de integración (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gdb clang-format valgrind
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: cargo test --workspace --locked
+
+  binarios:
+    name: ${{ matrix.nombre }}
+    needs: [version, pruebas]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # glibc de Ubuntu 22.04: corre en distribuciones de los últimos años.
+          - nombre: linux-x86_64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            exe: jonesy
+            formato: tar.gz
+          # Estático (musl): sin dependencias de la glibc del sistema, para servidores y
+          # laboratorios con distribuciones viejas.
+          - nombre: linux-x86_64-musl
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            exe: jonesy
+            formato: tar.gz
+          - nombre: windows-x86_64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            exe: jonesy.exe
+            formato: zip
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: musl-tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Compilar
+        run: cargo build --release --locked -p jonesy-bin --target ${{ matrix.target }}
+      - name: El binario arranca
+        shell: bash
+        run: |
+          bin="target/${{ matrix.target }}/release/${{ matrix.exe }}"
+          "$bin" --version
+          "$bin" --version | grep -q "${{ needs.version.outputs.version }}"
+      - name: Empaquetar
+        id: paquete
+        shell: bash
+        run: |
+          nombre="jonesy-${{ needs.version.outputs.version }}-${{ matrix.nombre }}"
+          mkdir -p "dist/$nombre"
+          cp "target/${{ matrix.target }}/release/${{ matrix.exe }}" "dist/$nombre/"
+          cp README.md LICENSE "dist/$nombre/"
+          cp docs/ejemplo.jonesy.toml "dist/$nombre/ejemplo.jonesy.toml"
+          cd dist
+          if [[ "${{ matrix.formato }}" == "zip" ]]; then
+            7z a -tzip "$nombre.zip" "$nombre" > /dev/null
+            echo "archivo=dist/$nombre.zip" >> "$GITHUB_OUTPUT"
+          else
+            tar -czf "$nombre.tar.gz" "$nombre"
+            echo "archivo=dist/$nombre.tar.gz" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@v5
+        with:
+          name: jonesy-${{ matrix.nombre }}
+          path: ${{ steps.paquete.outputs.archivo }}
+          if-no-files-found: error
+
+  publicar:
+    name: publicar el release
+    if: github.ref_type == 'tag'
+    needs: [version, binarios]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          path: dist
+          pattern: jonesy-*
+          merge-multiple: true
+      - name: SHA256SUMS
+        run: |
+          cd dist
+          sha256sum jonesy-* > SHA256SUMS
+          cat SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: jonesy ${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/jonesy-*
+            dist/SHA256SUMS

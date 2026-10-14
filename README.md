@@ -63,6 +63,19 @@ con jonesy, caso por caso, en [`docs/casos_de_uso.md`](docs/casos_de_uso.md).
 
 ## Instalación
 
+Sin compilar: cada [release](https://github.com/INGCOM-UNRN-P1/jonesy/releases)
+trae el binario para Linux (`linux-x86_64`, y `linux-x86_64-musl`, estático, para
+distribuciones viejas o servidores) y para Windows (`windows-x86_64.zip`), con
+`SHA256SUMS` para verificarlo:
+
+```bash
+tar -xzf jonesy-0.1.0-linux-x86_64.tar.gz
+install -m 755 jonesy-0.1.0-linux-x86_64/jonesy ~/.local/bin/
+```
+
+Los releases los arma `.github/workflows/release.yml` al subir un tag `vX.Y.Z` que
+coincida con la versión de `Cargo.toml`.
+
 Con Cargo, directo desde el repositorio (queda en `~/.cargo/bin`, que rustup
 agrega al `PATH`):
 
