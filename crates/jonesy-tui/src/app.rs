@@ -6645,6 +6645,7 @@ impl App {
             Accion::VisorHex => self.elegir_binario(),
             Accion::ArchivoPareja => self.ir_a_pareja(),
             Accion::Referencias => self.buscar_referencias(),
+            Accion::DocumentarFuncion => self.documentar_funcion(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -6929,6 +6930,53 @@ impl App {
                 format!("«{nombre}»: {n} referencia(s) en {archivos} archivo(s). Enter abre.")
             },
             if n == 0 { Nivel::Aviso } else { Nivel::Info },
+        );
+    }
+
+    /// Editar → Documentar la función: el comentario `/** … */` de la función del cursor,
+    /// con el esqueleto de corbel, y el texto del @brief seleccionado para escribirlo.
+    fn documentar_funcion(&mut self) {
+        let b = &self.buf().buf;
+        if b.lenguaje != Lenguaje::C {
+            self.avisar("Documentar funciones es para archivos de C.", Nivel::Aviso);
+            return;
+        }
+        let fuente = b.contenido();
+        let Some(f) = jonesy_core::documentar::firma_en(&fuente, b.linea_columna().0) else {
+            self.avisar(
+                "Poné el cursor en una función (o justo arriba).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        if jonesy_core::documentar::documentada(&fuente, f.linea) {
+            self.avisar(
+                format!("«{}» ya tiene su comentario de documentación.", f.nombre),
+                Nivel::Info,
+            );
+            return;
+        }
+        let texto = jonesy_core::documentar::docblock(&f);
+        let pos = b.linea_columna_a_pos(f.linea, 0);
+        self.editar(|b| b.reemplazar_rango(pos, pos, &texto));
+        // Seleccionado el texto del @brief, para escribir encima.
+        if let Some(i) = texto.find("[Descripción breve") {
+            let ini = pos + texto[..i].chars().count();
+            let largo = texto[i..]
+                .find(']')
+                .map(|j| texto[i..i + j + 1].chars().count());
+            if let Some(largo) = largo {
+                let b = &mut self.buf_mut().buf;
+                b.mover_a(ini, false);
+                b.mover_a(ini + largo, true);
+            }
+        }
+        self.avisar(
+            format!(
+                "Comentario de «{}»: escribí la descripción; los [ ] que quedan los marca corbel.",
+                f.nombre
+            ),
+            Nivel::Ok,
         );
     }
 

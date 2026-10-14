@@ -121,6 +121,7 @@ pub enum Accion {
     VisorHex,
     ArchivoPareja,
     Referencias,
+    DocumentarFuncion,
 }
 
 pub struct Info {
@@ -250,6 +251,7 @@ impl Accion {
             PausarExamen => ("Pausar / reanudar el cronómetro (código del docente)…", ""),
             ArchivoPareja => ("Ir al .h / .c correspondiente", "Alt+I"),
             Referencias => ("Buscar referencias (dónde se usa)", "Shift+F12"),
+            DocumentarFuncion => ("Documentar la función (/** @brief, @param… */)", ""),
         };
         Info { titulo, atajo }
     }
@@ -368,6 +370,7 @@ impl Accion {
             PausarExamen,
             ArchivoPareja,
             Referencias,
+            DocumentarFuncion,
             Salir,
         ]
     }
@@ -519,6 +522,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Formatear),
                 A(LimpiarEspacios),
                 A(RenombrarSimbolo),
+                A(DocumentarFuncion),
                 A(Precedencia),
             ],
         ),

@@ -3225,3 +3225,33 @@ fn referencias_con_shift_f12() {
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
     assert!(a.activo_ruta().is_some());
 }
+
+#[test]
+fn documentar_la_funcion_del_cursor() {
+    let dir = proyecto(&[(
+        "suma.c",
+        "int suma(int a, int b)\n{\n    return a + b;\n}\n",
+    )]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("suma.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(2, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    a.accion(jonesy_tui::accion::Accion::DocumentarFuncion);
+    // Lo seleccionado se reemplaza al escribir.
+    escribir(&mut a, "Suma dos enteros.");
+    let t = a.buf().buf.contenido();
+    assert!(
+        t.starts_with("/**\n * @brief Suma dos enteros.\n *\n * @param a [Descripción del parámetro a]\n * @param b"),
+        "{t}"
+    );
+    assert!(
+        t.contains(" * @return [") && t.contains(" */\nint suma(int a, int b)"),
+        "{t}"
+    );
+    // Otra vez: ya está documentada.
+    let pos = a.buf().buf.linea_columna_a_pos(12, 0);
+    a.buf_mut().buf.mover_a(pos, false);
+    a.accion(jonesy_tui::accion::Accion::DocumentarFuncion);
+    let p = pantalla(&mut a, 140, 30);
+    assert!(p.contains("ya tiene su comentario"), "{p}");
+}
