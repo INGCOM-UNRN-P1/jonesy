@@ -3015,6 +3015,65 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                 y,
             ))
         }
+        Modal::Completar { opciones, sel, .. } => {
+            // Debajo del cursor (o arriba si no entra), dentro del editor.
+            let z = app.zonas.editor.map(|z| z.texto).unwrap_or(area);
+            let b = &app.buf().buf;
+            let (l, c) = b.linea_columna();
+            let y_cursor = z.y + l.saturating_sub(b.desplazamiento) as u16;
+            let x_cursor = z.x + c.saturating_sub(b.desplazamiento_h) as u16;
+            let x = x_cursor.min(area.x + area.width.saturating_sub(20));
+            let visibles = opciones.len().min(8) as u16;
+            let ancho_texto = opciones
+                .iter()
+                .map(|o| o.texto.chars().count())
+                .max()
+                .unwrap_or(4);
+            let ancho_detalle = opciones
+                .iter()
+                .map(|o| o.detalle.chars().count())
+                .max()
+                .unwrap_or(0);
+            let w = ((ancho_texto + ancho_detalle + 5) as u16)
+                .min(70)
+                .min(area.x + area.width - x);
+            let h = visibles + 2;
+            let y = if y_cursor + 1 + h <= area.y + area.height {
+                y_cursor + 1
+            } else {
+                y_cursor.saturating_sub(h)
+            };
+            let r = Rect::new(x, y, w, h);
+            limpiar(f, r);
+            let bloque_c = bloque(
+                format!(" {}/{} · Enter completa ", sel + 1, opciones.len()),
+                true,
+            );
+            let i = bloque_c.inner(r);
+            f.render_widget(bloque_c, r);
+            let desde = sel.saturating_sub(visibles as usize - 1);
+            let lineas: Vec<Line> = opciones
+                .iter()
+                .enumerate()
+                .skip(desde)
+                .take(visibles as usize)
+                .map(|(k, o)| {
+                    let estilo = if k == *sel {
+                        Style::default()
+                            .bg(tema::fondo_seleccion())
+                            .fg(tema::fuerte())
+                    } else {
+                        Style::default().fg(tema::texto())
+                    };
+                    Line::from(vec![
+                        Span::styled(format!("{:<w$} ", o.texto, w = ancho_texto), estilo),
+                        Span::styled(o.detalle.clone(), Style::default().fg(tema::atenuado())),
+                    ])
+                })
+                .collect();
+            f.render_widget(Paragraph::new(lineas), i);
+            Some((x_cursor, y_cursor))
+        }
         Modal::RutaPreferencias { importar, texto } => {
             let r = centrado(area, 76, 3);
             limpiar(f, r);

@@ -8,6 +8,7 @@ pub mod busqueda;
 pub mod casos;
 pub mod catalogo;
 pub mod catscan;
+pub mod completar;
 pub mod diagnostico;
 pub mod diff;
 pub mod doctor;

@@ -305,6 +305,13 @@ pub enum Modal {
         texto: String,
         error: Option<String>,
     },
+    /// Ctrl+Espacio: los nombres que completan la palabra del cursor, que empieza en
+    /// `inicio` (posición en caracteres).
+    Completar {
+        inicio: usize,
+        opciones: Vec<jonesy_core::completar::Candidato>,
+        sel: usize,
+    },
     /// Exportar o importar las preferencias: la ruta del archivo.
     RutaPreferencias {
         importar: bool,
@@ -6653,6 +6660,7 @@ impl App {
             Accion::Referencias => self.buscar_referencias(),
             Accion::DocumentarFuncion => self.documentar_funcion(),
             Accion::CrearPrueba => self.crear_prueba(),
+            Accion::Autocompletar => self.autocompletar(true),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7038,6 +7046,50 @@ impl App {
             ),
             Nivel::Ok,
         );
+    }
+
+    /// Los candidatos para la palabra del cursor (los del archivo y los de la base del
+    /// quick-doc). Con `abrir`, abre la lista (o completa directo si hay uno solo); si no,
+    /// la actualiza mientras se escribe.
+    fn autocompletar(&mut self, abrir: bool) {
+        let b = &self.buf().buf;
+        let fuente = b.contenido();
+        let cursor = b.cursor;
+        let chars: Vec<char> = fuente.chars().collect();
+        let (inicio, prefijo) = jonesy_core::completar::prefijo(&chars, cursor);
+        let base = jonesy_doc::Base::embebida();
+        let biblioteca: Vec<(String, String)> = if b.lenguaje == Lenguaje::C {
+            base.nombres()
+                .filter_map(|n| base.funcion(n).map(|f| (n.to_string(), f.firma.clone())))
+                .collect()
+        } else {
+            vec![]
+        };
+        let opciones = jonesy_core::completar::candidatos(&fuente, cursor, &biblioteca);
+        if opciones.is_empty() || (prefijo.is_empty() && !abrir) {
+            self.modal = None;
+            if abrir {
+                self.avisar(
+                    if prefijo.is_empty() {
+                        "Escribí el comienzo de un nombre y Ctrl+Espacio lo completa.".to_string()
+                    } else {
+                        format!("Nada que empiece con «{prefijo}».")
+                    },
+                    Nivel::Info,
+                );
+            }
+            return;
+        }
+        if abrir && opciones.len() == 1 && !prefijo.is_empty() {
+            let texto = opciones[0].texto.clone();
+            self.editar(|b| b.reemplazar_rango(inicio, cursor, &texto));
+            return;
+        }
+        self.modal = Some(Modal::Completar {
+            inicio,
+            opciones,
+            sel: 0,
+        });
     }
 
     /// Abre el resultado `i` de la búsqueda en el proyecto.
@@ -8145,6 +8197,8 @@ impl App {
             // Ctrl+/ llega como Ctrl+/ o como Ctrl+7 según la terminal.
             (KeyCode::Char('/' | '7' | '_'), true, _) => Some(Accion::Comentar),
             (KeyCode::Char('d'), true, _) => Some(Accion::DuplicarLinea),
+            // Ctrl+Espacio llega como Ctrl+Espacio o como Ctrl+@ (NUL) según la terminal.
+            (KeyCode::Char(' ' | '@'), true, _) => Some(Accion::Autocompletar),
             (KeyCode::Char('r'), true, _) => Some(Accion::RenombrarSimbolo),
             (KeyCode::Char('p'), true, _) => Some(Accion::PreviewMarkdown),
             (KeyCode::PageDown, true, _) => Some(Accion::SiguienteBuffer),
@@ -8517,6 +8571,50 @@ impl App {
                     })
                     .flatten();
                 self.modal = Some(Modal::RenombrarSimbolo { plan, texto, error });
+            }
+            Modal::Completar {
+                inicio,
+                opciones,
+                mut sel,
+            } => {
+                let n = opciones.len();
+                match k.code {
+                    KeyCode::Esc => {}
+                    KeyCode::Up => {
+                        sel = (sel + n - 1) % n;
+                        self.modal = Some(Modal::Completar {
+                            inicio,
+                            opciones,
+                            sel,
+                        });
+                    }
+                    KeyCode::Down => {
+                        sel = (sel + 1) % n;
+                        self.modal = Some(Modal::Completar {
+                            inicio,
+                            opciones,
+                            sel,
+                        });
+                    }
+                    KeyCode::Enter | KeyCode::Tab => {
+                        let texto = opciones[sel].texto.clone();
+                        let cursor = self.buf().buf.cursor;
+                        self.editar(|b| b.reemplazar_rango(inicio, cursor, &texto));
+                    }
+                    // Seguir escribiendo filtra la lista.
+                    KeyCode::Char(c) if !ctrl && !alt && (c.is_alphanumeric() || c == '_') => {
+                        self.editar(|b| b.escribir(c));
+                        self.autocompletar(false);
+                    }
+                    KeyCode::Backspace => {
+                        self.editar(|b| b.borrar_atras());
+                        if self.buf().buf.cursor > inicio {
+                            self.autocompletar(false);
+                        }
+                    }
+                    // Cualquier otra tecla cierra la lista y hace lo suyo en el editor.
+                    _ => self.tecla_editor(k),
+                }
             }
             Modal::RutaPreferencias {
                 importar,

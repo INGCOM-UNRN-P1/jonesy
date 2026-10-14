@@ -3309,3 +3309,44 @@ fn marcas_de_las_pruebas_en_el_margen() {
     assert!(linea("TEST(suma_basica)").contains("✓"), "{p}");
     assert!(linea("TEST(suma_mala)").contains("✗"), "{p}");
 }
+
+#[test]
+fn autocompletar_con_ctrl_espacio() {
+    let dir = proyecto(&[(
+        "main.c",
+        "#include <stdio.h>\n\nint promedio = 0;\n\nint main(void)\n{\n    \n}\n",
+    )]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(6, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    escribir(&mut a, "pr");
+    tecla(&mut a, KeyCode::Char(' '), KeyModifiers::CONTROL);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("promedio") && p.contains("en este archivo") && p.contains("printf"),
+        "{p}"
+    );
+    // Seguir escribiendo filtra: «pri» deja sólo printf, de la biblioteca.
+    escribir(&mut a, "i");
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("int printf(") && !p.contains("en este archivo"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(
+        a.buf().buf.contenido().contains("    promedio\n"),
+        "{}",
+        a.buf().buf.contenido()
+    );
+    // Con una sola opción completa directo.
+    escribir(&mut a, " + strl");
+    tecla(&mut a, KeyCode::Char(' '), KeyModifiers::CONTROL);
+    assert!(
+        a.buf().buf.contenido().contains("promedio + strlen"),
+        "{}",
+        a.buf().buf.contenido()
+    );
+}

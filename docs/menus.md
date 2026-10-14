@@ -96,7 +96,7 @@ comprueba que esté al día.
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
-| Editar | [E]ditar | F10 y E | 27 |
+| Editar | [E]ditar | F10 y E | 28 |
 | Ver | [V]er | Alt+V (o F10 y V) | 17 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 12 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 10 |
@@ -155,6 +155,7 @@ comprueba que esté al día.
 ├─────────────────────────────────────────────────────────────────────────────┤
 │ Comentar / descomentar líneas                                        Ctrl+/ │
 │ Duplicar línea                                                       Ctrl+D │
+│ Autocompletar el nombre                                        Ctrl+Espacio │
 │ Mover línea arriba                                                    Alt+↑ │
 │ Mover línea abajo                                                     Alt+↓ │
 ├─────────────────────────────────────────────────────────────────────────────┤
