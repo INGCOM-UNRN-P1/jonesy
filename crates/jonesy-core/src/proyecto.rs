@@ -23,8 +23,39 @@ pub struct Config {
     /// Herramientas del ecosistema integradas como plugins.
     pub integraciones: crate::integraciones::ConfigIntegraciones,
     pub pruebas: Pruebas,
+    /// Límites de tiempo y memoria de los casos (Comparar con las salidas esperadas).
+    pub casos: ConfigCasos,
     /// Atajos propios: `"ctrl+e" = "Compilar"` (tecla → acción; ganan a los de fábrica).
     pub atajos: std::collections::BTreeMap<String, String>,
+}
+
+/// `[casos]`: límites de cada caso, como en un juez.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ConfigCasos {
+    /// Segundos por caso (10 por defecto).
+    pub tiempo_s: f64,
+    /// MiB por caso (0 = sin límite).
+    pub memoria_mb: u64,
+    /// Límites propios de un caso por su nombre (`entrada2`, `casos/borde`).
+    pub por_caso: std::collections::BTreeMap<String, LimitesCaso>,
+}
+
+impl Default for ConfigCasos {
+    fn default() -> Self {
+        ConfigCasos {
+            tiempo_s: 10.0,
+            memoria_mb: 0,
+            por_caso: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LimitesCaso {
+    pub tiempo_s: Option<f64>,
+    pub memoria_mb: Option<u64>,
 }
 
 /// `[pruebas]`: cómo correr y leer las pruebas (Construir → Correr pruebas).

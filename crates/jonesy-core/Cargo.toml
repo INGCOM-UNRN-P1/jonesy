@@ -17,5 +17,8 @@ tar.workspace = true
 similar.workspace = true
 jonesy-doc = { path = "../jonesy-doc" }
 
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
 [dev-dependencies]
 tempfile.workspace = true

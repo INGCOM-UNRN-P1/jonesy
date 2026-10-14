@@ -2569,15 +2569,13 @@ impl App {
         };
         let args = self.argumentos_de_ejercicio();
         let tx = self.tx.clone();
+        let config = self.proyecto.config.casos.clone();
         self.avisar(format!("Corriendo {} caso(s)…", casos.len()), Nivel::Info);
         std::thread::spawn(move || {
-            let r = jonesy_core::casos::correr_todos(
-                &prog,
-                &args,
-                &cwd,
-                &casos,
-                Duration::from_secs(10),
-            );
+            let limites = |c: &jonesy_core::casos::Caso| {
+                jonesy_core::casos::Limites::de_config(&config, &c.nombre)
+            };
+            let r = jonesy_core::casos::correr_todos(&prog, &args, &cwd, &casos, &limites);
             let _ = tx.send(Aviso::Casos(r));
         });
     }

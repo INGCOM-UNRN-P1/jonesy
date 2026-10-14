@@ -72,6 +72,40 @@ pub struct Corrida {
     pub tiempo: Duration,
     /// Se cortó por pasar el tiempo límite (¿ciclo infinito?).
     pub colgado: bool,
+    /// Memoria máxima que usó (KiB), si el sistema la informa.
+    pub memoria_kb: Option<u64>,
+    /// Pasó el límite de memoria del caso.
+    pub sin_memoria: bool,
+}
+
+/// Límites de una corrida, como en un juez (`[casos]` de .jonesy.toml).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Limites {
+    pub tiempo: Duration,
+    /// Memoria en MiB (None: sin límite).
+    pub memoria_mb: Option<u64>,
+}
+
+impl Default for Limites {
+    fn default() -> Self {
+        Limites {
+            tiempo: Duration::from_secs(10),
+            memoria_mb: None,
+        }
+    }
+}
+
+impl Limites {
+    /// Los del caso `nombre` según la configuración del proyecto.
+    pub fn de_config(c: &crate::proyecto::ConfigCasos, nombre: &str) -> Limites {
+        let propio = c.por_caso.get(nombre);
+        let tiempo = propio.and_then(|p| p.tiempo_s).unwrap_or(c.tiempo_s);
+        let memoria = propio.and_then(|p| p.memoria_mb).unwrap_or(c.memoria_mb);
+        Limites {
+            tiempo: Duration::from_secs_f64(if tiempo > 0.0 { tiempo } else { 10.0 }),
+            memoria_mb: (memoria > 0).then_some(memoria),
+        }
+    }
 }
 
 /// Corre `programa args` en `dir` con `entrada` como stdin y un tiempo límite.
@@ -82,7 +116,47 @@ pub fn correr(
     entrada: Option<&Path>,
     limite: Duration,
 ) -> std::io::Result<Corrida> {
+    correr_con(
+        programa,
+        args,
+        dir,
+        entrada,
+        Limites {
+            tiempo: limite,
+            memoria_mb: None,
+        },
+    )
+}
+
+/// Como `correr`, con límite de tiempo y de memoria (en Unix: RLIMIT_AS, más un margen
+/// para las bibliotecas; la memoria usada se mide con wait4).
+pub fn correr_con(
+    programa: &Path,
+    args: &[String],
+    dir: &Path,
+    entrada: Option<&Path>,
+    limites: Limites,
+) -> std::io::Result<Corrida> {
+    let limite = limites.tiempo;
     let mut cmd = Command::new(programa);
+    #[cfg(unix)]
+    if let Some(mb) = limites.memoria_mb {
+        use std::os::unix::process::CommandExt;
+        // Margen para el cargador y las bibliotecas compartidas (que también cuentan).
+        let bytes = (mb + 64) * 1024 * 1024;
+        // SAFETY: setrlimit es seguro después de fork (async-signal-safe) y sólo afecta
+        // al proceso hijo.
+        unsafe {
+            cmd.pre_exec(move || {
+                let r = libc::rlimit {
+                    rlim_cur: bytes as libc::rlim_t,
+                    rlim_max: bytes as libc::rlim_t,
+                };
+                libc::setrlimit(libc::RLIMIT_AS, &r);
+                Ok(())
+            });
+        }
+    }
     cmd.args(args)
         .current_dir(dir)
         .stdout(Stdio::piped())
@@ -116,37 +190,101 @@ pub fn correr(
         s
     });
     let mut colgado = false;
-    let codigo = loop {
-        match hijo.try_wait()? {
-            Some(estado) => break estado.code().or_else(|| senal(&estado)),
+    let (codigo, memoria_kb) = loop {
+        match esperar_sin_bloquear(&mut hijo)? {
+            Some(fin) => break fin,
             None if inicio.elapsed() >= limite => {
                 let _ = hijo.kill();
-                let _ = hijo.wait();
                 colgado = true;
-                break None;
+                break esperar_bloqueando(&mut hijo)?;
             }
             None => std::thread::sleep(Duration::from_millis(10)),
         }
     };
+    let codigo = if colgado { None } else { codigo };
     let tiempo = inicio.elapsed();
     let salida = String::from_utf8_lossy(&lector.join().unwrap_or_default()).into_owned();
+    // Sin memoria: usó más que el límite, o terminó mal cerca de él (malloc devolvió NULL
+    // o el sistema lo cortó al pedir más).
+    let sin_memoria = match (limites.memoria_mb, memoria_kb) {
+        (Some(mb), Some(kb)) => {
+            let tope = mb * 1024;
+            kb > tope
+                || (codigo != Some(0) && !colgado && kb * 10 > tope * 7)
+                || (codigo != Some(0) && salida.contains("Cannot allocate memory"))
+        }
+        (Some(_), None) => codigo != Some(0) && salida.contains("Cannot allocate memory"),
+        _ => false,
+    };
     Ok(Corrida {
         salida,
         codigo,
         tiempo,
         colgado,
+        memoria_kb,
+        sin_memoria,
     })
 }
 
+/// (código de salida o 128+señal, memoria máxima en KiB) si ya terminó.
 #[cfg(unix)]
-fn senal(e: &std::process::ExitStatus) -> Option<i32> {
-    use std::os::unix::process::ExitStatusExt;
-    e.signal().map(|s| 128 + s)
+fn esperar_sin_bloquear(
+    hijo: &mut std::process::Child,
+) -> std::io::Result<Option<(Option<i32>, Option<u64>)>> {
+    esperar_unix(hijo, libc::WNOHANG)
+}
+
+#[cfg(unix)]
+fn esperar_bloqueando(
+    hijo: &mut std::process::Child,
+) -> std::io::Result<(Option<i32>, Option<u64>)> {
+    Ok(esperar_unix(hijo, 0)?.unwrap_or((None, None)))
+}
+
+#[cfg(unix)]
+fn esperar_unix(
+    hijo: &mut std::process::Child,
+    opciones: libc::c_int,
+) -> std::io::Result<Option<(Option<i32>, Option<u64>)>> {
+    let mut estado: libc::c_int = 0;
+    // SAFETY: rusage es un struct C plano; wait4 lo completa.
+    let mut uso: libc::rusage = unsafe { std::mem::zeroed() };
+    // SAFETY: el pid es de un hijo nuestro que todavía no se esperó.
+    let r = unsafe { libc::wait4(hijo.id() as libc::pid_t, &mut estado, opciones, &mut uso) };
+    if r == 0 {
+        return Ok(None);
+    }
+    if r < 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let codigo = if libc::WIFEXITED(estado) {
+        Some(libc::WEXITSTATUS(estado))
+    } else if libc::WIFSIGNALED(estado) {
+        Some(128 + libc::WTERMSIG(estado))
+    } else {
+        None
+    };
+    // ru_maxrss viene en KiB en Linux (en bytes en macOS).
+    let kb = if cfg!(target_os = "macos") {
+        uso.ru_maxrss as u64 / 1024
+    } else {
+        uso.ru_maxrss as u64
+    };
+    Ok(Some((codigo, (kb > 0).then_some(kb))))
 }
 
 #[cfg(not(unix))]
-fn senal(_: &std::process::ExitStatus) -> Option<i32> {
-    None
+fn esperar_sin_bloquear(
+    hijo: &mut std::process::Child,
+) -> std::io::Result<Option<(Option<i32>, Option<u64>)>> {
+    Ok(hijo.try_wait()?.map(|e| (e.code(), None)))
+}
+
+#[cfg(not(unix))]
+fn esperar_bloqueando(
+    hijo: &mut std::process::Child,
+) -> std::io::Result<(Option<i32>, Option<u64>)> {
+    Ok((hijo.wait()?.code(), None))
 }
 
 /// Normaliza para comparar: sin espacios al final de cada línea ni líneas vacías al final
@@ -238,17 +376,19 @@ pub fn correr_todos(
     args: &[String],
     dir: &Path,
     casos: &[Caso],
-    limite: Duration,
+    limites: &dyn Fn(&Caso) -> Limites,
 ) -> Vec<ResultadoCaso> {
     casos
         .iter()
         .map(|c| {
             let corrida =
-                correr(programa, args, dir, Some(&c.entrada), limite).unwrap_or(Corrida {
+                correr_con(programa, args, dir, Some(&c.entrada), limites(c)).unwrap_or(Corrida {
                     salida: String::new(),
                     codigo: None,
                     tiempo: Duration::ZERO,
                     colgado: false,
+                    memoria_kb: None,
+                    sin_memoria: false,
                 });
             let esperada = c
                 .esperada
@@ -260,7 +400,7 @@ pub fn correr_todos(
                 Some(_) => {
                     let (a, b) = (normalizar(&corrida.salida), normalizar(&esperada));
                     let n = lineas_distintas(&a, &b);
-                    (Some(n == 0 && !corrida.colgado), n)
+                    (Some(n == 0 && !corrida.colgado && !corrida.sin_memoria), n)
                 }
             };
             ResultadoCaso {
@@ -286,6 +426,71 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "linux")]
+    fn limites_de_tiempo_y_memoria() {
+        let d = tempfile::tempdir().unwrap();
+        let compilar = |nombre: &str, codigo: &str| -> Option<std::path::PathBuf> {
+            let c = d.path().join(format!("{nombre}.c"));
+            std::fs::write(&c, codigo).unwrap();
+            let b = d.path().join(nombre);
+            let ok = Command::new("gcc")
+                .arg("-o")
+                .arg(&b)
+                .arg(&c)
+                .status()
+                .is_ok_and(|s| s.success());
+            ok.then_some(b)
+        };
+        let Some(normal) = compilar(
+            "normal",
+            "#include <stdio.h>\nint main(void) { puts(\"ok\"); return 0; }\n",
+        ) else {
+            return; // sin gcc
+        };
+        let r = correr_con(&normal, &[], d.path(), None, Limites::default()).unwrap();
+        assert_eq!(r.codigo, Some(0));
+        assert!(
+            r.memoria_kb.is_some_and(|kb| kb > 0) && !r.sin_memoria,
+            "{r:?}"
+        );
+
+        let lento = compilar("lento", "int main(void) { for (;;) {} }\n").unwrap();
+        let r = correr_con(
+            &lento,
+            &[],
+            d.path(),
+            None,
+            Limites {
+                tiempo: Duration::from_millis(300),
+                memoria_mb: None,
+            },
+        )
+        .unwrap();
+        assert!(r.colgado && r.codigo.is_none(), "{r:?}");
+
+        // Pide y toca 200 MiB con un límite de 32.
+        let gloton = compilar(
+            "gloton",
+            "#include <stdlib.h>\n#include <string.h>\n#include <stdio.h>\nint main(void) { char *p = malloc(200u << 20); if (p == NULL) { puts(\"sin memoria\"); return 1; } memset(p, 1, 200u << 20); return 0; }\n",
+        )
+        .unwrap();
+        let r = correr_con(
+            &gloton,
+            &[],
+            d.path(),
+            None,
+            Limites {
+                tiempo: Duration::from_secs(10),
+                memoria_mb: Some(32),
+            },
+        )
+        .unwrap();
+        // malloc devolvió NULL: el programa lo vio y terminó con 1 (sin pasarse del tope).
+        assert_eq!(r.codigo, Some(1), "{r:?}");
+        assert!(r.salida.contains("sin memoria"), "{r:?}");
+    }
 
     #[test]
     fn encuentra_los_casos() {

@@ -3395,8 +3395,27 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                         tema::fondo()
                     };
                     let st = Style::default().bg(fondo);
+                    let limites = jonesy_core::casos::Limites::de_config(
+                        &app.proyecto.config.casos,
+                        &x.caso.nombre,
+                    );
                     let (marca, color, detalle) = match (x.coincide, x.corrida.colgado) {
-                        (_, true) => ("✗", tema::error(), "se colgó (más de 10 s)".to_string()),
+                        (_, true) => (
+                            "✗",
+                            tema::error(),
+                            format!(
+                                "superó el tiempo ({} s): ¿un ciclo infinito o muy lento?",
+                                limites.tiempo.as_secs_f64()
+                            ),
+                        ),
+                        _ if x.corrida.sin_memoria => (
+                            "✗",
+                            tema::error(),
+                            format!(
+                                "superó la memoria ({} MiB)",
+                                limites.memoria_mb.unwrap_or(0)
+                            ),
+                        ),
                         (Some(true), _) => ("✓", tema::ok(), "coincide".to_string()),
                         (Some(false), _) => (
                             "✗",
@@ -3405,9 +3424,12 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                         ),
                         (None, _) => ("·", tema::atenuado(), "sin salida esperada".to_string()),
                     };
-                    let codigo = match x.corrida.codigo {
-                        Some(0) | None => String::new(),
-                        Some(c) => format!(" · código {c}"),
+                    let codigo = match (x.corrida.codigo, limites.memoria_mb) {
+                        (Some(0) | None, _) => String::new(),
+                        (Some(c), Some(mb)) if !x.corrida.sin_memoria => format!(
+                            " · código {c} (con el límite de {mb} MiB: ¿malloc devolvió NULL?)"
+                        ),
+                        (Some(c), _) => format!(" · código {c}"),
                     };
                     Line::from(vec![
                         Span::styled(format!(" {marca} "), st.fg(color)),
@@ -3417,7 +3439,14 @@ fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)>
                         ),
                         Span::styled(format!("{detalle}{codigo}"), st),
                         Span::styled(
-                            format!("  {:.2} s", x.corrida.tiempo.as_secs_f64()),
+                            format!(
+                                "  {:.2} s{}",
+                                x.corrida.tiempo.as_secs_f64(),
+                                x.corrida
+                                    .memoria_kb
+                                    .map(|kb| format!(" · {:.1} MiB", kb as f64 / 1024.0))
+                                    .unwrap_or_default()
+                            ),
                             st.fg(tema::atenuado()),
                         ),
                     ])

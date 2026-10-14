@@ -3523,3 +3523,35 @@ fn descartar_los_cambios_de_un_archivo() {
     tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
     assert!(a.buf().buf.contenido().contains("return 1;"));
 }
+
+#[test]
+#[cfg(unix)] // usa gcc
+fn limite_de_tiempo_por_caso() {
+    let dir = proyecto(&[
+        (
+            "main.c",
+            "#include <stdio.h>\n\nint main(void)\n{\n    int n = 0;\n    if (scanf(\"%d\", &n) != 1)\n    {\n        return 1;\n    }\n    while (n == 0)\n    {\n    }\n    printf(\"%d\\n\", n);\n    return 0;\n}\n",
+        ),
+        ("entrada1.txt", "5\n"),
+        ("salida1.txt", "5\n"),
+        ("entrada2.txt", "0\n"),
+        ("salida2.txt", "0\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n[casos]\ntiempo_s = 0.5\n"),
+    ]);
+    if std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::CompararSalidas);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Casos { .. }))
+    });
+    let p = pantalla(&mut a, 140, 30);
+    assert!(p.contains("superó el tiempo (0.5 s)"), "{p}");
+    assert!(p.contains("coincide") && p.contains("MiB"), "{p}");
+}

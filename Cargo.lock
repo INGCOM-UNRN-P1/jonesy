@@ -375,6 +375,7 @@ dependencies = [
  "anyhow",
  "hex",
  "jonesy-doc",
+ "libc",
  "ropey",
  "serde",
  "serde_json",
