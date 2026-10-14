@@ -803,6 +803,10 @@ pub struct App {
     pub valor_cursor: Option<(String, Option<Result<String, String>>)>,
     /// Palabra bajo el mouse en el editor (gana a la del cursor hasta la próxima tecla).
     hover: Option<String>,
+    /// El ejercicio de deckard de la consigna (si es uno).
+    pub deckard: Option<jonesy_core::deckard::Ejercicio>,
+    /// Pistas vistas de cada ejercicio de deckard (id → cuántas).
+    pub pistas_vistas: HashMap<String, usize>,
     /// Archivo (relativo al repositorio) cuyos cambios se van a descartar.
     descartar_pendiente: Option<String>,
     /// Los atajos de `[atajos]` del proyecto: (tecla, acción, cómo se escribió).
@@ -1009,6 +1013,8 @@ impl App {
             hover: None,
             atajos_usuario: vec![],
             descartar_pendiente: None,
+            deckard: None,
+            pistas_vistas: HashMap::new(),
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -1056,6 +1062,7 @@ impl App {
         };
         app.cargar_integraciones();
         app.restaurar_sesion(&op.archivos);
+        app.consigna_de_deckard();
         app.ofrecer_recuperacion();
         if let Some(min) = op.simulacro.filter(|_| !op.examen) {
             app.empezar_simulacro(min);
@@ -1134,6 +1141,7 @@ impl App {
                     .expandidos
                     .insert(self.proyecto.raiz.join(rel));
             }
+            self.pistas_vistas = s.pistas.iter().cloned().collect();
             for (nombre, activa) in &s.integraciones {
                 if let Some(x) = self.integraciones.iter_mut().find(|x| x.nombre == *nombre) {
                     x.activa = *activa;
@@ -1167,11 +1175,21 @@ impl App {
         }
         if self.buffers.is_empty() {
             let raiz = self.proyecto.raiz.clone();
-            let candidatos = self.proyecto.archivos(5000);
-            let consigna = self.consigna.as_ref().map(|c| c.ruta.clone());
-            let elegido = [raiz.join("main.c"), raiz.join("src/main.c")]
+            // La solución modelo de deckard es del docente: nunca se abre por su cuenta.
+            let candidatos: Vec<PathBuf> = self
+                .proyecto
+                .archivos(5000)
                 .into_iter()
-                .find(|p| p.is_file())
+                .filter(|p| p.file_name().is_none_or(|n| n != "solucion.c"))
+                .collect();
+            let consigna = self.consigna.as_ref().map(|c| c.ruta.clone());
+            let elegido = jonesy_core::deckard::leer(&raiz)
+                .and_then(|e| jonesy_core::deckard::archivo_inicial(&e))
+                .or_else(|| {
+                    [raiz.join("main.c"), raiz.join("src/main.c")]
+                        .into_iter()
+                        .find(|p| p.is_file())
+                })
                 .or_else(|| {
                     candidatos
                         .iter()
@@ -1256,6 +1274,11 @@ impl App {
                 .map(|x| (x.nombre.clone(), x.activa))
                 .collect(),
             tema: Some(tema::actual().nombre().into()),
+            pistas: self
+                .pistas_vistas
+                .iter()
+                .map(|(k, v)| (k.clone(), *v))
+                .collect(),
         };
         let _ = s.guardar(&dir);
     }
@@ -1445,6 +1468,96 @@ impl App {
         if self.modo() == Modo::Compacto {
             self.vista = Vista::Codigo;
         }
+        self.consigna_de_deckard();
+    }
+
+    /// La consigna del ejercicio de deckard del archivo activo (o de la raíz): cambia al
+    /// pasar a un archivo de otro ejercicio (una guía con varios).
+    pub fn consigna_de_deckard(&mut self) {
+        let desde = self
+            .buffers
+            .get(self.activo)
+            .and_then(|b| b.buf.ruta.clone())
+            .unwrap_or_else(|| self.proyecto.raiz.clone());
+        let Some(e) = jonesy_core::deckard::buscar_desde(&desde, &self.proyecto.raiz)
+            .or_else(|| jonesy_core::deckard::leer(&self.proyecto.raiz))
+        else {
+            return;
+        };
+        if self
+            .deckard
+            .as_ref()
+            .is_some_and(|d| d.id == e.id && d.dir == e.dir)
+        {
+            return;
+        }
+        let primera = self.deckard.is_none();
+        self.deckard = Some(e);
+        self.refrescar_consigna_deckard(false);
+        if primera {
+            self.consigna_visible = true;
+        }
+    }
+
+    /// Arma la consigna con las pistas vistas hasta ahora.
+    fn refrescar_consigna_deckard(&mut self, conservar_desplazamiento: bool) {
+        let Some(e) = &self.deckard else { return };
+        let vistas = self.pistas_vistas.get(&e.id).copied().unwrap_or(0);
+        let ruta = ["enunciado.md", "README.md", "ejercicio.yaml"]
+            .iter()
+            .map(|n| e.dir.join(n))
+            .find(|p| p.is_file())
+            .unwrap_or_else(|| e.dir.join("enunciado.md"));
+        let desplazamiento = if conservar_desplazamiento {
+            self.consigna
+                .as_ref()
+                .map(|c| c.desplazamiento)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        self.consigna = Some(Consigna {
+            ruta,
+            fuente: jonesy_core::deckard::markdown(e, vistas),
+            doc: None,
+            desplazamiento,
+            enlace: None,
+        });
+    }
+
+    /// Ayuda → Ver la siguiente pista (o p en la consigna): una pista más del ejercicio de
+    /// deckard. En el examen queda en la bitácora.
+    fn siguiente_pista(&mut self) {
+        let Some(e) = self.deckard.clone() else {
+            self.avisar(
+                "Esta consigna no tiene pistas (las traen los ejercicios de deckard).",
+                Nivel::Info,
+            );
+            return;
+        };
+        let vistas = self.pistas_vistas.get(&e.id).copied().unwrap_or(0);
+        if e.pistas.is_empty() {
+            self.avisar("Este ejercicio no tiene pistas.", Nivel::Info);
+            return;
+        }
+        if vistas >= e.pistas.len() {
+            self.avisar("Ya viste todas las pistas de este ejercicio.", Nivel::Info);
+            return;
+        }
+        let n = vistas + 1;
+        self.pistas_vistas.insert(e.id.clone(), n);
+        self.tel(TelemetryEvent::CommandExec {
+            command: format!("pista {n} de {} del ejercicio {}", e.pistas.len(), e.id),
+            exit_code: Some(0),
+        });
+        self.refrescar_consigna_deckard(true);
+        self.consigna_visible = true;
+        self.guardar_sesion();
+        let texto: String = e.pistas[vistas].chars().take(120).collect();
+        self.avisar(
+            format!("Pista {n} de {}: {texto}", e.pistas.len()),
+            Nivel::Info,
+        );
     }
 
     /// Aplica una edición al buffer activo y la registra en la telemetría.
@@ -6786,6 +6899,7 @@ impl App {
                 }
             }
             Accion::ConteoMemoria => self.contar_memoria(),
+            Accion::SiguientePista => self.siguiente_pista(),
             Accion::Vigilar => {
                 let b = &self.buf().buf;
                 let texto = b
@@ -8041,6 +8155,7 @@ impl App {
                 }
             }
             KeyCode::Esc | KeyCode::Tab => self.cambiar_foco(Foco::Editor),
+            KeyCode::Char('p') if self.deckard.is_some() => self.siguiente_pista(),
             _ => self.tecla_editor(k),
         }
     }

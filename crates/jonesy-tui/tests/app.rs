@@ -3591,3 +3591,82 @@ fn contar_malloc_y_free_por_funcion() {
         "{p}"
     );
 }
+
+#[test]
+fn consigna_de_un_starter_kit_de_deckard() {
+    let dir = proyecto(&[
+        (
+            "metadata.json",
+            r#"{"ejercicio_id": "invertir", "titulo": "Invertir un arreglo", "tema": "arreglos", "bloom": "APLICAR", "minutos_estimados": 20, "clave_entrega": "DKD-0CA7-7CAB-A7DB", "generator": "Deckard Cátedra Toolchain"}"#,
+        ),
+        (
+            "README.md",
+            "# Invertir un arreglo\n\n## Enunciado\n\nLeer N enteros e imprimirlos al revés.\n\n## Pistas de Resolución\n\n<details><summary>Pista 1</summary>\n\nPensá en el último índice.\n</details>\n<details><summary>Pista 2</summary>\n\nUn solo ciclo alcanza.\n</details>\n",
+        ),
+        ("invertir.c", "int main(void)\n{\n    return 0;\n}\n"),
+        ("Makefile", "build:\n\t@true\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    assert_eq!(a.buf().buf.nombre(), "invertir.c");
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Nivel: Aplicar") && p.contains("Tiempo estimado: 20 min"),
+        "{p}"
+    );
+    assert!(
+        p.contains("Pistas (0 de 2)") && !p.contains("último índice"),
+        "{p}"
+    );
+    // p en la consigna muestra la primera.
+    tecla(&mut a, KeyCode::F(7), KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('p'), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Pensá en el último índice") && !p.contains("Un solo ciclo"),
+        "{p}"
+    );
+    // Queda en la sesión.
+    a.guardar_sesion();
+    let (mut b, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut b, 160, 40);
+    assert!(p.contains("Pensá en el último índice"), "{p}");
+}
+
+#[test]
+fn ejercicios_del_banco_de_deckard() {
+    let dir = proyecto(&[
+        (
+            "suma/ejercicio.yaml",
+            "id: suma\ntitulo: Sumar\ntema: arreglos\nbloom: 2\nminutos_estimados: 15\npistas: []\n",
+        ),
+        ("suma/enunciado.md", "# Sumar\n\nSumar dos enteros.\n"),
+        ("suma/solucion.c", "int main(void) { return 0; }\n"),
+        ("suma/tests/caso_01.in", "1 2\n"),
+        ("suma/tests/caso_01.out", "3\n"),
+        (
+            "resta/ejercicio.yaml",
+            "id: resta\ntitulo: Restar\ntema: aritmetica\nbloom: 1\nminutos_estimados: 10\n",
+        ),
+        ("resta/enunciado.md", "Restar dos enteros.\n"),
+        ("resta/resta.c", "int main(void) { return 0; }\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    assert!(
+        a.buffers.iter().all(|b| b.buf.nombre() != "solucion.c"),
+        "la solución del docente no se abre sola"
+    );
+    a.abrir_archivo(&dir.path().join("resta/resta.c"), true);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Restar") && p.contains("Nivel: Recordar"), "{p}");
+    // Al pasar a un archivo del otro ejercicio, cambia la consigna.
+    a.abrir_archivo(&dir.path().join("suma/tests/caso_01.in"), true);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("Sumar dos enteros") && p.contains("Nivel: Comprender"),
+        "{p}"
+    );
+    // Los casos de tests/ son los de Comparar con las salidas esperadas.
+    let casos = jonesy_core::casos::buscar(&dir.path().join("suma"));
+    assert_eq!(casos.len(), 1);
+    assert_eq!(casos[0].nombre, "tests/caso_01");
+}

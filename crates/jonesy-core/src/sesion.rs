@@ -34,6 +34,8 @@ pub struct Sesion {
     pub integraciones: Vec<(String, bool)>,
     /// Tema de colores elegido desde Archivo → Configuración del entorno → Apariencia.
     pub tema: Option<String>,
+    /// Pistas vistas de cada ejercicio de deckard (id → cuántas).
+    pub pistas: Vec<(String, usize)>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -190,6 +192,7 @@ mod tests {
             expandidos: vec!["src".into()],
             integraciones: vec![("kaneda".into(), false)],
             tema: Some("claro".into()),
+            pistas: vec![("suma".into(), 1)],
         };
         s.guardar(dir.path()).unwrap();
         assert_eq!(Sesion::cargar(dir.path()).unwrap(), s);

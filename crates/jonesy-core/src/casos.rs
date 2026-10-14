@@ -24,7 +24,8 @@ pub struct Caso {
 /// Los casos de `dir` (y de `dir/casos`), ordenados por nombre.
 pub fn buscar(dir: &Path) -> Vec<Caso> {
     let mut v = vec![];
-    for d in [dir.to_path_buf(), dir.join("casos")] {
+    // `tests/` es donde deckard deja los casos (`caso_01.in` ↔ `caso_01.out`).
+    for d in [dir.to_path_buf(), dir.join("casos"), dir.join("tests")] {
         let Ok(it) = std::fs::read_dir(&d) else {
             continue;
         };
@@ -54,7 +55,10 @@ pub fn buscar(dir: &Path) -> Vec<Caso> {
                 nombre: if d == dir {
                     caso
                 } else {
-                    format!("casos/{caso}")
+                    format!(
+                        "{}/{caso}",
+                        d.file_name().unwrap_or_default().to_string_lossy()
+                    )
                 },
                 entrada: p,
                 esperada: esperada.is_file().then_some(esperada),

@@ -128,6 +128,7 @@ pub enum Accion {
     Vigilar,
     GitDescartar,
     ConteoMemoria,
+    SiguientePista,
 }
 
 pub struct Info {
@@ -264,6 +265,7 @@ impl Accion {
             Vigilar => ("Vigilar una expresión (se recalcula en cada paso)…", ""),
             GitDescartar => ("Descartar los cambios de este archivo…", ""),
             ConteoMemoria => ("Contar malloc y free por función", ""),
+            SiguientePista => ("Ver la siguiente pista de la consigna", ""),
         };
         Info { titulo, atajo }
     }
@@ -389,6 +391,7 @@ impl Accion {
             Vigilar,
             GitDescartar,
             ConteoMemoria,
+            SiguientePista,
             Salir,
         ]
     }
@@ -661,6 +664,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             A(Bienvenida),
             A(Recorrido),
             A(GuiaRapida),
+            A(SiguientePista),
             A(Glosario),
             A(Tablas),
             A(CatalogoReglas),
