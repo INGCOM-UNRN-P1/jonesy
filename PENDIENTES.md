@@ -42,37 +42,25 @@ depurar, memoria). Lo de docentes e infraestructura queda en segundo plano.
 Cien mejoras chicas pensadas para el alumno, tipificadas por área (las 50
 primeras y otras 50 sumadas después, #51 a #100). **Impacto**: cuánto cambia el
 día a día de quien cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día
-o dos), L (más). Hechas 41 de 100 (ver el historial de git para cada una). Por
+o dos), L (más). Hechas 56 de 100 (ver el historial de git para cada una). Por
 tipo: Edición 16 · Navegación 9 · Compilación 10 · Ejecución 9 · Pruebas 7 ·
 Depuración 9 · Memoria 5 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 ·
 Mantenimiento 5.
 
 |  #    	|  Mejora                                                                                                      	|  Tipo           	|  Impacto  	|  Esfuerzo  	|  Estado  	|
 |-------	|--------------------------------------------------------------------------------------------------------------	|-----------------	|-----------	|------------	|----------	|
-| 6     	|  Autocompletar identificadores del archivo y funciones de la base del quick-doc (Ctrl+Espacio)               	|  Edición        	|  alto     	|  M         	|  falta   	|
 | 7     	|  Fragmentos de C con Tab: `for`, `while`, `if/else`, `switch`, `main`, `malloc` con su verificación de NULL  	|  Edición        	|  medio    	|  M         	|  falta   	|
 | 10    	|  Plegar funciones y bloques                                                                                  	|  Edición        	|  bajo     	|  M         	|  falta   	|
-| 17    	|  Arreglo rápido de errores simples (falta `;`, falta `#include`, `=` por `==`) con una tecla                 	|  Compilación    	|  alto     	|  M         	|  falta   	|
 | 19    	|  Compilar al guardar (opcional) para ver los errores sin apretar F6                                          	|  Compilación    	|  medio    	|  S         	|  falta   	|
-| 27    	|  Marcas ✓/✗ en el margen de cada `TEST()` según la última corrida                                         	|  Pruebas        	|  medio    	|  M         	|  falta   	|
-| 28    	|  Crear el esqueleto de una prueba (`TEST` + `RUN_TEST`) para la función bajo el cursor                       	|  Pruebas        	|  medio    	|  S         	|  falta   	|
-| 29    	|  Expresiones vigiladas en el depurador que se recalculan en cada paso                                        	|  Depuración     	|  alto     	|  M         	|  falta   	|
-| 30    	|  Ver arreglos como tabla y cadenas como texto en el panel de variables                                       	|  Depuración     	|  alto     	|  M         	|  falta   	|
-| 31    	|  Valor de una variable al pasar el mouse o el cursor sobre ella mientras se depura                           	|  Depuración     	|  medio    	|  M         	|  falta   	|
 | 33    	|  Breakpoints condicionales (`i == 5`) y por cantidad de pasadas                                              	|  Depuración     	|  medio    	|  M         	|  falta   	|
 | 34    	|  Revisar la memoria de programas que leen de la entrada: valgrind en la terminal y el informe al terminar    	|  Memoria        	|  alto     	|  M         	|  falta   	|
 | 35    	|  Memoria en Windows: AddressSanitizer donde esté disponible, o cat-scan como alternativa guiada              	|  Memoria        	|  medio    	|  L         	|  falta   	|
 | 36    	|  Para cada fuga, señalar dónde se pierde la última referencia al bloque                                      	|  Memoria        	|  bajo     	|  L         	|  falta   	|
 | 37    	|  Ver el diff de lo que se va a confirmar dentro del diálogo de commit                                        	|  Git            	|  medio    	|  S         	|  falta   	|
 | 42    	|  Ejemplos en el quick-doc que se copian al editor con una tecla                                              	|  Aprendizaje    	|  medio    	|  S         	|  falta   	|
-| 46    	|  Tema apto para daltonismo (sin depender de rojo/verde para errores y aciertos)                              	|  Interfaz       	|  medio    	|  S         	|  falta   	|
-| 47    	|  Atajos configurables en `.jonesy.toml` (por ejemplo, para terminales que no pasan F-keys)                   	|  Interfaz       	|  bajo     	|  M         	|  falta   	|
 | 50    	|  Avisar cuando hay una versión nueva de jonesy y cómo actualizar (`cargo install …`)                         	|  Mantenimiento  	|  bajo     	|  S         	|  falta   	|
-| 52    	|  Ir del `.c` a su `.h` y del `.h` al `.c` con una tecla                                                      	|  Navegación     	|  medio    	|  S         	|  falta   	|
-| 53    	|  Buscar dónde se usa una función o variable (referencias) en todo el proyecto                                	|  Navegación     	|  alto     	|  M         	|  falta   	|
 | 54    	|  Archivos recientes del proyecto con una tecla, para volver al anterior rápido                               	|  Navegación     	|  medio    	|  S         	|  falta   	|
 | 55    	|  Mostrar en la barra en qué función está el cursor (archivo › función)                                       	|  Navegación     	|  bajo     	|  S         	|  falta   	|
-| 56    	|  Insertar el comentario de documentación de una función (`/** @param … */`) a partir de su firma             	|  Edición        	|  medio    	|  S         	|  falta   	|
 | 57    	|  Ajuste de líneas largas en el editor (sin cortarlas en el archivo), opcional                                	|  Edición        	|  bajo     	|  S         	|  falta   	|
 | 58    	|  Selección por columnas (bloque rectangular) con Alt+arrastre                                                	|  Edición        	|  bajo     	|  M         	|  falta   	|
 | 59    	|  Historial local de cada archivo (versiones guardadas, sin git) para recuperar algo borrado                  	|  Edición        	|  medio    	|  M         	|  falta   	|
@@ -84,7 +72,6 @@ Mantenimiento 5.
 | 65    	|  Advertir funciones de más de N líneas o con demasiados parámetros mientras se escribe                       	|  Compilación    	|  bajo     	|  S         	|  falta   	|
 | 66    	|  «Fijar como esperada»: guardar la salida de una corrida correcta como salida del caso                       	|  Ejecución      	|  medio    	|  S         	|  falta   	|
 | 67    	|  Mostrar los invisibles al comparar salidas (espacios al final, `\r`, falta el `\n` final)                   	|  Ejecución      	|  medio    	|  S         	|  falta   	|
-| 68    	|  Límite de tiempo y de memoria por caso configurable, como un juez                                           	|  Ejecución      	|  bajo     	|  S         	|  falta   	|
 | 69    	|  Correr el programa en una terminal externa (fuera de jonesy) cuando hace falta                              	|  Ejecución      	|  bajo     	|  S         	|  falta   	|
 | 70    	|  Crear casos a partir de los ejemplos de la consigna (bloques de entrada y salida del Markdown)              	|  Pruebas        	|  alto     	|  M         	|  falta   	|
 | 71    	|  Depurar una prueba: F5 sobre un `TEST` corre sólo esa prueba bajo gdb                                       	|  Pruebas        	|  alto     	|  M         	|  falta   	|
@@ -95,9 +82,7 @@ Mantenimiento 5.
 | 76    	|  Paso atrás en el depurador (`record` y `reverse-step` de gdb)                                               	|  Depuración     	|  medio    	|  L         	|  falta   	|
 | 77    	|  Historial de valores de una variable a lo largo de la ejecución                                             	|  Depuración     	|  bajo     	|  L         	|  falta   	|
 | 78    	|  Comparar el heap entre dos pasos: qué se pidió y qué se liberó en el medio                                  	|  Memoria        	|  medio    	|  M         	|  falta   	|
-| 79    	|  Al terminar, contar `malloc` y `free` por función (dónde se pide y dónde se libera)                         	|  Memoria        	|  medio    	|  M         	|  falta   	|
 | 80    	|  Ver la historia de un archivo (sus commits) y quién cambió cada línea (blame)                               	|  Git            	|  medio    	|  M         	|  falta   	|
-| 81    	|  Descartar los cambios de un archivo (volver a la última versión) con confirmación                           	|  Git            	|  medio    	|  S         	|  falta   	|
 | 82    	|  Iniciar un repositorio desde el IDE (`git init`, primer commit)                                             	|  Git            	|  medio    	|  S         	|  falta   	|
 | 83    	|  Proponer un `.gitignore` para C (binarios, `.o`, `test_bin`) al iniciar o si falta                          	|  Git            	|  medio    	|  S         	|  falta   	|
 | 84    	|  Etiquetar versiones (`git tag`) desde el panel, por ejemplo para cada entrega                               	|  Git            	|  bajo     	|  S         	|  falta   	|
@@ -113,6 +98,7 @@ Mantenimiento 5.
 | 3     	|  Resaltar la llave, paréntesis o corchete que hace pareja con el del cursor                                  	|  Edición        	|  alto     	|  S         	|  hecho   	|
 | 4     	|  Comentar o descomentar las líneas elegidas con Ctrl+/                                                       	|  Edición        	|  medio    	|  S         	|  hecho   	|
 | 5     	|  Mover la línea arriba/abajo (Alt+↑/↓) y duplicarla (Ctrl+D)                                                 	|  Edición        	|  medio    	|  S         	|  hecho   	|
+| 6     	|  Autocompletar identificadores del archivo y funciones de la base del quick-doc (Ctrl+Espacio)               	|  Edición        	|  alto     	|  M         	|  hecho   	|
 | 8     	|  Buscar y reemplazar (Ctrl+H) con mayúsculas, palabra completa y confirmación una por una                    	|  Edición        	|  alto     	|  M         	|  hecho   	|
 | 9     	|  Mostrar espacios al final y tabs mezclados con espacios, y limpiarlos al guardar (opcional)                 	|  Edición        	|  bajo     	|  S         	|  hecho   	|
 | 11    	|  Ir a la definición de una función del proyecto (F12 o Ctrl+clic) y volver (Alt+←)                           	|  Navegación     	|  alto     	|  M         	|  hecho   	|
@@ -121,6 +107,7 @@ Mantenimiento 5.
 | 14    	|  Marcadores de línea para volver rápido a un lugar del código (poner, listar, saltar)                        	|  Navegación     	|  medio    	|  S         	|  hecho   	|
 | 15    	|  Teclas para ir al problema siguiente y al anterior sin abrir el panel de Problemas                          	|  Navegación     	|  medio    	|  S         	|  hecho   	|
 | 16    	|  Marcar el primer error de una cascada como «empezá por acá» y atenuar los que dependen de él                	|  Compilación    	|  alto     	|  S         	|  hecho   	|
+| 17    	|  Arreglo rápido de errores simples (falta `;`, falta `#include`, `=` por `==`) con una tecla                 	|  Compilación    	|  alto     	|  M         	|  hecho   	|
 | 18    	|  Subrayar la columna exacta del error en el editor, no sólo marcar la línea                                  	|  Compilación    	|  medio    	|  S         	|  hecho   	|
 | 20    	|  Reconocer los mensajes de gcc en español sin forzar `LC_MESSAGES=C`                                         	|  Compilación    	|  bajo     	|  M         	|  hecho   	|
 | 21    	|  Entrada del programa desde un archivo (`< entrada.txt`) elegible por ejercicio, con varios casos            	|  Ejecución      	|  alto     	|  M         	|  hecho   	|
@@ -129,6 +116,11 @@ Mantenimiento 5.
 | 24    	|  Avisar si el programa parece colgado (sin salida ni entrada por N segundos) y ofrecer cortarlo              	|  Ejecución      	|  medio    	|  S         	|  hecho   	|
 | 25    	|  Mostrar el tiempo de ejecución y la memoria máxima al terminar el programa                                  	|  Ejecución      	|  bajo     	|  S         	|  hecho   	|
 | 26    	|  Correr sólo la prueba en la que está el cursor                                                              	|  Pruebas        	|  medio    	|  M         	|  hecho   	|
+| 27    	|  Marcas ✓/✗ en el margen de cada `TEST()` según la última corrida                                         	|  Pruebas        	|  medio    	|  M         	|  hecho   	|
+| 28    	|  Crear el esqueleto de una prueba (`TEST` + `RUN_TEST`) para la función bajo el cursor                       	|  Pruebas        	|  medio    	|  S         	|  hecho   	|
+| 29    	|  Expresiones vigiladas en el depurador que se recalculan en cada paso                                        	|  Depuración     	|  alto     	|  M         	|  hecho   	|
+| 30    	|  Ver arreglos como tabla y cadenas como texto en el panel de variables                                       	|  Depuración     	|  alto     	|  M         	|  hecho   	|
+| 31    	|  Valor de una variable al pasar el mouse o el cursor sobre ella mientras se depura                           	|  Depuración     	|  medio    	|  M         	|  hecho   	|
 | 32    	|  Correr hasta el cursor, sin poner un breakpoint                                                             	|  Depuración     	|  medio    	|  S         	|  hecho   	|
 | 38    	|  Revisar el mensaje de commit (no vacío, primera línea corta) con una plantilla                              	|  Git            	|  bajo     	|  S         	|  hecho   	|
 | 39    	|  Push y pull desde el panel de git, con el estado adelante/atrás y qué hacer ante un conflicto               	|  Git            	|  medio    	|  M         	|  hecho   	|
@@ -137,9 +129,17 @@ Mantenimiento 5.
 | 43    	|  Glosario de C (puntero, heap, stack, segfault, fuga…) enlazado desde las explicaciones                      	|  Aprendizaje    	|  bajo     	|  M         	|  hecho   	|
 | 44    	|  Recorrido guiado la primera vez (marcar en pantalla dónde está cada panel)                                  	|  Aprendizaje    	|  bajo     	|  M         	|  hecho   	|
 | 45    	|  Maximizar temporalmente el panel actual y volver (alternar con una tecla)                                   	|  Interfaz       	|  medio    	|  S         	|  hecho   	|
+| 46    	|  Tema apto para daltonismo (sin depender de rojo/verde para errores y aciertos)                              	|  Interfaz       	|  medio    	|  S         	|  hecho   	|
+| 47    	|  Atajos configurables en `.jonesy.toml` (por ejemplo, para terminales que no pasan F-keys)                   	|  Interfaz       	|  bajo     	|  M         	|  hecho   	|
 | 48    	|  Mostrar en la barra cuándo fue el último autoguardado del examen                                            	|  Examen         	|  medio    	|  S         	|  hecho   	|
 | 49    	|  Simulacro de examen: modo práctica con cronómetro y entrega sin sellar                                      	|  Examen         	|  medio    	|  M         	|  hecho   	|
 | 51    	|  Renombrar una variable o función en todo el archivo (y en el proyecto) con una tecla                        	|  Edición        	|  alto     	|  M         	|  hecho   	|
+| 52    	|  Ir del `.c` a su `.h` y del `.h` al `.c` con una tecla                                                      	|  Navegación     	|  medio    	|  S         	|  hecho   	|
+| 53    	|  Buscar dónde se usa una función o variable (referencias) en todo el proyecto                                	|  Navegación     	|  alto     	|  M         	|  hecho   	|
+| 56    	|  Insertar el comentario de documentación de una función (`/** @param … */`) a partir de su firma             	|  Edición        	|  medio    	|  S         	|  hecho   	|
+| 68    	|  Límite de tiempo y de memoria por caso configurable, como un juez                                           	|  Ejecución      	|  bajo     	|  S         	|  hecho   	|
+| 79    	|  Al terminar, contar `malloc` y `free` por función (dónde se pide y dónde se libera)                         	|  Memoria        	|  medio    	|  M         	|  hecho   	|
+| 81    	|  Descartar los cambios de un archivo (volver a la última versión) con confirmación                           	|  Git            	|  medio    	|  S         	|  hecho   	|
 | 85    	|  Catálogo navegable de las reglas de estilo de la cátedra, con ejemplos                                      	|  Aprendizaje    	|  medio    	|  M         	|  hecho   	|
 | 87    	|  Tablas de consulta en la ayuda: ASCII, tamaños y rangos de tipos, especificadores de printf/scanf           	|  Aprendizaje    	|  medio    	|  S         	|  hecho   	|
 | 88    	|  Mostrar la precedencia de una expresión con sus paréntesis implícitos                                       	|  Aprendizaje    	|  bajo     	|  M         	|  hecho   	|
@@ -153,7 +153,11 @@ Mantenimiento 5.
 Notas: #51 renombra dentro del ámbito de la declaración en el archivo abierto
 (Ctrl+R); entre archivos del proyecto todavía no. #97 exporta tema, quick-doc,
 paneles, integraciones y manifiestos propios: los atajos no se pueden cambiar,
-así que no hay atajos que exportar.
+así que no hay atajos que exportar (desde #47 se configuran en `[atajos]` de
+`.jonesy.toml`, que ya viaja con el proyecto). #79 cuenta con un envoltorio de malloc y
+free enlazado con `--wrap` (sólo Linux), así que ve todos los `.c` del ejercicio, a
+diferencia de cat-scan. #68: con límite de memoria, un malloc que lo supera devuelve
+NULL; si el programa termina mal se sugiere esa causa en lugar de afirmarla.
 
 ## Lo que queda (fuera del perfil estudiante)
 
