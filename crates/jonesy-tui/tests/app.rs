@@ -3197,3 +3197,31 @@ fn del_c_a_su_h_con_alt_i() {
     let p = pantalla(&mut a, 140, 30);
     assert!(p.contains("No encontré solo.h"), "{p}");
 }
+
+#[test]
+fn referencias_con_shift_f12() {
+    let dir = proyecto(&[
+        ("suma.h", "int suma(int a, int b);\n"),
+        (
+            "suma.c",
+            "#include \"suma.h\"\n\nint suma(int a, int b)\n{\n    return a + b;\n}\n",
+        ),
+        (
+            "main.c",
+            "#include \"suma.h\"\n\n/* suma */\nint main(void)\n{\n    return suma(1, 2);\n}\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(5, 13);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::F(12), KeyModifiers::SHIFT);
+    assert_eq!(a.pestana, Pestana::Busqueda);
+    let (_, r) = a.busqueda_proyecto.as_ref().unwrap();
+    assert_eq!(r.hallazgos.len(), 3, "{:#?}", r.hallazgos);
+    let p = pantalla(&mut a, 140, 40);
+    assert!(p.contains("«suma»: 3 referencia(s) en 3 archivo(s)"), "{p}");
+    // Enter abre la primera.
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a.activo_ruta().is_some());
+}

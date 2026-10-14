@@ -120,6 +120,7 @@ pub enum Accion {
     ObjetivoMake,
     VisorHex,
     ArchivoPareja,
+    Referencias,
 }
 
 pub struct Info {
@@ -248,6 +249,7 @@ impl Accion {
             RenombrarSimbolo => ("Renombrar en su ámbito…", "Ctrl+R"),
             PausarExamen => ("Pausar / reanudar el cronómetro (código del docente)…", ""),
             ArchivoPareja => ("Ir al .h / .c correspondiente", "Alt+I"),
+            Referencias => ("Buscar referencias (dónde se usa)", "Shift+F12"),
         };
         Info { titulo, atajo }
     }
@@ -365,6 +367,7 @@ impl Accion {
             RenombrarSimbolo,
             PausarExamen,
             ArchivoPareja,
+            Referencias,
             Salir,
         ]
     }
@@ -500,6 +503,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(BuscarEnProyecto),
                 A(IrALinea),
                 A(IrADefinicion),
+                A(Referencias),
                 A(Volver),
                 A(ArchivoPareja),
                 SEP,
@@ -717,6 +721,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
 | Del .c a su .h (y del .h al .c) | Alt+I |
+| Dónde se usa la función o variable del cursor (referencias) | Shift+F12 |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
 | Renombrar la variable o función del cursor (sólo donde vale) | Ctrl+R |

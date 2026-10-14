@@ -6644,6 +6644,7 @@ impl App {
             Accion::ObjetivoMake => self.elegir_objetivo_make(),
             Accion::VisorHex => self.elegir_binario(),
             Accion::ArchivoPareja => self.ir_a_pareja(),
+            Accion::Referencias => self.buscar_referencias(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -6890,6 +6891,42 @@ impl App {
                         ""
                     }
                 )
+            },
+            if n == 0 { Nivel::Aviso } else { Nivel::Info },
+        );
+    }
+
+    /// Shift+F12: dónde se usa la función o variable del cursor, en todo el proyecto (sin
+    /// comentarios ni cadenas). Los resultados van al panel Búsqueda.
+    pub fn buscar_referencias(&mut self) {
+        let b = &self.buf().buf;
+        let Some(nombre) = b.palabra_en(b.cursor).filter(|p| {
+            p.chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
+        }) else {
+            self.avisar(
+                "Poné el cursor sobre un nombre para ver dónde se usa.",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        self.guardar_todo();
+        let r = jonesy_core::busqueda::referencias(&self.proyecto.raiz, &nombre);
+        let (n, archivos) = (r.hallazgos.len(), r.archivos);
+        self.busqueda_proyecto = Some((nombre.clone(), r));
+        self.sel_busqueda = 0;
+        self.panel_inferior = true;
+        self.pestana = Pestana::Busqueda;
+        self.cambiar_foco(Foco::Inferior);
+        if self.modo() == Modo::Compacto {
+            self.vista = Vista::Terminal;
+        }
+        self.avisar(
+            if n == 0 {
+                format!("«{nombre}» no se usa en los .c y .h del proyecto.")
+            } else {
+                format!("«{nombre}»: {n} referencia(s) en {archivos} archivo(s). Enter abre.")
             },
             if n == 0 { Nivel::Aviso } else { Nivel::Info },
         );
@@ -7388,6 +7425,7 @@ impl App {
             (KeyCode::F(9), _, _, true) | (KeyCode::F(21), _, _, _) => Some(Accion::ObjetivoMake),
             (KeyCode::F(9), _, _, _) => Some(Accion::VistaTerminal),
             // F12: entregar en el examen, terminar el simulacro; fuera, ir a la definición.
+            (KeyCode::F(12), _, _, true) | (KeyCode::F(24), _, _, _) => Some(Accion::Referencias),
             (KeyCode::F(12), _, _, _) => Some(if self.examen.is_some() {
                 Accion::Entregar
             } else if self.simulacro.is_some() {
