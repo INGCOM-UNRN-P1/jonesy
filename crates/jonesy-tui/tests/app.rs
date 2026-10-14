@@ -3555,3 +3555,39 @@ fn limite_de_tiempo_por_caso() {
     assert!(p.contains("superó el tiempo (0.5 s)"), "{p}");
     assert!(p.contains("coincide") && p.contains("MiB"), "{p}");
 }
+
+#[test]
+#[cfg(target_os = "linux")] // gcc y addr2line
+fn contar_malloc_y_free_por_funcion() {
+    for h in ["gcc", "addr2line"] {
+        if std::process::Command::new(h)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    let dir = proyecto(&[
+        (
+            "main.c",
+            "#include <stdlib.h>\n\nint *crear(void)\n{\n    return malloc(4 * sizeof(int));\n}\n\nint main(void)\n{\n    int *a = crear();\n    int *b = crear();\n    free(a);\n    (void)b;\n    return 0;\n}\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.accion(jonesy_tui::accion::Accion::ConteoMemoria);
+    esperar(&mut a, &rx, |a| {
+        matches!(a.modal, Some(Modal::Visor { .. }))
+    });
+    let p = pantalla(&mut a, 140, 40);
+    assert!(
+        p.contains("malloc y free por función") && p.contains("crear"),
+        "{p}"
+    );
+    assert!(
+        p.contains("Sin liberar al terminar: 1 bloque(s), 16 bytes"),
+        "{p}"
+    );
+}

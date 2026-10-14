@@ -6785,6 +6785,7 @@ impl App {
                     }
                 }
             }
+            Accion::ConteoMemoria => self.contar_memoria(),
             Accion::Vigilar => {
                 let b = &self.buf().buf;
                 let texto = b
@@ -7282,6 +7283,52 @@ impl App {
         );
     }
 
+    /// Depurar → Contar malloc y free por función: compila con un envoltorio de malloc y
+    /// free, corre el programa (con la entrada elegida para Ctrl+F5) y muestra cuánto pide
+    /// y libera cada función y qué quedó sin liberar.
+    fn contar_memoria(&mut self) {
+        if cfg!(not(target_os = "linux")) {
+            self.avisar(
+                "El conteo de malloc y free por función es para Linux.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        let Some(activo) = self.activo_ruta() else {
+            return;
+        };
+        let Some(fuentes) = jonesy_core::catscan::fuentes_del_programa(&self.proyecto, &activo)
+        else {
+            self.avisar(
+                "Abrí un archivo del ejercicio (que tenga main.c) para contar su memoria.",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        self.guardar_todo();
+        let entrada = self
+            .clave_ejercicio()
+            .and_then(|c| self.entradas.get(&c).filter(|p| p.is_file()).cloned());
+        let args = self.argumentos_de_ejercicio();
+        let proyecto = jonesy_core::Proyecto::abrir(&self.proyecto.raiz);
+        let dir = self.proyecto.dir_estado().join("conteo");
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let r = jonesy_core::conteo_memoria::contar(
+                &proyecto,
+                &fuentes,
+                entrada.as_deref(),
+                &args,
+                &dir,
+            );
+            let _ = tx.send(Aviso::ConteoMemoria(r));
+        });
+        self.avisar(
+            "Compilando y corriendo para contar malloc y free…",
+            Nivel::Info,
+        );
+    }
+
     /// Depurar → Vigilar: agrega la expresión (y la evalúa si el programa está detenido) o
     /// la quita si ya estaba.
     fn alternar_vigilada(&mut self, expresion: &str) {
@@ -7642,6 +7689,18 @@ impl App {
                     self.resolver_pendiente_catalogo(p);
                 }
             }
+            Aviso::ConteoMemoria(r) => match r {
+                Ok(md) => {
+                    let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
+                    self.glosario_visor.clear();
+                    self.modal = Some(Modal::Visor {
+                        titulo: "Memoria por función".into(),
+                        lineas: markdown::renderizar(&md, ancho, &self.sim).lineas,
+                        desplazamiento: 0,
+                    });
+                }
+                Err(e) => self.avisar(e, Nivel::Error),
+            },
             Aviso::Doctor(texto) => {
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 110);
                 self.modal = Some(Modal::Visor {

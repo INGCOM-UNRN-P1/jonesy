@@ -10,6 +10,7 @@ pub mod casos;
 pub mod catalogo;
 pub mod catscan;
 pub mod completar;
+pub mod conteo_memoria;
 pub mod diagnostico;
 pub mod diff;
 pub mod doctor;

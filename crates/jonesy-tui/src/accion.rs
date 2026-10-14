@@ -127,6 +127,7 @@ pub enum Accion {
     ArregloRapido,
     Vigilar,
     GitDescartar,
+    ConteoMemoria,
 }
 
 pub struct Info {
@@ -262,6 +263,7 @@ impl Accion {
             ArregloRapido => ("Arreglar el error de la línea (si es simple)", "Alt+Enter"),
             Vigilar => ("Vigilar una expresión (se recalcula en cada paso)…", ""),
             GitDescartar => ("Descartar los cambios de este archivo…", ""),
+            ConteoMemoria => ("Contar malloc y free por función", ""),
         };
         Info { titulo, atajo }
     }
@@ -386,6 +388,7 @@ impl Accion {
             ArregloRapido,
             Vigilar,
             GitDescartar,
+            ConteoMemoria,
             Salir,
         ]
     }
@@ -604,6 +607,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Vigilar),
                 SEP,
                 A(RevisarMemoria),
+                A(ConteoMemoria),
                 A(CatScan),
                 A(ExportarMemoria),
             ],

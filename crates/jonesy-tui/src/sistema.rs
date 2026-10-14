@@ -25,6 +25,8 @@ pub enum Aviso {
     Reporte(String),
     /// Terminaron los casos de Construir → Comparar con las salidas esperadas.
     Casos(Vec<jonesy_core::casos::ResultadoCaso>),
+    /// Terminó Depurar → Contar malloc y free por función: el informe o el error.
+    ConteoMemoria(Result<String, String>),
     /// Se cargaron los catálogos de reglas de las herramientas.
     Catalogo(Vec<jonesy_core::catalogo::Regla>),
 }

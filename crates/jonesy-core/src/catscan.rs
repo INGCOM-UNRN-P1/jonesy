@@ -269,30 +269,82 @@ fn define_main(ruta: &Path) -> bool {
     })
 }
 
+/// Los fuentes del programa del archivo activo: su `main.c`, los demás `.c` del ejercicio
+/// y de las bibliotecas que usa (sin pruebas ni otros `main`), y los directorios de
+/// include. Para un archivo suelto sin Makefile, sólo ese archivo.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FuentesPrograma {
+    pub main: PathBuf,
+    pub otras: Vec<PathBuf>,
+    pub includes: Vec<PathBuf>,
+}
+
+fn fuentes_de(dir: &Path) -> Vec<PathBuf> {
+    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.path())
+                .filter(|x| x.extension().is_some_and(|e| e == "c"))
+                .filter(|x| {
+                    let n = x
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    !matches!(n.as_str(), "main.c" | "prueba.c" | "holden_mocks.c")
+                        && !n.starts_with('.')
+                        && !define_main(x)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    v.sort();
+    v
+}
+
+pub fn fuentes_del_programa(p: &crate::Proyecto, activo: &Path) -> Option<FuentesPrograma> {
+    match p.modulo_activo(Some(activo)) {
+        Some(m) => {
+            let main = m.dir.join("main.c");
+            if !main.is_file() {
+                return None;
+            }
+            let mut f = FuentesPrograma {
+                main,
+                otras: fuentes_de(&m.dir),
+                includes: vec![m.dir.clone()],
+            };
+            for lib in p.bibliotecas_de(m) {
+                f.includes.push(if lib.dir.join("include").is_dir() {
+                    lib.dir.join("include")
+                } else {
+                    lib.dir.clone()
+                });
+                let src = if lib.dir.join("src").is_dir() {
+                    lib.dir.join("src")
+                } else {
+                    lib.dir.clone()
+                };
+                f.otras.extend(fuentes_de(&src));
+            }
+            Some(f)
+        }
+        None if activo.extension().is_some_and(|e| e == "c") && p.makefile().is_none() => {
+            Some(FuentesPrograma {
+                main: activo.to_path_buf(),
+                otras: vec![],
+                includes: activo
+                    .parent()
+                    .map(|d| vec![d.to_path_buf()])
+                    .unwrap_or_default(),
+            })
+        }
+        None => None,
+    }
+}
+
 pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Option<String> {
     use crate::proyecto::shell_quote as q;
     let rel = |x: &Path| p.relativa(x).replace('\\', "/");
-    let fuentes_de = |dir: &Path| -> Vec<PathBuf> {
-        let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
-            .map(|it| {
-                it.flatten()
-                    .map(|e| e.path())
-                    .filter(|x| x.extension().is_some_and(|e| e == "c"))
-                    .filter(|x| {
-                        let n = x
-                            .file_name()
-                            .map(|n| n.to_string_lossy().into_owned())
-                            .unwrap_or_default();
-                        !matches!(n.as_str(), "main.c" | "prueba.c" | "holden_mocks.c")
-                            && !n.starts_with('.')
-                            && !define_main(x)
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        v.sort();
-        v
-    };
     let mut args: Vec<String> = vec![];
     let fuente = match p.modulo_activo(Some(activo)) {
         Some(m) => {

@@ -99,7 +99,7 @@ comprueba que esté al día.
 | Editar | [E]ditar | F10 y E | 29 |
 | Ver | [V]er | Alt+V (o F10 y V) | 17 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 12 |
-| Depurar | [D]epurar | Alt+D (o F10 y D) | 11 |
+| Depurar | [D]epurar | Alt+D (o F10 y D) | 12 |
 | Git | [G]it | F10 y G | 9 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
 | Examen | E[x]amen | Alt+X (o F10 y X) | 3 |
@@ -231,6 +231,7 @@ comprueba que esté al día.
 │ Vigilar una expresión (se recalcula en cada paso)…            │
 ├───────────────────────────────────────────────────────────────┤
 │ Revisar memoria con valgrind (fugas y accesos)                │
+│ Contar malloc y free por función                              │
 │ Inspección visual de memoria (cat-scan)                 Alt+M │
 │ Exportar traza de memoria (reporte HTML)                      │
 └───────────────────────────────────────────────────────────────┘
