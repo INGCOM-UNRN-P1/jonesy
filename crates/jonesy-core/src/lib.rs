@@ -16,6 +16,7 @@ pub mod documentar;
 pub mod entorno;
 pub mod entrega;
 pub mod errores_gcc;
+pub mod esqueleto;
 pub mod estructura;
 pub mod fallos;
 pub mod gdb;

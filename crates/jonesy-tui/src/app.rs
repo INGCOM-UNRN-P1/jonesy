@@ -6646,6 +6646,7 @@ impl App {
             Accion::ArchivoPareja => self.ir_a_pareja(),
             Accion::Referencias => self.buscar_referencias(),
             Accion::DocumentarFuncion => self.documentar_funcion(),
+            Accion::CrearPrueba => self.crear_prueba(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -6975,6 +6976,59 @@ impl App {
             format!(
                 "Comentario de «{}»: escribí la descripción; los [ ] que quedan los marca corbel.",
                 f.nombre
+            ),
+            Nivel::Ok,
+        );
+    }
+
+    /// Construir → Crear una prueba para esta función: el esqueleto de un `TEST` de
+    /// p1_test (una variable por parámetro, la llamada y la aserción según lo que
+    /// devuelve) en el archivo de pruebas del módulo, con su `RUN_TEST`. Queda sin guardar.
+    fn crear_prueba(&mut self) {
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let b = &self.buf().buf;
+        let Some(f) = jonesy_core::documentar::firma_en(&b.contenido(), b.linea_columna().0)
+            .filter(|f| f.nombre != "main" && b.lenguaje == Lenguaje::C)
+        else {
+            self.avisar(
+                "Poné el cursor en una función de C (no en main).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let Some(pruebas) = jonesy_core::esqueleto::archivo_de_pruebas(&self.proyecto, &ruta)
+        else {
+            self.avisar(
+                "No encontré el archivo de pruebas del ejercicio (prueba.c).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        if mismo_archivo(&pruebas, &ruta) {
+            self.avisar(
+                "Estás en el archivo de pruebas: poné el cursor en la función a probar.",
+                Nivel::Aviso,
+            );
+            return;
+        }
+        if self.abrir_archivo(&pruebas, true).is_none() {
+            return;
+        }
+        let fuente = self.buf().buf.contenido();
+        let nombre = jonesy_core::esqueleto::nombre_libre(&fuente, &f.nombre);
+        let test = jonesy_core::esqueleto::prueba(&f, &nombre);
+        let (texto, linea) = jonesy_core::esqueleto::agregar(&fuente, &test, &nombre);
+        self.editar(|b| b.reemplazar_todo(&texto));
+        let b = &mut self.buf_mut().buf;
+        let pos = b.linea_columna_a_pos(linea, 0);
+        b.mover_a(pos, false);
+        centrar(b, 4);
+        self.cambiar_foco(Foco::Editor);
+        self.avisar(
+            format!(
+                "Prueba «{nombre}» agregada (y su RUN_TEST): completá los valores y lo esperado, y guardá."
             ),
             Nivel::Ok,
         );

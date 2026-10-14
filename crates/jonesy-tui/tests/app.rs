@@ -3255,3 +3255,34 @@ fn documentar_la_funcion_del_cursor() {
     let p = pantalla(&mut a, 140, 30);
     assert!(p.contains("ya tiene su comentario"), "{p}");
 }
+
+#[test]
+fn crear_una_prueba_para_la_funcion() {
+    let dir = proyecto(&[
+        ("ejercicios/ej1/Makefile", "test:\n\t@true\n"),
+        (
+            "ejercicios/ej1/suma.c",
+            "#include \"suma.h\"\n\nint suma(int a, int b)\n{\n    return a + b;\n}\n",
+        ),
+        (
+            "ejercicios/ej1/prueba.c",
+            "#include \"p1_test.h\"\n#include \"suma.h\"\n\nint main(int argc, char **argv)\n{\n    return TEST_REPORT();\n}\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/suma.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(4, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    a.accion(jonesy_tui::accion::Accion::CrearPrueba);
+    assert_eq!(a.buf().buf.nombre(), "prueba.c");
+    let t = a.buf().buf.contenido();
+    assert!(
+        t.contains("TEST(prueba_suma)\n{\n    SUBCASE(\"Caso básico de suma\");\n    int a = 0;\n    int b = 0;\n    ASSERT_INT_EQ(0 /* esperado */, suma(a, b));\n}"),
+        "{t}"
+    );
+    assert!(
+        t.contains("    RUN_TEST(prueba_suma);\n    return TEST_REPORT();"),
+        "{t}"
+    );
+    assert!(a.buf().buf.modificado(), "queda sin guardar para revisarla");
+}

@@ -122,6 +122,7 @@ pub enum Accion {
     ArchivoPareja,
     Referencias,
     DocumentarFuncion,
+    CrearPrueba,
 }
 
 pub struct Info {
@@ -252,6 +253,7 @@ impl Accion {
             ArchivoPareja => ("Ir al .h / .c correspondiente", "Alt+I"),
             Referencias => ("Buscar referencias (dónde se usa)", "Shift+F12"),
             DocumentarFuncion => ("Documentar la función (/** @brief, @param… */)", ""),
+            CrearPrueba => ("Crear una prueba para esta función", ""),
         };
         Info { titulo, atajo }
     }
@@ -371,6 +373,7 @@ impl Accion {
             ArchivoPareja,
             Referencias,
             DocumentarFuncion,
+            CrearPrueba,
             Salir,
         ]
     }
@@ -563,6 +566,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(CompararSalidas),
                 A(Probar),
                 A(ProbarAqui),
+                A(CrearPrueba),
                 SEP,
                 A(ObjetivoMake),
                 A(LimpiarCompilacion),

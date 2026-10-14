@@ -9,6 +9,8 @@ pub struct Firma {
     pub nombre: String,
     pub retorno: String,
     pub parametros: Vec<String>,
+    /// Cada parámetro como está escrito (`const int v[]`), en el mismo orden.
+    pub declaraciones: Vec<String>,
     /// Línea (0-based) donde empieza la declaración.
     pub linea: usize,
     pub sangria: String,
@@ -120,6 +122,11 @@ pub fn firma_en(fuente: &str, linea_cursor: usize) -> Option<Firma> {
         nombre: s.nombre.clone(),
         retorno: retorno.split_whitespace().collect::<Vec<_>>().join(" "),
         parametros: partes.iter().filter_map(|p| nombre_parametro(p)).collect(),
+        declaraciones: partes
+            .iter()
+            .map(|p| p.split_whitespace().collect::<Vec<_>>().join(" "))
+            .filter(|p| !p.is_empty() && p != "void")
+            .collect(),
         linea: s.linea,
         sangria,
     })
