@@ -3,9 +3,10 @@
 Qué se hace con jonesy, quién lo hace y cómo se resuelve en el IDE. Los casos siguen el
 ciclo de trabajo de un ejercicio (abrir, escribir, compilar, correr, probar, depurar,
 versionar) y después el examen, el trabajo docente y el mantenimiento del entorno.
-Las teclas y menús están al día con [menus.md](menus.md); los detalles de la entrega,
-en [entrega.md](entrega.md), y los de las herramientas del ecosistema, en
-[integraciones.md](integraciones.md).
+Cada caso tiene una grabación de terminal (asciinema) con su explicación paso a paso en
+[casos/](casos/README.md). Las teclas y menús están al día con [menus.md](menus.md);
+los detalles de la entrega, en [entrega.md](entrega.md), y los de las herramientas del
+ecosistema, en [integraciones.md](integraciones.md).
 
 ## Actores
 
@@ -69,6 +70,8 @@ la invoca.
 
 ### CU-01 · Empezar a usar jonesy por primera vez
 
+> Grabación: [CU-01-primer-uso.cast](casos/CU-01-primer-uso.cast) · [qué muestra](casos/CU-01-primer-uso.md)
+
 - **Disparador:** el alumno instala jonesy y lo abre por primera vez.
 - **Flujo:** se muestra la pantalla de bienvenida con las teclas del ciclo de trabajo y
   lo que falta en el entorno (gcc, gdb, valgrind…) con cómo instalarlo. Desde ahí, `R`
@@ -79,6 +82,8 @@ la invoca.
   guía rápida siguen en el menú Ayuda.
 
 ### CU-02 · Abrir un TP o un ejercicio
+
+> Grabación: [CU-02-abrir-un-tp.cast](casos/CU-02-abrir-un-tp.cast) · [qué muestra](casos/CU-02-abrir-un-tp.md)
 
 - **Disparador:** `jonesy` en el directorio del TP, `jonesy ~/tp3`, `jonesy lista.c`, o
   Archivo → Abrir proyecto (con los recientes).
@@ -91,6 +96,8 @@ la invoca.
 
 ### CU-03 · Leer la consigna mientras se programa
 
+> Grabación: [CU-03-leer-la-consigna.cast](casos/CU-03-leer-la-consigna.cast) · [qué muestra](casos/CU-03-leer-la-consigna.md)
+
 - **Disparador:** el ejercicio tiene `consigna.md`, `enunciado.md` o `README.md`.
 - **Flujo:** la consigna se muestra de solo lectura al lado del código, con el
   Markdown dibujado. Tab y Shift+Tab recorren sus enlaces y Enter los sigue. En
@@ -100,6 +107,8 @@ la invoca.
 
 ### CU-04 · Escribir y editar código
 
+> Grabación: [CU-04-escribir-y-editar.cast](casos/CU-04-escribir-y-editar.cast) · [qué muestra](casos/CU-04-escribir-y-editar.md)
+
 - **Flujo:** editor con atajos conocidos (Ctrl+S, Ctrl+Z, Ctrl+C/V), mouse, resaltado de
   C, pares que se cierran solos, comentar (Ctrl+/), duplicar (Ctrl+D) y mover líneas
   (Alt+↑/↓), buscar (Ctrl+F) y reemplazar (Ctrl+H), pestañas y archivos nuevos (Ctrl+N).
@@ -107,6 +116,8 @@ la invoca.
   cátedra (CU-09).
 
 ### CU-05 · Consultar una función de la biblioteca estándar
+
+> Grabación: [CU-05-quick-doc.cast](casos/CU-05-quick-doc.cast) · [qué muestra](casos/CU-05-quick-doc.md)
 
 - **Disparador:** el alumno escribe una llamada (`scanf(`, `strcpy(`…) o deja el cursor
   sobre ella.
@@ -117,6 +128,8 @@ la invoca.
 
 ### CU-06 · Moverse por el código y el proyecto
 
+> Grabación: [CU-06-moverse-por-el-codigo.cast](casos/CU-06-moverse-por-el-codigo.cast) · [qué muestra](casos/CU-06-moverse-por-el-codigo.md)
+
 - **Flujo:** ir a la definición (F12 o Ctrl+clic) y volver (Alt+←), esquema del archivo
   (Alt+S), ir a una línea (Ctrl+G), buscar en el proyecto (Ctrl+Shift+F o Ctrl+F3, con
   los resultados en un panel), marcadores (Ctrl+F2, Shift+F2) y el problema siguiente o
@@ -124,6 +137,8 @@ la invoca.
 - **Resultado:** el alumno llega a lo que busca sin recorrer los archivos a mano.
 
 ### CU-07 · Renombrar una variable o función
+
+> Grabación: [CU-07-renombrar.cast](casos/CU-07-renombrar.cast) · [qué muestra](casos/CU-07-renombrar.md)
 
 - **Disparador:** Ctrl+R (Editar → Renombrar en su ámbito) con el cursor sobre el nombre.
 - **Flujo:** jonesy encuentra la declaración que vale en ese punto y propone el cambio
@@ -136,6 +151,8 @@ la invoca.
 
 ### CU-08 · Compilar y entender los errores
 
+> Grabación: [CU-08-compilar-y-entender-los-errores.cast](casos/CU-08-compilar-y-entender-los-errores.cast) · [qué muestra](casos/CU-08-compilar-y-entender-los-errores.md)
+
 - **Disparador:** F6 o `[F6 Compilar]`.
 - **Flujo:** compila el ejercicio del archivo activo con su Makefile (compilando antes
   las bibliotecas que usa) o el archivo con gcc. Cada error y advertencia aparece en
@@ -147,6 +164,8 @@ la invoca.
 
 ### CU-09 · Revisar el estilo con las reglas de la cátedra
 
+> Grabación: [CU-09-estilo-de-la-catedra.cast](casos/CU-09-estilo-de-la-catedra.cast) · [qué muestra](casos/CU-09-estilo-de-la-catedra.md)
+
 - **Disparador:** guardar el archivo.
 - **Flujo:** ripley, gaff, kaneda y spunkmeyer revisan el código y sus hallazgos
   aparecen al final de la línea y en el panel de reglas (Alt+R), agrupados por regla. F1
@@ -156,6 +175,8 @@ la invoca.
 
 ### CU-10 · Formatear el código
 
+> Grabación: [CU-10-formatear.cast](casos/CU-10-formatear.cast) · [qué muestra](casos/CU-10-formatear.md)
+
 - **Disparador:** Alt+Shift+F (Editar → Autoformatear).
 - **Flujo:** formatea con gaff o con `clang-format` (con el `.clang-format` de la
   cátedra si no hay otro). Las acciones de las herramientas (gaff fix, tetsuo, motoko…)
@@ -163,6 +184,8 @@ la invoca.
 - **Resultado:** el archivo queda con el formato de la cátedra.
 
 ### CU-11 · Ejecutar el programa
+
+> Grabación: [CU-11-ejecutar.cast](casos/CU-11-ejecutar.cast) · [qué muestra](casos/CU-11-ejecutar.md)
 
 - **Disparador:** Ctrl+F5 o `[^F5 Ejecutar]`.
 - **Flujo:** compila y corre el programa en la terminal interna (una PTY real), donde el
@@ -172,12 +195,16 @@ la invoca.
 
 ### CU-12 · Ejecutar con un archivo de entrada o con argumentos
 
+> Grabación: [CU-12-entrada-y-argumentos.cast](casos/CU-12-entrada-y-argumentos.cast) · [qué muestra](casos/CU-12-entrada-y-argumentos.md)
+
 - **Disparador:** Construir → Ejecutar con entrada… o Argumentos del programa….
 - **Flujo:** se elige un archivo para la entrada estándar (o el teclado) y los
   argumentos; se recuerdan por ejercicio y Ctrl+F5 los usa.
 - **Resultado:** no hay que tipear la misma entrada en cada prueba.
 
 ### CU-13 · Comparar contra las salidas esperadas
+
+> Grabación: [CU-13-comparar-salidas.cast](casos/CU-13-comparar-salidas.cast) · [qué muestra](casos/CU-13-comparar-salidas.md)
 
 - **Disparador:** Construir → Comparar con las salidas esperadas.
 - **Flujo:** corre el programa con cada `entradaN.txt` y compara con `salidaN.txt`; cada
@@ -186,6 +213,8 @@ la invoca.
 
 ### CU-14 · Correr las pruebas
 
+> Grabación: [CU-14-correr-las-pruebas.cast](casos/CU-14-correr-las-pruebas.cast) · [qué muestra](casos/CU-14-correr-las-pruebas.md)
+
 - **Disparador:** Ctrl+F6 (`[^F6 Probar]`), o Shift+F6 para la prueba del cursor.
 - **Flujo:** corre `make test` del ejercicio (u otro framework configurado que informe
   en SARIF). Cada fallo de `p1_test` queda en su línea con lo esperado y lo obtenido; los
@@ -193,6 +222,8 @@ la invoca.
 - **Resultado:** las pruebas que fallan, listas para revisar desde Problemas.
 
 ### CU-15 · Correr un objetivo de make
+
+> Grabación: [CU-15-objetivo-de-make.cast](casos/CU-15-objetivo-de-make.cast) · [qué muestra](casos/CU-15-objetivo-de-make.md)
 
 - **Disparador:** Shift+F9 o Construir → Correr un objetivo de make…; también desde los
   comandos (F1 o Ctrl+K, con el prefijo «make:») y desde la vista de proyecto (Alt+Y).
@@ -205,6 +236,8 @@ la invoca.
 
 ### CU-16 · Entender por qué el programa se cortó
 
+> Grabación: [CU-16-el-programa-se-corto.cast](casos/CU-16-el-programa-se-corto.cast) · [qué muestra](casos/CU-16-el-programa-se-corto.md)
+
 - **Disparador:** el programa termina por una señal (violación de segmento, abort,
   división por cero…).
 - **Flujo:** la terminal y la barra explican la señal en español y aparece
@@ -213,6 +246,8 @@ la invoca.
 - **Resultado:** el alumno ve la línea y el estado en el momento del error.
 
 ### CU-17 · Depurar paso a paso
+
+> Grabación: [CU-17-depurar-paso-a-paso.cast](casos/CU-17-depurar-paso-a-paso.cast) · [qué muestra](casos/CU-17-depurar-paso-a-paso.md)
 
 - **Disparador:** F5, un breakpoint en el margen (clic o Ctrl+B) o Ctrl+F10 (correr
   hasta el cursor).
@@ -223,6 +258,8 @@ la invoca.
 
 ### CU-18 · Revisar la memoria con valgrind
 
+> Grabación: [CU-18-valgrind.cast](casos/CU-18-valgrind.cast) · [qué muestra](casos/CU-18-valgrind.md)
+
 - **Disparador:** Depurar → Revisar memoria con valgrind.
 - **Flujo:** corre `make memcheck` o el programa bajo valgrind y deja cada acceso
   inválido, uso después de `free`, `free` doble y fuga en la línea del alumno, con dónde
@@ -231,6 +268,8 @@ la invoca.
 
 ### CU-19 · Ver la memoria dibujada (cat-scan)
 
+> Grabación: [CU-19-cat-scan.cast](casos/CU-19-cat-scan.cast) · [qué muestra](casos/CU-19-cat-scan.md)
+
 - **Disparador:** Alt+M durante la depuración.
 - **Flujo:** con la traza de mem-trace, dibuja el stack y el heap con flechas de los
   punteros a lo que apuntan, los colgantes en rojo, y los eventos del paso. Se puede
@@ -238,6 +277,8 @@ la invoca.
 - **Resultado:** el alumno ve qué pasa con sus punteros en cada línea.
 
 ### CU-20 · Versionar con git
+
+> Grabación: [CU-20-git.cast](casos/CU-20-git.cast) · [qué muestra](casos/CU-20-git.md)
 
 - **Disparador:** Alt+G (panel de git) o el menú Git.
 - **Flujo:** agregar y sacar archivos del commit (Espacio, `a`, `u`), commit con revisión
@@ -248,6 +289,8 @@ la invoca.
 
 ### CU-21 · Aprender C desde el IDE
 
+> Grabación: [CU-21-aprender-c.cast](casos/CU-21-aprender-c.cast) · [qué muestra](casos/CU-21-aprender-c.md)
+
 - **Flujo:** el menú Ayuda reúne el **glosario** de C (puntero, heap, segfault, fuga…),
   las **tablas de consulta** (tipos con sus tamaños en esa máquina, printf/scanf,
   secuencias de escape, precedencia, ASCII), el **catálogo de reglas** de la cátedra y la
@@ -257,11 +300,15 @@ la invoca.
 
 ### CU-22 · Escribir el informe en Markdown
 
+> Grabación: [CU-22-informe-markdown.cast](casos/CU-22-informe-markdown.cast) · [qué muestra](casos/CU-22-informe-markdown.md)
+
 - **Flujo:** los `.md` se editan con resaltado y Ctrl+P muestra la vista previa dibujada
   (tablas, listas, código, enlaces recorribles con Tab).
 - **Resultado:** el informe del TP se escribe y revisa dentro del IDE.
 
 ### CU-23 · Usar la terminal integrada
+
+> Grabación: [CU-23-terminal-integrada.cast](casos/CU-23-terminal-integrada.cast) · [qué muestra](casos/CU-23-terminal-integrada.md)
 
 - **Disparador:** Alt+T o F9 en el modo compacto.
 - **Flujo:** una shell real dentro del IDE (con las variables y el `PATH` del entorno de
@@ -269,6 +316,8 @@ la invoca.
 - **Resultado:** no hace falta otra ventana para la línea de comandos.
 
 ### CU-24 · Trabajar sin mouse
+
+> Grabación: [CU-24-sin-mouse.cast](casos/CU-24-sin-mouse.cast) · [qué muestra](casos/CU-24-sin-mouse.md)
 
 - **Flujo:** todo tiene tecla. Los menús se abren con Alt+letra o F10 y la letra; los
   comandos (Ctrl+K, o F1 donde no hay un error que explicar) buscan cualquier acción,
@@ -278,6 +327,8 @@ la invoca.
 - **Resultado:** el IDE se usa entero desde el teclado, también por SSH.
 
 ### CU-25 · Ajustar la apariencia y llevarla a otra máquina
+
+> Grabación: [CU-25-apariencia-y-preferencias.cast](casos/CU-25-apariencia-y-preferencias.cast) · [qué muestra](casos/CU-25-apariencia-y-preferencias.md)
 
 - **Disparador:** Archivo → Configuración del entorno (Ctrl+,).
 - **Flujo:** elegir tema (oscuro, claro, contraste, turbo, solarizado, fósforo), posición
@@ -289,6 +340,8 @@ la invoca.
 
 ### CU-26 · Recuperar el trabajo tras un corte
 
+> Grabación: [CU-26-recuperar-tras-un-corte.cast](casos/CU-26-recuperar-tras-un-corte.cast) · [qué muestra](casos/CU-26-recuperar-tras-un-corte.md)
+
 - **Disparador:** se cerró la terminal o se cortó la conexión con cambios sin guardar.
 - **Flujo:** jonesy deja copias de recuperación al recibir la señal; al volver a abrir el
   proyecto ofrece restaurarlas (`s`), descartarlas (`n`) o conservarlas para después
@@ -297,6 +350,8 @@ la invoca.
 
 ### CU-27 · Practicar con un simulacro de examen
 
+> Grabación: [CU-27-simulacro.cast](casos/CU-27-simulacro.cast) · [qué muestra](casos/CU-27-simulacro.md)
+
 - **Disparador:** Archivo → Simulacro de examen… o `jonesy --simulacro [min]`.
 - **Flujo:** cronómetro y avisos de tiempo como en el examen, sin restricciones ni
   sellado. F12 lo termina y muestra cómo fue (compilaciones, cuántas con errores,
@@ -304,6 +359,8 @@ la invoca.
 - **Resultado:** el alumno llega al examen sabiendo cómo funciona.
 
 ### CU-38 · Mirar por dentro un ejecutable, un `.o` o un `.a`
+
+> Grabación: [CU-38-visor-hexadecimal.cast](casos/CU-38-visor-hexadecimal.cast) · [qué muestra](casos/CU-38-visor-hexadecimal.md)
 
 - **Disparador:** abrir un binario desde el explorador o la línea de comandos, o Ver →
   Visor hexadecimal, que lista los binarios del proyecto.
@@ -326,6 +383,8 @@ la invoca.
 
 ### CU-28 · Rendir un examen
 
+> Grabación: [CU-28-rendir-un-examen.cast](casos/CU-28-rendir-un-examen.cast) · [qué muestra](casos/CU-28-rendir-un-examen.md)
+
 - **Disparador:** la cátedra abre `jonesy --exam` (o `JONESY_EXAM_MODE=1`).
 - **Flujo:** la consigna se muestra de solo lectura; el cronómetro avisa los minutos que
   quedan y cuándo se termina el tiempo; todo se guarda solo cada 30 s (la
@@ -338,6 +397,8 @@ la invoca.
 
 ### CU-29 · Revisar y confirmar la entrega
 
+> Grabación: [CU-29-entregar.cast](casos/CU-29-entregar.cast) · [qué muestra](casos/CU-29-entregar.md)
+
 - **Disparador:** F12 o `[ Entregar Examen ]`.
 - **Flujo:** antes de confirmar, la ventana lista los archivos que van en el paquete
   (avisa si un `.c` abierto queda afuera) y cómo terminaron la última compilación y las
@@ -349,6 +410,8 @@ la invoca.
   alumno ve el SHA-256 que la identifica.
 
 ### CU-30 · Pausar el cronómetro del examen
+
+> Grabación: [CU-30-pausa-del-examen.cast](casos/CU-30-pausa-del-examen.cast) · [qué muestra](casos/CU-30-pausa-del-examen.md)
 
 - **Actor:** el docente, en la máquina del alumno.
 - **Disparador:** un corte de luz, una consulta larga u otro imprevisto.
@@ -365,6 +428,8 @@ la invoca.
 
 ### CU-31 · Configurar un proyecto o un examen
 
+> Grabación: [CU-31-configurar-el-proyecto.cast](casos/CU-31-configurar-el-proyecto.cast) · [qué muestra](casos/CU-31-configurar-el-proyecto.md)
+
 - **Flujo:** en `.jonesy.toml` (ver [ejemplo.jonesy.toml](ejemplo.jonesy.toml)): comando
   de compilación, programa y argumentos para depurar, descripciones de objetivos,
   integraciones activas, pruebas en SARIF y, para el examen, consigna, duración,
@@ -375,6 +440,8 @@ la invoca.
 
 ### CU-32 · Verificar una entrega
 
+> Grabación: [CU-32-verificar-una-entrega.cast](casos/CU-32-verificar-una-entrega.cast) · [qué muestra](casos/CU-32-verificar-una-entrega.md)
+
 - **Disparador:** llega un paquete `entrega-<alumno>-<ts>.tar`.
 - **Flujo:** `jonesy verificar <paquete.tar> [--json]` comprueba el SHA-256 del paquete,
   cada archivo contra el manifiesto, la cadena de la bitácora, su sello y que la sesión
@@ -383,12 +450,16 @@ la invoca.
 
 ### CU-33 · Auditar la sesión de un examen
 
+> Grabación: [CU-33-auditar-la-sesion.cast](casos/CU-33-auditar-la-sesion.cast) · [qué muestra](casos/CU-33-auditar-la-sesion.md)
+
 - **Flujo:** `jonesy replay <telemetry.log>` reproduce la sesión tecla a tecla;
   `--resumen` y `--json` dan el resumen: integridad de la cadena, tiempo, cantidad de
   pegados y caracteres pegados, velocidad de tipeo por minuto.
 - **Resultado:** el docente puede distinguir el trabajo propio de los pegados masivos.
 
 ### CU-34 · Extender jonesy con plugins y herramientas
+
+> Grabación: [CU-34-plugins.cast](casos/CU-34-plugins.cast) · [qué muestra](casos/CU-34-plugins.md)
 
 - **Flujo:** plugins en Python en `.jonesy/plugins/*.py` (funciones `comando_*` que
   aparecen en el menú Plugins y en los comandos; errores en Problemas en su línea; ver
@@ -403,6 +474,8 @@ la invoca.
 
 ### CU-35 · Revisar la salud del entorno
 
+> Grabación: [CU-35-doctor.cast](casos/CU-35-doctor.cast) · [qué muestra](casos/CU-35-doctor.md)
+
 - **Actor:** el alumno al instalar, o el administrador al preparar las máquinas.
 - **Disparador:** `jonesy doctor [--rapido] [--json]` o Ayuda → Diagnóstico del entorno.
 - **Flujo:** revisa compilar (gcc, make), depurar (gdb, ptrace), memoria (valgrind,
@@ -414,6 +487,8 @@ la invoca.
 
 ### CU-36 · Reportar un problema de jonesy
 
+> Grabación: [CU-36-reportar-un-problema.cast](casos/CU-36-reportar-un-problema.cast) · [qué muestra](casos/CU-36-reportar-un-problema.md)
+
 - **Disparador:** algo no anda como debería.
 - **Flujo:** `jonesy reporte [--salida archivo.md]` o Ayuda → Reportar un problema arma
   un informe con la versión, el sistema, la terminal, un doctor rápido, el
@@ -423,6 +498,8 @@ la invoca.
 - **Resultado:** un reporte completo para pegar en el aviso del problema.
 
 ### CU-37 · Alojar muchas sesiones en un servidor
+
+> Grabación: [CU-37-muchas-sesiones.cast](casos/CU-37-muchas-sesiones.cast) · [qué muestra](casos/CU-37-muchas-sesiones.md)
 
 - **Actor:** el administrador del servidor de examen.
 - **Flujo:** un binario único, sin dependencias de ejecución más allá de las
