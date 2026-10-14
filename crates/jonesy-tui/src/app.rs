@@ -801,6 +801,8 @@ pub struct App {
     pub valor_cursor: Option<(String, Option<Result<String, String>>)>,
     /// Palabra bajo el mouse en el editor (gana a la del cursor hasta la próxima tecla).
     hover: Option<String>,
+    /// Los atajos de `[atajos]` del proyecto: (tecla, acción, cómo se escribió).
+    pub atajos_usuario: Vec<(crate::atajos::Atajo, Accion, String)>,
     /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
     ultima_compilacion: Option<(Instant, usize)>,
     /// Últimas pruebas: cuándo, cuántas pasan, cuántas fallan y si compilaron.
@@ -1001,6 +1003,7 @@ impl App {
             vigiladas: vec![],
             valor_cursor: None,
             hover: None,
+            atajos_usuario: vec![],
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -1062,6 +1065,8 @@ impl App {
         }
         app.cargar_doc();
         app.refrescar_git();
+        let (atajos, errores_atajos) = crate::atajos::cargar(&app.proyecto.config.atajos);
+        app.atajos_usuario = atajos;
         if let Some(e) = app.proyecto.error_config.clone() {
             app.avisar(e, Nivel::Error);
         } else if entregado {
@@ -1083,6 +1088,11 @@ impl App {
             app.avisar(
                 "Modo examen: la sesión se registra y se guarda automáticamente.",
                 Nivel::Info,
+            );
+        } else if !errores_atajos.is_empty() {
+            app.avisar(
+                format!("[atajos] de .jonesy.toml: {}", errores_atajos.join("; ")),
+                Nivel::Aviso,
             );
         }
         app
@@ -6600,9 +6610,18 @@ impl App {
             Accion::ExplicarRegla => self.explicar_regla(),
             Accion::Atajos => {
                 let ancho = self.tam.0.saturating_sub(10).clamp(40, 90);
+                let mut texto = accion::AYUDA_ATAJOS.to_string();
+                if !self.atajos_usuario.is_empty() {
+                    texto.push_str("\n## Tus atajos ([atajos] de .jonesy.toml)\n\n| Teclas | Acción |\n|---|---|\n");
+                    for (_, a, tecla) in &self.atajos_usuario {
+                        texto.push_str(&format!("| {tecla} | {} |\n", a.info().titulo));
+                    }
+                } else {
+                    texto.push_str("\nPara sumar los tuyos: `[atajos]` en .jonesy.toml, por ejemplo `\"ctrl+e\" = \"Compilar\"`.\n");
+                }
                 self.modal = Some(Modal::Visor {
                     titulo: "Atajos".into(),
-                    lineas: markdown::renderizar(accion::AYUDA_ATAJOS, ancho, &self.sim).lineas,
+                    lineas: markdown::renderizar(&texto, ancho, &self.sim).lineas,
                     desplazamiento: 0,
                 });
             }
@@ -7709,6 +7728,16 @@ impl App {
         self.desplazado_por_mouse = false;
         if self.modal.is_some() {
             self.tecla_modal(k);
+            return;
+        }
+        // Los atajos propios de [atajos] ganan a los de fábrica.
+        if let Some(a) = self
+            .atajos_usuario
+            .iter()
+            .find(|(t, _, _)| t.coincide(&k))
+            .map(|(_, a, _)| *a)
+        {
+            self.accion(a);
             return;
         }
         let ctrl = k.modifiers.contains(KeyModifiers::CONTROL);

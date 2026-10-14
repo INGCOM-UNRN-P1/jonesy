@@ -36,6 +36,12 @@ plugins_permitidos = []
 # Usá un código largo y al azar: el hash queda a la vista del alumno.
 pausa_sha256 = ""
 
+[atajos]
+# Atajos propios (ganan a los de fábrica), útiles en terminales que no pasan las F-teclas.
+# La acción es su nombre (Compilar, Ejecutar, Probar, IrALinea…) o su título del menú.
+# "ctrl+e" = "Compilar"
+# "alt+u" = "Correr pruebas (make test)"
+
 [interfaz]
 # Posición del quick-doc: "derecha" o "inferior".
 quickdoc = "derecha"

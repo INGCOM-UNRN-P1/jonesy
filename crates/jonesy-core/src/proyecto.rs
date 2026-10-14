@@ -23,6 +23,8 @@ pub struct Config {
     /// Herramientas del ecosistema integradas como plugins.
     pub integraciones: crate::integraciones::ConfigIntegraciones,
     pub pruebas: Pruebas,
+    /// Atajos propios: `"ctrl+e" = "Compilar"` (tecla → acción; ganan a los de fábrica).
+    pub atajos: std::collections::BTreeMap<String, String>,
 }
 
 /// `[pruebas]`: cómo correr y leer las pruebas (Construir → Correr pruebas).

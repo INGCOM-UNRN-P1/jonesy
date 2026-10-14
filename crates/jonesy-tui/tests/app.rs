@@ -3470,3 +3470,27 @@ fn depurador_vigiladas_arreglos_cadenas_y_valor_del_cursor() {
     );
     a.accion(jonesy_tui::accion::Accion::Detener);
 }
+
+#[test]
+fn atajos_propios_del_proyecto() {
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (
+            ".jonesy.toml",
+            "[atajos]\n\"ctrl+e\" = \"IrALinea\"\n\"alt+q\" = \"no existe\"\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let p = pantalla(&mut a, 140, 30);
+    assert!(
+        p.contains("[atajos] de .jonesy.toml"),
+        "el inválido se avisa: {p}"
+    );
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::CONTROL);
+    assert!(matches!(a.modal, Some(Modal::IrALinea { .. })));
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    a.accion(jonesy_tui::accion::Accion::Atajos);
+    let p = pantalla(&mut a, 140, 200);
+    assert!(p.contains("Tus atajos") && p.contains("ctrl+e"), "{p}");
+}
