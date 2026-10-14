@@ -3350,3 +3350,61 @@ fn autocompletar_con_ctrl_espacio() {
         a.buf().buf.contenido()
     );
 }
+
+#[test]
+#[cfg(unix)] // usa gcc
+fn arreglo_rapido_con_alt_enter() {
+    let dir = proyecto(&[(
+        "main.c",
+        "int main(void)\n{\n    int x = 0\n    if (x = 5)\n    {\n        printf(\"hola\\n\");\n    }\n    return 0;\n}\n",
+    )]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // 1) Falta «;»: gcc lo marca en la línea del if.
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| !a.diag_compilador.is_empty());
+    let pos = a.buf().buf.linea_columna_a_pos(3, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::ALT);
+    assert!(
+        a.buf().buf.contenido().contains("int x = 0;\n"),
+        "{}",
+        a.buf().buf.contenido()
+    );
+    // 2) Después: la asignación en la condición y el printf sin include.
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    a.diag_compilador.clear();
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| a.diag_compilador.len() >= 2);
+    let pos = a.buf().buf.linea_columna_a_pos(3, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::ALT);
+    assert!(
+        a.buf().buf.contenido().contains("if (x == 5)"),
+        "{}",
+        a.buf().buf.contenido()
+    );
+    // Desde Problemas: Alt+Enter sobre el del printf.
+    let i = a
+        .diagnosticos()
+        .iter()
+        .position(|d| d.mensaje.contains("printf"))
+        .expect("el aviso del printf");
+    a.sel_problema = i;
+    a.foco = Foco::Inferior;
+    a.pestana = Pestana::Problemas;
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::ALT);
+    assert!(
+        a.buf().buf.contenido().starts_with("#include <stdio.h>\n"),
+        "{}",
+        a.buf().buf.contenido()
+    );
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    a.diag_compilador.clear();
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.salida
+            .iter()
+            .any(|l| l.0.contains("compilación correcta"))
+    });
+}

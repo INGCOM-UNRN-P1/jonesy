@@ -124,6 +124,7 @@ pub enum Accion {
     DocumentarFuncion,
     CrearPrueba,
     Autocompletar,
+    ArregloRapido,
 }
 
 pub struct Info {
@@ -256,6 +257,7 @@ impl Accion {
             DocumentarFuncion => ("Documentar la función (/** @brief, @param… */)", ""),
             CrearPrueba => ("Crear una prueba para esta función", ""),
             Autocompletar => ("Autocompletar el nombre", "Ctrl+Espacio"),
+            ArregloRapido => ("Arreglar el error de la línea (si es simple)", "Alt+Enter"),
         };
         Info { titulo, atajo }
     }
@@ -377,6 +379,7 @@ impl Accion {
             DocumentarFuncion,
             CrearPrueba,
             Autocompletar,
+            ArregloRapido,
             Salir,
         ]
     }
@@ -523,6 +526,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(Comentar),
                 A(DuplicarLinea),
                 A(Autocompletar),
+                A(ArregloRapido),
                 A(SubirLinea),
                 A(BajarLinea),
                 SEP,
@@ -737,6 +741,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
 | Autocompletar (nombres del archivo y funciones de la biblioteca) | Ctrl+Espacio |
+| Arreglar un error simple de la línea (falta «;» o un #include, «=» por «==») | Alt+Enter |
 | Renombrar la variable o función del cursor (sólo donde vale) | Ctrl+R |
 | Mover línea arriba / abajo | Alt+↑ / Alt+↓ |
 | Autoformato (gaff o clang-format) | Alt+Shift+F |

@@ -3,6 +3,7 @@
 //! No depende de la terminal: lo usan la TUI (`jonesy-tui`) y los modos sin pantalla
 //! (`--headless`, benchmarks) del binario.
 
+pub mod arreglos;
 pub mod buffer;
 pub mod busqueda;
 pub mod casos;

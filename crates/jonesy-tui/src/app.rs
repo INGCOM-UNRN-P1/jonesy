@@ -4097,7 +4097,14 @@ impl App {
             .filter(|d| d.resumen.is_some())
             .and_then(|d| jonesy_core::errores_gcc::explicar(&d.mensaje))
         {
-            self.visor_explicacion("Error de compilación".into(), &e.texto);
+            let mut texto = e.texto.clone();
+            if let Some((_, a)) = self.arreglo_de(d.as_ref()) {
+                texto.push_str(&format!(
+                    "\n**Arreglo rápido:** Alt+Enter en la línea hace esto: {}.\n",
+                    a.descripcion
+                ));
+            }
+            self.visor_explicacion("Error de compilación".into(), &texto);
             return;
         }
         let Some(d) = d.filter(|d| d.codigo.is_some()) else {
@@ -6661,6 +6668,7 @@ impl App {
             Accion::DocumentarFuncion => self.documentar_funcion(),
             Accion::CrearPrueba => self.crear_prueba(),
             Accion::Autocompletar => self.autocompletar(true),
+            Accion::ArregloRapido => self.arreglo_rapido(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7090,6 +7098,63 @@ impl App {
             opciones,
             sel: 0,
         });
+    }
+
+    /// El arreglo rápido de un diagnóstico de gcc del archivo activo (o del primero de la
+    /// línea del cursor que tenga uno).
+    fn arreglo_de(
+        &self,
+        d: Option<&Diagnostico>,
+    ) -> Option<(Diagnostico, jonesy_core::arreglos::Arreglo)> {
+        let ruta = self.activo_ruta()?;
+        let fuente = self.buf().buf.contenido();
+        let candidatos: Vec<Diagnostico> = match d {
+            Some(d) => vec![d.clone()],
+            None => self
+                .diagnosticos_linea(&ruta, self.buf().buf.linea_columna().0)
+                .into_iter()
+                .cloned()
+                .collect(),
+        };
+        candidatos
+            .into_iter()
+            .filter(|d| d.origen == jonesy_core::Origen::Compilador)
+            .find_map(|d| {
+                jonesy_core::arreglos::proponer(&fuente, &d.mensaje, d.linea, d.columna)
+                    .map(|a| (d, a))
+            })
+    }
+
+    /// Alt+Enter: aplica el arreglo del error de la línea (falta «;» o un #include, «=» por
+    /// «==»). Se deshace con Ctrl+Z; F6 vuelve a compilar para confirmarlo.
+    fn arreglo_rapido(&mut self) {
+        let Some((d, a)) = self.arreglo_de(None) else {
+            let hay = self.activo_ruta().is_some_and(|r| {
+                !self
+                    .diagnosticos_linea(&r, self.buf().buf.linea_columna().0)
+                    .is_empty()
+            });
+            self.avisar(
+                if hay {
+                    "Este error no tiene un arreglo automático: F1 lo explica."
+                } else {
+                    "No hay un error en esta línea (Alt+N va al siguiente)."
+                },
+                Nivel::Info,
+            );
+            return;
+        };
+        self.editar(|b| b.reemplazar_rango(a.inicio, a.fin, &a.texto));
+        // El diagnóstico arreglado sale de la lista hasta la próxima compilación.
+        self.diag_compilador
+            .retain(|x| !(x.mensaje == d.mensaje && x.linea == d.linea && x.archivo == d.archivo));
+        self.avisar(
+            format!(
+                "{} (Ctrl+Z lo deshace; F6 compila de nuevo).",
+                a.descripcion
+            ),
+            Nivel::Ok,
+        );
     }
 
     /// Abre el resultado `i` de la búsqueda en el proyecto.
@@ -7914,6 +7979,11 @@ impl App {
                     KeyCode::Down => {
                         self.sel_problema = (self.sel_problema + 1).min(total.saturating_sub(1))
                     }
+                    KeyCode::Enter if k.modifiers.contains(KeyModifiers::ALT) => {
+                        self.saltar_a_problema(self.sel_problema);
+                        self.cambiar_foco(Foco::Editor);
+                        self.arreglo_rapido();
+                    }
                     KeyCode::Enter => self.saltar_a_problema(self.sel_problema),
                     KeyCode::F(1) => self.explicar_regla(),
                     KeyCode::Tab => self.cambiar_foco(Foco::Editor),
@@ -8248,6 +8318,7 @@ impl App {
         if alt {
             match k.code {
                 KeyCode::Up => self.accion(Accion::SubirLinea),
+                KeyCode::Enter => self.accion(Accion::ArregloRapido),
                 KeyCode::Down => self.accion(Accion::BajarLinea),
                 KeyCode::Left => self.accion(Accion::Volver),
                 _ => {}
