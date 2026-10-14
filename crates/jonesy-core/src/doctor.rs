@@ -54,7 +54,9 @@ pub fn buscar(nombre: &str) -> Option<PathBuf> {
 
 /// Primera línea de `programa --version`, con un tiempo límite (algunas herramientas
 /// arrancan lento o esperan entrada).
-fn version(ruta: &Path, limite: Duration) -> String {
+/// La versión que informa `ruta --version`, o por qué no arranca: termina con error sin
+/// decir nada o con un traceback de Python (un paquete roto, un entorno que no es el suyo).
+fn version(ruta: &Path, limite: Duration) -> Result<String, String> {
     let Ok(mut hijo) = Command::new(ruta)
         .arg("--version")
         .env("NO_COLOR", "1")
@@ -63,7 +65,7 @@ fn version(ruta: &Path, limite: Duration) -> String {
         .stderr(Stdio::piped())
         .spawn()
     else {
-        return "versión desconocida".into();
+        return Ok("versión desconocida".into());
     };
     let fin = Instant::now() + limite;
     loop {
@@ -73,27 +75,42 @@ fn version(ruta: &Path, limite: Duration) -> String {
             _ => {
                 let _ = hijo.kill();
                 let _ = hijo.wait();
-                return "versión desconocida (no respondió)".into();
+                return Ok("versión desconocida (no respondió)".into());
             }
         }
     }
-    let salida = hijo.wait_with_output().ok();
-    let texto = salida
-        .map(|o| {
-            let s = String::from_utf8_lossy(&o.stdout).into_owned();
-            if s.trim().is_empty() {
-                String::from_utf8_lossy(&o.stderr).into_owned()
-            } else {
-                s
-            }
-        })
-        .unwrap_or_default();
-    texto
+    let Ok(o) = hijo.wait_with_output() else {
+        return Ok("versión desconocida".into());
+    };
+    let salida = String::from_utf8_lossy(&o.stdout).into_owned();
+    let errores = String::from_utf8_lossy(&o.stderr).into_owned();
+    let roto = errores.contains("Traceback (most recent call last)")
+        || salida.contains("Traceback (most recent call last)")
+        || (!o.status.success() && salida.trim().is_empty());
+    if roto {
+        // La última línea del error suele decir la causa (ModuleNotFoundError: …).
+        let causa = errores
+            .lines()
+            .chain(salida.lines())
+            .map(str::trim)
+            .rfind(|l| !l.is_empty())
+            .unwrap_or("terminó con error")
+            .chars()
+            .take(120)
+            .collect();
+        return Err(causa);
+    }
+    let texto = if salida.trim().is_empty() {
+        errores
+    } else {
+        salida
+    };
+    Ok(texto
         .lines()
         .map(str::trim)
         .find(|l| !l.is_empty())
         .unwrap_or("versión desconocida")
-        .to_string()
+        .to_string())
 }
 
 /// Chequeo de un binario: si está en el PATH y su versión.
@@ -109,19 +126,31 @@ pub fn binario(nombre: &str, proposito: &str, requerido: bool, sugerencia: &str)
             proposito: proposito.into(),
             sugerencia: sugerencia.into(),
         },
-        Some(ruta) => Chequeo {
-            nombre: nombre.into(),
-            categoria: String::new(),
-            nivel: nivel_de(requerido).into(),
-            requerido,
-            ok: true,
-            detalle: format!(
-                "{} ({})",
-                version(&ruta, Duration::from_secs(5)),
-                ruta.display()
-            ),
-            proposito: proposito.into(),
-            sugerencia: String::new(),
+        Some(ruta) => match version(&ruta, Duration::from_secs(5)) {
+            Ok(v) => Chequeo {
+                nombre: nombre.into(),
+                categoria: String::new(),
+                nivel: nivel_de(requerido).into(),
+                requerido,
+                ok: true,
+                detalle: format!("{v} ({})", ruta.display()),
+                proposito: proposito.into(),
+                sugerencia: String::new(),
+            },
+            Err(causa) => Chequeo {
+                nombre: nombre.into(),
+                categoria: String::new(),
+                nivel: nivel_de(requerido).into(),
+                requerido,
+                ok: false,
+                detalle: format!("está en {} pero no arranca: {causa}", ruta.display()),
+                proposito: proposito.into(),
+                sugerencia: format!(
+                    "Reinstalalo, o revisá el PATH: {} puede ser otra copia ({})",
+                    ruta.display(),
+                    sugerencia
+                ),
+            },
         },
     }
 }
@@ -526,7 +555,7 @@ pub fn chequeos(
     );
     // Python: versión mínima para el worker.
     if let Some(py) = buscar("python3").or_else(|| buscar("python")) {
-        let ver = version(&py, Duration::from_secs(5));
+        let ver = version(&py, Duration::from_secs(5)).unwrap_or_default();
         let menor = ver.split_whitespace().nth(1).and_then(|n| {
             let mut p = n.split('.');
             Some((
@@ -794,6 +823,34 @@ mod tests {
         let mal = informe("0.1.0", vec![binario("no-existe-jonesy-xyz", "", true, "")]);
         assert!(!mal.ok);
         assert_eq!(json["chequeos"][0]["nivel"], "requerido");
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn una_herramienta_rota_no_pasa_por_buena() {
+        use std::os::unix::fs::PermissionsExt;
+        let d = std::env::temp_dir().join(format!("jonesy-doctor-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let script = |nombre: &str, cuerpo: &str| {
+            let p = d.join(nombre);
+            std::fs::write(&p, format!("#!/bin/sh\n{cuerpo}\n")).unwrap();
+            std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+            p
+        };
+        let roto = script(
+            "roto",
+            "echo 'Traceback (most recent call last):' >&2\necho \"ModuleNotFoundError: No module named 'yutani'\" >&2\nexit 1",
+        );
+        let sano = script("sano", "echo 'sano 1.0'");
+        let mudo = script("mudo", "exit 2");
+        let limite = Duration::from_secs(5);
+        assert_eq!(
+            version(&roto, limite).unwrap_err(),
+            "ModuleNotFoundError: No module named 'yutani'"
+        );
+        assert_eq!(version(&sano, limite).unwrap(), "sano 1.0");
+        assert!(version(&mudo, limite).is_err());
+        let _ = std::fs::remove_dir_all(&d);
     }
 
     #[test]
