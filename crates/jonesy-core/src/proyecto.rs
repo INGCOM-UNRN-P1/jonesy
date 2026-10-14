@@ -510,6 +510,54 @@ impl Proyecto {
             .into_owned()
     }
 
+    /// El par de un fuente de C: el `.h` de un `.c` y el `.c` de un `.h` (Alt+I). Busca en
+    /// el mismo directorio, después en `include/` o `src/` del módulo (o del directorio de
+    /// arriba) y, si no, en todo el proyecto por nombre.
+    pub fn archivo_pareja(&self, ruta: &Path) -> Option<PathBuf> {
+        let ext = ruta.extension()?.to_str()?.to_ascii_lowercase();
+        let otra = match ext.as_str() {
+            "c" => "h",
+            "h" => "c",
+            _ => return None,
+        };
+        let stem = ruta.file_stem()?.to_string_lossy().into_owned();
+        let nombre = format!("{stem}.{otra}");
+        let dir = ruta.parent()?;
+        let mut candidatos = vec![dir.join(&nombre)];
+        let base_modulo = self
+            .estructura
+            .modulo_de(ruta)
+            .map(|m| m.dir.clone())
+            .unwrap_or_else(|| self.raiz.clone());
+        for base in [dir.parent().map(Path::to_path_buf), Some(base_modulo)]
+            .into_iter()
+            .flatten()
+        {
+            for sub in ["include", "src", "inc", "lib"] {
+                candidatos.push(base.join(sub).join(&nombre));
+            }
+            candidatos.push(base.join(&nombre));
+        }
+        if let Some(c) = candidatos.into_iter().find(|c| c.is_file()) {
+            return Some(c);
+        }
+        let mut en_proyecto: Vec<PathBuf> = self
+            .archivos(5000)
+            .into_iter()
+            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy() == nombre))
+            .collect();
+        // El más cercano al archivo (más componentes en común).
+        en_proyecto.sort_by_key(|p| {
+            std::cmp::Reverse(
+                p.components()
+                    .zip(ruta.components())
+                    .take_while(|(a, b)| a == b)
+                    .count(),
+            )
+        });
+        en_proyecto.into_iter().next()
+    }
+
     /// Archivos del proyecto (para abrir con Ctrl+O), sin directorios ocultos ni binarios conocidos.
     pub fn archivos(&self, limite: usize) -> Vec<PathBuf> {
         let mut salida = Vec::new();
@@ -626,6 +674,46 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn pareja_de_c_y_h() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path();
+        for f in [
+            "lista.c",
+            "lista.h",
+            "libs/pila/src/pila.c",
+            "libs/pila/include/pila.h",
+            "ejercicios/ej1/cola.c",
+            "otros/cola.h",
+        ] {
+            std::fs::create_dir_all(r.join(f).parent().unwrap()).unwrap();
+            std::fs::write(r.join(f), "").unwrap();
+        }
+        let p = Proyecto::abrir(r);
+        assert_eq!(
+            p.archivo_pareja(&r.join("lista.c")),
+            Some(r.join("lista.h"))
+        );
+        assert_eq!(
+            p.archivo_pareja(&r.join("lista.h")),
+            Some(r.join("lista.c"))
+        );
+        assert_eq!(
+            p.archivo_pareja(&r.join("libs/pila/src/pila.c")),
+            Some(r.join("libs/pila/include/pila.h"))
+        );
+        assert_eq!(
+            p.archivo_pareja(&r.join("libs/pila/include/pila.h")),
+            Some(r.join("libs/pila/src/pila.c"))
+        );
+        // En otro lugar del proyecto, por nombre.
+        assert_eq!(
+            p.archivo_pareja(&r.join("ejercicios/ej1/cola.c")),
+            Some(r.join("otros/cola.h"))
+        );
+        assert_eq!(p.archivo_pareja(&r.join("notas.md")), None);
+    }
 
     #[test]
     fn comando_de_formato() {

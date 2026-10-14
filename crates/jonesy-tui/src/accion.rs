@@ -119,6 +119,7 @@ pub enum Accion {
     ReportarProblema,
     ObjetivoMake,
     VisorHex,
+    ArchivoPareja,
 }
 
 pub struct Info {
@@ -246,6 +247,7 @@ impl Accion {
             Recorrido => ("Recorrido guiado por la pantalla", ""),
             RenombrarSimbolo => ("Renombrar en su ámbito…", "Ctrl+R"),
             PausarExamen => ("Pausar / reanudar el cronómetro (código del docente)…", ""),
+            ArchivoPareja => ("Ir al .h / .c correspondiente", "Alt+I"),
         };
         Info { titulo, atajo }
     }
@@ -362,6 +364,7 @@ impl Accion {
             Recorrido,
             RenombrarSimbolo,
             PausarExamen,
+            ArchivoPareja,
             Salir,
         ]
     }
@@ -440,7 +443,9 @@ impl Menu {
 }
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
-pub const ALT_GLOBALES: &[char] = &['t', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm'];
+pub const ALT_GLOBALES: &[char] = &[
+    't', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm', 'i',
+];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
 /// edición, vistas, construir (compilar, correr, probar), depurar (paso a paso y
@@ -496,6 +501,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(IrALinea),
                 A(IrADefinicion),
                 A(Volver),
+                A(ArchivoPareja),
                 SEP,
                 A(AlternarMarcador),
                 A(SiguienteMarcador),
@@ -710,6 +716,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Maximizar el panel actual (y volver) | Alt+Z |
 | Ir a línea | Ctrl+G |
 | Ir a la definición · volver | F12 (fuera del examen) o Ctrl+clic · Alt+← |
+| Del .c a su .h (y del .h al .c) | Alt+I |
 | Esquema del archivo (funciones, tipos, macros) | Alt+S |
 | Comentar / descomentar · duplicar línea | Ctrl+/ · Ctrl+D |
 | Renombrar la variable o función del cursor (sólo donde vale) | Ctrl+R |

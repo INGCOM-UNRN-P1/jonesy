@@ -3405,6 +3405,43 @@ impl App {
         Some(i)
     }
 
+    /// Alt+I: del .c a su .h y del .h a su .c.
+    fn ir_a_pareja(&mut self) {
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let es_c = matches!(
+            ruta.extension().and_then(|e| e.to_str()),
+            Some("c" | "h" | "C" | "H")
+        );
+        if !es_c {
+            self.avisar("Alt+I va del .c a su .h (y del .h al .c).", Nivel::Aviso);
+            return;
+        }
+        match self.proyecto.archivo_pareja(&ruta) {
+            Some(p) => {
+                self.recordar_posicion();
+                self.abrir_archivo(&p, true);
+                self.cambiar_foco(Foco::Editor);
+            }
+            None => {
+                let stem = ruta
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let otra = if ruta.extension().is_some_and(|e| e == "h" || e == "H") {
+                    "c"
+                } else {
+                    "h"
+                };
+                self.avisar(
+                    format!("No encontré {stem}.{otra} en el proyecto."),
+                    Nivel::Aviso,
+                );
+            }
+        }
+    }
+
     /// Ver → Visor hexadecimal: elegir uno de los binarios del proyecto.
     fn elegir_binario(&mut self) {
         let opciones: Vec<OpcionPaleta> = jonesy_core::hex::binarios(&self.proyecto.raiz, 500)
@@ -6606,6 +6643,7 @@ impl App {
             Accion::ReportarProblema => self.reportar_problema(),
             Accion::ObjetivoMake => self.elegir_objetivo_make(),
             Accion::VisorHex => self.elegir_binario(),
+            Accion::ArchivoPareja => self.ir_a_pareja(),
             Accion::Glosario => self.abrir_glosario(),
             Accion::CatalogoReglas => self.abrir_catalogo(),
             Accion::Recorrido => self.modal = Some(Modal::Recorrido { paso: 0 }),
@@ -7363,6 +7401,7 @@ impl App {
             (KeyCode::Char('h'), false, true, _) => Some(Accion::Herramientas),
             (KeyCode::Char('y'), false, true, _) => Some(Accion::EstructuraProyecto),
             (KeyCode::Char('s'), false, true, _) => Some(Accion::Esquema),
+            (KeyCode::Char('i'), false, true, _) => Some(Accion::ArchivoPareja),
             (KeyCode::Char('n'), false, true, false) => Some(Accion::SiguienteProblema),
             (KeyCode::Char('N'), false, true, _) | (KeyCode::Char('n'), false, true, true) => {
                 Some(Accion::AnteriorProblema)

@@ -3177,3 +3177,23 @@ fn visor_hexadecimal_de_binarios() {
     let (b, _rx) = app(dir.path(), false);
     assert!(b.buffers.iter().any(|x| x.hex.is_some()));
 }
+
+#[test]
+fn del_c_a_su_h_con_alt_i() {
+    let dir = proyecto(&[
+        ("lista.c", "#include \"lista.h\"\n"),
+        ("lista.h", "#ifndef LISTA_H\n#define LISTA_H\n#endif\n"),
+        ("solo.c", "int x;\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("lista.c"), true);
+    tecla(&mut a, KeyCode::Char('i'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.nombre(), "lista.h");
+    tecla(&mut a, KeyCode::Char('i'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.nombre(), "lista.c");
+    a.abrir_archivo(&dir.path().join("solo.c"), true);
+    tecla(&mut a, KeyCode::Char('i'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.nombre(), "solo.c");
+    let p = pantalla(&mut a, 140, 30);
+    assert!(p.contains("No encontré solo.h"), "{p}");
+}
