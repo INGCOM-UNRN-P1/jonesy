@@ -126,6 +126,7 @@ pub enum Accion {
     Autocompletar,
     ArregloRapido,
     Vigilar,
+    GitDescartar,
 }
 
 pub struct Info {
@@ -260,6 +261,7 @@ impl Accion {
             Autocompletar => ("Autocompletar el nombre", "Ctrl+Espacio"),
             ArregloRapido => ("Arreglar el error de la línea (si es simple)", "Alt+Enter"),
             Vigilar => ("Vigilar una expresión (se recalcula en cada paso)…", ""),
+            GitDescartar => ("Descartar los cambios de este archivo…", ""),
         };
         Info { titulo, atajo }
     }
@@ -383,6 +385,7 @@ impl Accion {
             Autocompletar,
             ArregloRapido,
             Vigilar,
+            GitDescartar,
             Salir,
         ]
     }
@@ -616,6 +619,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 SEP,
                 A(GitCommit),
                 A(GitDeshacerCommit),
+                A(GitDescartar),
                 SEP,
                 A(GitTraer),
                 A(GitSubir),

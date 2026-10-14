@@ -250,6 +250,8 @@ pub enum Confirmacion {
     Borrar,
     /// git reset --soft HEAD~1.
     DeshacerCommit,
+    /// Volver el archivo de `App::descartar_pendiente` al último commit.
+    Descartar,
 }
 
 pub enum Modal {
@@ -801,6 +803,8 @@ pub struct App {
     pub valor_cursor: Option<(String, Option<Result<String, String>>)>,
     /// Palabra bajo el mouse en el editor (gana a la del cursor hasta la próxima tecla).
     hover: Option<String>,
+    /// Archivo (relativo al repositorio) cuyos cambios se van a descartar.
+    descartar_pendiente: Option<String>,
     /// Los atajos de `[atajos]` del proyecto: (tecla, acción, cómo se escribió).
     pub atajos_usuario: Vec<(crate::atajos::Atajo, Accion, String)>,
     /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
@@ -1004,6 +1008,7 @@ impl App {
             valor_cursor: None,
             hover: None,
             atajos_usuario: vec![],
+            descartar_pendiente: None,
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -2233,6 +2238,55 @@ impl App {
     }
 
     /// Confirma deshacer el último commit; se niega si ya está en el remoto (push).
+    /// `d` en el panel de git o Git → Descartar: pide confirmación para volver el archivo
+    /// al último commit.
+    fn pedir_descartar(&mut self, rel: String) {
+        let Some(e) = self.git_estado.clone() else {
+            self.avisar("El proyecto no está en un repositorio git.", Nivel::Aviso);
+            return;
+        };
+        let Some(entrada) = e.entradas.iter().find(|x| x.ruta == rel) else {
+            self.avisar(
+                format!("«{rel}» no tiene cambios desde el último commit."),
+                Nivel::Info,
+            );
+            return;
+        };
+        if entrada.tipo == jonesy_git::TipoEntrada::SinSeguimiento {
+            self.avisar(
+                format!("«{rel}» es nuevo (nunca se hizo commit): no hay versión anterior. Si sobra, borralo desde el explorador (Supr)."),
+                Nivel::Aviso,
+            );
+            return;
+        }
+        self.descartar_pendiente = Some(rel.clone());
+        self.modal = Some(Modal::Confirmar {
+            titulo: "Descartar cambios".into(),
+            mensaje: format!(
+                "«{rel}» vuelve a como estaba en el último commit y se pierden sus cambios (si está abierto, Ctrl+Z en el editor los recupera mientras no lo cierres). ¿Descartarlos? (s/n)"
+            ),
+            que: Confirmacion::Descartar,
+        });
+    }
+
+    fn descartar_cambios(&mut self) {
+        let (Some(rel), Some(repo)) = (self.descartar_pendiente.take(), self.repo.clone()) else {
+            return;
+        };
+        match repo.descartar(&rel) {
+            Ok(()) => {
+                let ruta = jonesy_core::canonica(&repo.dir.join(&rel));
+                self.recargar_desde_disco(&ruta, "Descartar");
+                self.avisar(
+                    format!("«{rel}» volvió a la versión del último commit."),
+                    Nivel::Ok,
+                );
+            }
+            Err(e) => self.avisar(format!("No se pudo descartar: {e}"), Nivel::Error),
+        }
+        self.refrescar_git();
+    }
+
     fn pedir_deshacer_commit(&mut self) {
         let Some(e) = self.git_estado.clone() else {
             self.avisar("El proyecto no está en un repositorio git.", Nivel::Aviso);
@@ -6722,6 +6776,17 @@ impl App {
             Accion::CrearPrueba => self.crear_prueba(),
             Accion::Autocompletar => self.autocompletar(true),
             Accion::ArregloRapido => self.arreglo_rapido(),
+            Accion::GitDescartar => {
+                let rel = self
+                    .activo_ruta()
+                    .and_then(|r| self.repo.as_ref().and_then(|repo| repo.relativa(&r)));
+                match rel {
+                    Some(r) => self.pedir_descartar(r),
+                    None => {
+                        self.avisar("Este archivo no está en un repositorio git.", Nivel::Aviso)
+                    }
+                }
+            }
             Accion::Vigilar => {
                 let b = &self.buf().buf;
                 let texto = b
@@ -8013,6 +8078,16 @@ impl App {
                     KeyCode::Char('c') if !ctrl => self.git_accion(Accion::GitCommit),
                     KeyCode::Char('l') => self.git_accion(Accion::GitLog),
                     KeyCode::Char('z') => self.pedir_deshacer_commit(),
+                    KeyCode::Char('d') if !en_log => {
+                        let ruta = self
+                            .git_estado
+                            .as_ref()
+                            .and_then(|e| e.entradas.get(self.git.sel))
+                            .map(|e| e.ruta.clone());
+                        if let Some(r) = ruta {
+                            self.pedir_descartar(r);
+                        }
+                    }
                     KeyCode::Char('s') if !ctrl => self.git_remoto(OpRemota::Subir),
                     KeyCode::Char('b') if !ctrl => self.git_remoto(OpRemota::Traer),
                     KeyCode::Char('m') if en_log => {
@@ -8659,6 +8734,7 @@ impl App {
                     Confirmacion::Recuperar => self.recuperar(true),
                     Confirmacion::Borrar => self.borrar_ruta(),
                     Confirmacion::DeshacerCommit => self.deshacer_commit(),
+                    Confirmacion::Descartar => self.descartar_cambios(),
                     Confirmacion::AbrirClonado => {
                         if let Some(p) = self.proyecto_pendiente.take() {
                             self.cambiar_proyecto(p);

@@ -191,6 +191,7 @@ pub fn atajos_panel(p: Panel) -> (&'static str, &'static str) {
 | Espacio | agregar o sacar el archivo del próximo commit (stage) |\n\
 | a · u | agregar todo · sacar todo |\n\
 | c | commit |\n\
+| d | descartar los cambios del archivo (vuelve al último commit; pide confirmación) |\n\
 | Enter | ver el cambio (diff) del archivo o del commit |\n\
 | l | historial (log); m marca un commit para comparar |\n\
 | z | deshacer el último commit (los cambios quedan) |\n\

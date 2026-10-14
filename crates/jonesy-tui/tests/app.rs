@@ -3494,3 +3494,32 @@ fn atajos_propios_del_proyecto() {
     let p = pantalla(&mut a, 140, 200);
     assert!(p.contains("Tus atajos") && p.contains("ctrl+e"), "{p}");
 }
+
+#[test]
+fn descartar_los_cambios_de_un_archivo() {
+    let dir = proyecto(&[("main.c", "int main(void)\n{\n    return 0;\n}\n")]);
+    git(dir.path(), &["init", "-q"]);
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "-q", "-m", "inicial"]);
+    std::fs::write(
+        dir.path().join("main.c"),
+        "int main(void)\n{\n    return 1;\n}\n",
+    )
+    .unwrap();
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    a.refrescar_git();
+    a.accion(jonesy_tui::accion::Accion::GitDescartar);
+    assert!(matches!(a.modal, Some(Modal::Confirmar { .. })));
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::NONE);
+    assert!(std::fs::read_to_string(dir.path().join("main.c"))
+        .unwrap()
+        .contains("return 0;"));
+    assert!(
+        a.buf().buf.contenido().contains("return 0;"),
+        "el buffer se recarga"
+    );
+    // Ctrl+Z en el editor lo recupera.
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::CONTROL);
+    assert!(a.buf().buf.contenido().contains("return 1;"));
+}

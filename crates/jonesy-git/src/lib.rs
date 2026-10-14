@@ -290,6 +290,24 @@ impl Repo {
         }
     }
 
+    /// Vuelve el archivo a como está en el último commit (en el índice y en el disco).
+    pub fn descartar(&self, ruta: &str) -> Result<(), ErrorGit> {
+        if !self.tiene_commits() {
+            return Err(ErrorGit(
+                "todavía no hay commits: no hay una versión a la cual volver".into(),
+            ));
+        }
+        self.ejecutar(&[
+            "restore",
+            "--staged",
+            "--worktree",
+            "--source=HEAD",
+            "--",
+            ruta,
+        ])
+        .map(|_| ())
+    }
+
     pub fn agregar_todo(&self) -> Result<(), ErrorGit> {
         self.ejecutar(&["add", "-A"]).map(|_| ())
     }
