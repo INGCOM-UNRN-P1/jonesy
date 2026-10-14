@@ -782,6 +782,8 @@ pub struct App {
     inicio_pruebas: Option<std::time::SystemTime>,
     /// El último aviso de error (para Ayuda → Reportar un problema).
     ultimo_error: Option<String>,
+    /// Cómo terminó cada prueba en la última corrida (✓/✗ junto a su `TEST`).
+    pub resultados_pruebas: HashMap<String, bool>,
     /// Última compilación: cuándo terminó y cuántos errores dio (para avisar al entregar).
     ultima_compilacion: Option<(Instant, usize)>,
     /// Últimas pruebas: cuándo, cuántas pasan, cuántas fallan y si compilaron.
@@ -978,6 +980,7 @@ impl App {
             inicio_pruebas: None,
             ultima_compilacion: None,
             ultimo_error: None,
+            resultados_pruebas: HashMap::new(),
             ultimas_pruebas: None,
             hasta_linea: None,
             git_remoto: None,
@@ -5710,6 +5713,9 @@ impl App {
     fn fin_pruebas(&mut self, r: jonesy_core::pruebas::Resultado, codigo: Option<i32>) {
         if let Some(s) = &mut self.simulacro {
             s.pruebas = Some((r.pasan, r.fallan));
+        }
+        for (nombre, paso) in &r.por_prueba {
+            self.resultados_pruebas.insert(nombre.clone(), *paso);
         }
         self.diag_compilador = r.diagnosticos;
         let compila = !self.diag_compilador.iter().any(|d| {

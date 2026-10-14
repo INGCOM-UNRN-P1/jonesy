@@ -3286,3 +3286,26 @@ fn crear_una_prueba_para_la_funcion() {
     );
     assert!(a.buf().buf.modificado(), "queda sin guardar para revisarla");
 }
+
+#[test]
+#[cfg(unix)] // usa make
+fn marcas_de_las_pruebas_en_el_margen() {
+    let dir = proyecto(&[
+        (
+            "ejercicios/ej1/Makefile",
+            "test:\n\t@printf '[CORRIENDO] suma_basica ... PASÓ\\n[CORRIENDO] suma_mala ... \\n  [FALLO] prueba.c:9: ASSERT_INT_EQ(5, 6)\\n    en test: suma_mala\\n[RESULTADO] FALLÓ\\nTests aprobados: 1\\nTests desaprobados: 1\\n'; exit 1\n",
+        ),
+        (
+            "ejercicios/ej1/prueba.c",
+            "#include \"p1_test.h\"\n\nTEST(suma_basica)\n{\n}\n\nTEST(suma_mala)\n{\n    ASSERT_INT_EQ(5, 6);\n}\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/prueba.c"), true);
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| a.resultados_pruebas.len() == 2);
+    let p = pantalla(&mut a, 140, 30);
+    let linea = |n: &str| p.lines().find(|l| l.contains(n)).unwrap_or("").to_string();
+    assert!(linea("TEST(suma_basica)").contains("✓"), "{p}");
+    assert!(linea("TEST(suma_mala)").contains("✗"), "{p}");
+}

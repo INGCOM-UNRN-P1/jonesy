@@ -999,6 +999,8 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
         .filter(|(a, _)| ruta.as_ref().is_some_and(|r| mismo_archivo(a, r)))
         .map(|(_, l)| l - 1)
         .collect();
+    // ✓/✗ junto a cada TEST(…) según la última corrida de las pruebas.
+    let resultados_pruebas = app.resultados_pruebas.clone();
     // (línea, columna 0-based, gravedad, texto) de los diagnósticos de este archivo.
     let diags_col: Vec<(usize, usize, Severidad, String)> = match &ruta {
         Some(p) => app
@@ -1095,7 +1097,25 @@ fn dibujar_editor(f: &mut Frame, app: &mut App, r: Rect) -> Option<(u16, u16)> {
                 .set_fg(tema::atenuado());
             continue;
         }
-        // Gutter: marcador, breakpoint, número, marca de diagnóstico.
+        // Gutter: resultado de la prueba, marcador, breakpoint, número, diagnóstico.
+        if !resultados_pruebas.is_empty() {
+            let texto_linea = b.linea_texto(linea);
+            let nombre = texto_linea
+                .trim_start()
+                .strip_prefix("TEST(")
+                .map(|r| r.split([')', ',', ' ']).next().unwrap_or("").to_string());
+            if let Some(paso) = nombre.and_then(|n| resultados_pruebas.get(&n)) {
+                let (simbolo, color) = match (*paso, sim.ascii) {
+                    (true, false) => ("✓", tema::ok()),
+                    (true, true) => ("+", tema::ok()),
+                    (false, false) => ("✗", tema::error()),
+                    (false, true) => ("x", tema::error()),
+                };
+                buf[(gutter.x, y)]
+                    .set_symbol(simbolo)
+                    .set_style(Style::default().fg(color).bg(fondo));
+            }
+        }
         if marcas.contains(&linea) {
             buf[(gutter.x, y)]
                 .set_symbol(if sim.ascii { "#" } else { "◆" })

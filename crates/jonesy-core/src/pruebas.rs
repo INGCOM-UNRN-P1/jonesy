@@ -24,6 +24,8 @@ pub struct Resultado {
     pub diagnosticos: Vec<Diagnostico>,
     /// Se encontró la salida de `p1_test` (si no, quizás las pruebas usan otra cosa).
     pub reconocida: bool,
+    /// Cada prueba que corrió y si pasó (para marcar ✓/✗ junto a su `TEST`).
+    pub por_prueba: Vec<(String, bool)>,
 }
 
 /// Saca las secuencias de color ANSI (por si la biblioteca no respeta NO_COLOR).
@@ -142,6 +144,7 @@ pub fn desde_sarif(
         fallan: s.fallan,
         diagnosticos,
         reconocida: true,
+        por_prueba: vec![],
     })
 }
 
@@ -157,6 +160,8 @@ pub fn interpretar(salida: &str, dir: &Path) -> Resultado {
     let mut pila: Vec<PathBuf> = vec![dir.to_path_buf()];
     // Fallo en curso: se completa con las líneas indentadas que lo siguen.
     let mut actual: Option<Diagnostico> = None;
+    // Prueba que empezó y todavía no dijo cómo terminó.
+    let mut corriendo: Option<String> = None;
     let mut detalles: Vec<String> = vec![];
     let cerrar =
         |actual: &mut Option<Diagnostico>, detalles: &mut Vec<String>, r: &mut Resultado| {
@@ -253,16 +258,25 @@ pub fn interpretar(salida: &str, dir: &Path) -> Resultado {
             .any(|p| t.starts_with(p))
         {
             detalles.push(t.trim_end_matches(':').to_string());
-        } else if t.starts_with("[CORRIENDO]") {
+        } else if let Some(resto) = t.strip_prefix("[CORRIENDO]") {
             cerrar(&mut actual, &mut detalles, &mut r);
             r.reconocida = true;
+            let nombre = resto.split_whitespace().next().unwrap_or("").to_string();
             if t.contains("PASÓ") {
                 pasan_lineas += 1;
+                r.por_prueba.push((nombre, true));
+            } else if t.contains("FALLÓ") {
+                r.por_prueba.push((nombre, false));
+            } else {
+                corriendo = Some(nombre);
             }
         } else if t.starts_with("[RESULTADO]") {
             cerrar(&mut actual, &mut detalles, &mut r);
             if t.contains("FALLÓ") {
                 fallan_lineas += 1;
+            }
+            if let Some(n) = corriendo.take() {
+                r.por_prueba.push((n, !t.contains("FALLÓ")));
             }
         } else if let Some(n) = numero_tras(t, "Tests aprobados") {
             cerrar(&mut actual, &mut detalles, &mut r);
@@ -310,6 +324,24 @@ mod tests {
         assert!(r.reconocida);
         assert_eq!((r.pasan, r.fallan), (1, 3));
         assert_eq!(r.diagnosticos.len(), 3, "{:#?}", r.diagnosticos);
+        assert_eq!(
+            r.por_prueba,
+            vec![
+                ("suma_basica".to_string(), true),
+                ("suma_con_dos".to_string(), false),
+                ("cadena_nula".to_string(), false),
+                ("cadenas".to_string(), false),
+            ]
+        );
+        // El resultado en la misma línea (otras bibliotecas que imitan a p1_test).
+        let r2 = interpretar(
+            "[CORRIENDO] a ... PASÓ\n[CORRIENDO] b ... FALLÓ\n",
+            d.path(),
+        );
+        assert_eq!(
+            r2.por_prueba,
+            vec![("a".to_string(), true), ("b".to_string(), false)]
+        );
 
         let f = &r.diagnosticos[0];
         assert_eq!(
