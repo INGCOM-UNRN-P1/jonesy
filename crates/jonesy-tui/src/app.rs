@@ -5059,7 +5059,7 @@ impl App {
                 fila(
                     "Tema",
                     tema::actual().nombre().into(),
-                    "oscuro · claro · contraste · turbo (Turbo C++) · solarizado · fósforo".into(),
+                    "oscuro · claro · contraste · turbo (Turbo C++) · solarizado · fósforo · daltónico".into(),
                     QueConfig::Tema,
                 ),
                 fila(

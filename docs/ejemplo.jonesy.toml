@@ -45,7 +45,8 @@ osc52 = true
 ascii = false
 # Colores: "oscuro" (por defecto), "claro" (terminales de fondo blanco), "contraste"
 # (sólo los 16 colores ANSI), "turbo" (como Turbo C++ de Borland: editor azul, barra gris),
-# "solarizado" o "fosforo" (monitor de fósforo verde). También desde Archivo →
+# "solarizado", "fosforo" (monitor de fósforo verde) o "daltonico" (apto para daltonismo:
+# errores en naranja, aciertos y lo agregado en azul). También desde Archivo →
 # Configuración del entorno → Apariencia, que queda en la sesión.
 tema = "oscuro"
 # Recordar hacer commit tras estos minutos con cambios sin confirmar (0: nunca).

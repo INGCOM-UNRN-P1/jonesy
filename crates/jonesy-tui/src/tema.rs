@@ -117,16 +117,20 @@ pub enum Tema {
     Solarizado,
     /// Monitor de fósforo verde: todo en verdes sobre negro.
     Fosforo,
+    /// Apto para daltonismo (paleta de Okabe-Ito): errores en naranja y aciertos en
+    /// azul, nunca rojo contra verde; el diff, azul y naranja.
+    Daltonico,
 }
 
 impl Tema {
-    pub const TODOS: [Tema; 6] = [
+    pub const TODOS: [Tema; 7] = [
         Tema::Oscuro,
         Tema::Claro,
         Tema::Contraste,
         Tema::Turbo,
         Tema::Solarizado,
         Tema::Fosforo,
+        Tema::Daltonico,
     ];
 
     pub fn nombre(self) -> &'static str {
@@ -137,6 +141,7 @@ impl Tema {
             Tema::Turbo => "turbo",
             Tema::Solarizado => "solarizado",
             Tema::Fosforo => "fosforo",
+            Tema::Daltonico => "daltonico",
         }
     }
 
@@ -158,6 +163,7 @@ impl Tema {
             Tema::Turbo => &TURBO,
             Tema::Solarizado => &SOLARIZADO,
             Tema::Fosforo => &FOSFORO,
+            Tema::Daltonico => &DALTONICO,
         }
     }
 }
@@ -232,6 +238,39 @@ const OSCURO: Paleta = Paleta {
     agregado_fuerte: Color::Rgb(40, 110, 55),
     relleno: Color::Rgb(55, 58, 64),
     pegado: Color::Rgb(110, 50, 20),
+};
+
+/// Okabe-Ito: azul (0,114,178), celeste (86,180,233), naranja (230,159,0), bermellón
+/// (213,94,0), amarillo (240,228,66), púrpura rojizo (204,121,167).
+const DALTONICO: Paleta = Paleta {
+    fondo: Color::Reset,
+    texto: Color::Reset,
+    texto_barra: Color::Reset,
+    atenuado_barra: Color::Rgb(120, 125, 135),
+    tecla_menu: Color::Reset,
+    fondo_menu_sel: Color::Rgb(86, 180, 233),
+    fondo_barra: Color::Rgb(40, 44, 52),
+    fondo_seleccion: Color::Rgb(60, 66, 80),
+    fondo_linea: Color::Rgb(33, 37, 43),
+    fondo_codigo: Color::Rgb(36, 40, 47),
+    acento: Color::Rgb(86, 180, 233),
+    atenuado: Color::Rgb(120, 125, 135),
+    error: Color::Rgb(213, 94, 0),
+    advertencia: Color::Rgb(240, 228, 66),
+    nota: Color::Rgb(86, 180, 233),
+    estilo: Color::Rgb(204, 121, 167),
+    ok: Color::Rgb(0, 114, 178),
+    peligro: Color::Rgb(230, 159, 0),
+    fuerte: Color::White,
+    sobre_acento: Color::Black,
+    numero: Color::Rgb(230, 159, 0),
+    linea_depurador: Color::Rgb(70, 62, 10),
+    borrado: Color::Rgb(70, 38, 0),
+    borrado_fuerte: Color::Rgb(140, 70, 0),
+    agregado: Color::Rgb(0, 40, 75),
+    agregado_fuerte: Color::Rgb(0, 80, 140),
+    relleno: Color::Rgb(55, 58, 64),
+    pegado: Color::Rgb(90, 60, 120),
 };
 
 const CLARO: Paleta = Paleta {

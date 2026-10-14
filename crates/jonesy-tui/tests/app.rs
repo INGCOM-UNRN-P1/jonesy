@@ -1830,6 +1830,7 @@ fn tema_turbo_pinta_como_turbo_c() {
     assert_eq!(buf[(5, 2)].bg, Color::Rgb(0, 170, 0));
     // Los nombres con o sin tilde.
     assert_eq!(Tema::de_nombre("fósforo"), Some(Tema::Fosforo));
+    assert_eq!(Tema::de_nombre("daltónico"), Some(Tema::Daltonico));
     tema::usar(Tema::Oscuro);
 }
 
