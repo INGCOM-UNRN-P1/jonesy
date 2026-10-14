@@ -136,6 +136,8 @@ jonesy config importar prefs.toml              # en otra máquina
 | Copiar · cortar · pegar                  | Ctrl+C · Ctrl+X · Ctrl+V (OSC 52 al copiar)                                                   |
 | Buscar · ir a línea · abrir              | F3 / Ctrl+F · Ctrl+G · Ctrl+O (Tab marca varios)                                              |
 | Nuevo archivo · autoformato              | Ctrl+N · Alt+Shift+F                                                                          |
+| Autocompletar · arreglo rápido           | Ctrl+Espacio · Alt+Enter (falta «;» o un #include, «=» por «==»)                              |
+| Del .c al .h · referencias               | Alt+I · Shift+F12 (dónde se usa en el proyecto)                                               |
 | Pestañas                                 | Ctrl+Tab / Ctrl+Shift+Tab, Alt+1…9, Ctrl+W; clic del medio o × cierra                         |
 | Explorador · proyecto (make y tp.sh)     | Alt+E · Alt+Y (Tab alterna dentro de la barra)                                                |
 | Diff del archivo contra git, lado a lado | Alt+Shift+D (s alterna con unificado, n/p salta entre cambios)                                |
@@ -154,7 +156,8 @@ jonesy config importar prefs.toml              # en otra máquina
 
 En la terminal interna, `Alt+T` o `Esc Esc` devuelven el foco al editor y
 `Shift+RePág/AvPág` recorre el historial. La tabla completa está en _Ayuda →
-Atajos de teclado_.
+Atajos de teclado_, y `[atajos]` en `.jonesy.toml` suma los propios (por ejemplo
+`"ctrl+e" = "Compilar"` en terminales que no pasan las F-teclas).
 
 ### Layout adaptativo
 
