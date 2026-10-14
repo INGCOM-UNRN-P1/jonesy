@@ -249,6 +249,26 @@ pub fn resumen_final(t: &Traza) -> Vec<(Tono, String)> {
 /// Comando de mem-trace para el programa del archivo activo: un `.c` suelto, o el
 /// `main.c` de un ejercicio con Makefile junto con los demás fuentes del módulo y los de
 /// las bibliotecas que usa (por `--cc-arg`, con sus `-I`). None si no hay programa.
+/// ¿Define `main`? (Las pruebas con otro nombre que `prueba.c` tienen su propio `main`, y
+/// compilarlas junto al programa da «multiple definition of main».)
+fn define_main(ruta: &Path) -> bool {
+    let Ok(texto) = std::fs::read_to_string(ruta) else {
+        return false;
+    };
+    let limpio: String = crate::simbolos::limpio(&texto.chars().collect::<Vec<_>>())
+        .into_iter()
+        .collect();
+    limpio.lines().any(|l| {
+        let l = l.trim_start();
+        ["int ", "void "].iter().any(|tipo| {
+            l.strip_prefix(tipo)
+                .map(str::trim_start)
+                .and_then(|r| r.strip_prefix("main"))
+                .is_some_and(|r| r.trim_start().starts_with('('))
+        })
+    })
+}
+
 pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Option<String> {
     use crate::proyecto::shell_quote as q;
     let rel = |x: &Path| p.relativa(x).replace('\\', "/");
@@ -265,6 +285,7 @@ pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Op
                             .unwrap_or_default();
                         !matches!(n.as_str(), "main.c" | "prueba.c" | "holden_mocks.c")
                             && !n.starts_with('.')
+                            && !define_main(x)
                     })
                     .collect()
             })

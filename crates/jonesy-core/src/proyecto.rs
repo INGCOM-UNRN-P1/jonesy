@@ -690,10 +690,22 @@ mod tests {
         );
         // mem-trace del ejercicio: su main.c, sus fuentes y los de las bibliotecas.
         std::fs::write(ej.join("lista.c"), "").unwrap();
+        // Unas pruebas con otro nombre tienen su propio main: no se compilan con el programa.
+        std::fs::write(
+            ej.join("pruebas.c"),
+            "/* int main(void) en un comentario no cuenta */\nint main(int argc, char *argv[])\n{\n    return 0;\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            ej.join("utiles.c"),
+            "/* int main(void) */\nint doble(int x) { return 2 * x; }\n",
+        )
+        .unwrap();
         std::fs::write(dir.path().join("libs/arreglos/arreglos.c"), "").unwrap();
         let mt = crate::catscan::comando_memtrace(&p3, &main, &p3.raiz.join(".jonesy/memtrace"))
             .unwrap();
         assert!(mt.starts_with("mem-trace run ejercicios/ej1/main.c -I ejercicios/ej1 --cc-arg=ejercicios/ej1/lista.c"), "{mt}");
+        assert!(!mt.contains("pruebas.c") && mt.contains("utiles.c"), "{mt}");
         assert!(
             mt.contains("-I libs/memoria") && mt.contains("--cc-arg=libs/arreglos/arreglos.c"),
             "{mt}"
