@@ -2671,6 +2671,38 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     while !botones.is_empty() && ancho_botones(&botones) + 36 > r.width {
         botones.pop();
     }
+    // Con un aviso, que se lea entero: los botones se achican a su tecla («[F6]»),
+    // primero los de texto fijo y al final los que dicen algo del momento («Ver dónde
+    // falló», «Ejecutar < entrada.txt»); si todavía no entra, se descartan los últimos.
+    // Un aviso que no entraría ni sin botones (los largos también salen en su panel)
+    // los deja como están.
+    let necesario: u16 = izq.iter().map(|s| s.width() as u16).sum();
+    if app.mensaje.is_some() && necesario <= r.width {
+        let orden = [
+            Accion::Terminal,
+            Accion::PanelGit,
+            Accion::Compilar,
+            Accion::Probar,
+            Accion::GenerarDoc,
+            Accion::Ejecutar,
+            Accion::Depurar,
+        ];
+        for accion in orden {
+            if necesario + ancho_botones(&botones) <= r.width {
+                break;
+            }
+            for (t, a) in botones.iter_mut() {
+                if *a == accion {
+                    if let Some((tecla, _)) = t.split_once(' ') {
+                        *t = format!("{tecla}]");
+                    }
+                }
+            }
+        }
+        while !botones.is_empty() && necesario + ancho_botones(&botones) > r.width {
+            botones.pop();
+        }
+    }
     let ancho_der = ancho_botones(&botones);
     let ancho_izq = r.width.saturating_sub(ancho_der);
     f.render_widget(

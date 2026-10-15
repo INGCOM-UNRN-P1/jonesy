@@ -3725,3 +3725,24 @@ fn atajos_que_llegan_en_cualquier_terminal() {
     let p = pantalla(&mut a, 160, 40);
     assert!(p.contains("Buscar en el proyecto"), "{p}");
 }
+
+#[test]
+fn el_aviso_de_la_barra_de_estado_se_lee_entero() {
+    let dir = proyecto(&[
+        ("main.c", "int main(void) { return 0; }\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let aviso = "La compilación falló: 1 error(es); F1 explica el primero";
+    a.avisar(aviso, jonesy_tui::app::Nivel::Error);
+    let p = pantalla(&mut a, 100, 30);
+    let estado = p.lines().last().unwrap();
+    assert!(estado.contains(aviso), "{estado}");
+    // Los botones quedan con su tecla.
+    assert!(estado.contains("[F6]"), "{estado}");
+    // Sin aviso vuelven a tener su nombre.
+    a.mensaje = None;
+    let p = pantalla(&mut a, 100, 30);
+    assert!(p.lines().last().unwrap().contains("[F6 Compilar]"), "{p}");
+}
