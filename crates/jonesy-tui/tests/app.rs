@@ -1678,6 +1678,56 @@ fn revisar_memoria_explica_errores_y_fugas_en_su_linea() {
 }
 
 #[test]
+#[cfg(unix)]
+fn revisar_la_memoria_de_un_programa_que_lee_del_teclado() {
+    for herramienta in ["gcc", "valgrind"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    // Sin teclado, scanf recibiría EOF y el programa no llegaría al malloc.
+    let codigo = "#include <stdio.h>\n#include <stdlib.h>\n\nint main(void)\n{\n    int n = 0;\n    if (scanf(\"%d\", &n) != 1) {\n        return 2;\n    }\n    int *v = malloc(n * sizeof *v);\n    printf(\"pedí %d\\n\", n);\n    return v == NULL;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    pantalla(&mut a, 120, 40);
+    a.accion(jonesy_tui::accion::Accion::RevisarMemoria);
+    assert_eq!(a.pestana, Pestana::Ejecucion);
+    assert_eq!(a.foco, Foco::Inferior);
+    // Se escribe la entrada en la terminal (valgrind no muestra nada: su informe va a
+    // un archivo).
+    std::thread::sleep(Duration::from_millis(1500));
+    escribir(&mut a, "4");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Memoria:"))
+    });
+    assert_eq!(
+        a.mensaje.as_ref().unwrap().0,
+        "Memoria: 1 error(es), 16 bytes perdidos (mirá Problemas)."
+    );
+    assert!(a.ejecucion.as_ref().unwrap().texto().contains("pedí 4"));
+    assert!(
+        a.diag_compilador.iter().any(|d| d.linea == 10
+            && d.resumen
+                .as_deref()
+                .unwrap_or("")
+                .starts_with("Fuga de memoria: 16 bytes")),
+        "{:#?}",
+        a.diag_compilador
+    );
+}
+
+#[test]
 fn menus_por_letra_y_separadores() {
     use jonesy_tui::accion::Accion;
     let dir = proyecto(&[("main.c", MAIN)]);

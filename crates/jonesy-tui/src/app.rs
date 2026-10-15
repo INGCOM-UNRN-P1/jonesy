@@ -844,6 +844,9 @@ pub struct App {
     pub argumentos: HashMap<String, String>,
     /// Archivo donde /usr/bin/time deja la medida de la última ejecución.
     medida: Option<PathBuf>,
+    /// Revisar la memoria de un programa que lee del teclado: corre en la pestaña
+    /// Ejecución y valgrind deja el informe en este archivo, que se lee al terminar.
+    informe_memoria: Option<PathBuf>,
     /// Vigilancia de un programa que usa la CPU sin mostrar nada (¿ciclo infinito?).
     vigia: Option<Vigia>,
 
@@ -1034,6 +1037,7 @@ impl App {
             entradas: HashMap::new(),
             argumentos: HashMap::new(),
             medida: None,
+            informe_memoria: None,
             vigia: None,
             repo,
             git_estado: None,
@@ -5935,6 +5939,9 @@ impl App {
             return;
         }
         let activo = self.activo_ruta();
+        if self.revisar_memoria_interactiva(activo.as_deref()) {
+            return;
+        }
         let Some(comando) = self.proyecto.comando_memoria(activo.as_deref()) else {
             self.avisar(
                 "No sé qué revisar: abrí un .c o agregá un objetivo «memcheck» al Makefile.",
@@ -5943,6 +5950,74 @@ impl App {
             return;
         };
         self.correr_en_panel_con(comando, Lectura::Memoria);
+    }
+
+    /// valgrind sobre el programa (no `make memcheck`) con sus argumentos y su entrada:
+    /// con un archivo de entrada elegido corre en el panel; si el programa lee del teclado
+    /// y no hay archivo, en la pestaña Ejecución para poder escribirle (sin teclado
+    /// recibiría EOF), y el informe se lee al terminar. false si no corresponde.
+    fn revisar_memoria_interactiva(&mut self, activo: Option<&Path>) -> bool {
+        let Some(a) = activo else { return false };
+        let clave = self.clave_ejercicio().unwrap_or_default();
+        let entrada = self.entradas.get(&clave).filter(|p| p.is_file()).cloned();
+        if entrada.is_none() && !self.proyecto.programa_lee_entrada(a) {
+            return false;
+        }
+        let informe =
+            std::env::temp_dir().join(format!("jonesy-valgrind-{}.txt", std::process::id()));
+        let _ = std::fs::remove_file(&informe);
+        let Some(comando) = self.proyecto.comando_memoria_interactiva(Some(a), &informe) else {
+            return false;
+        };
+        let args: String = self
+            .argumentos_de_ejercicio()
+            .iter()
+            .map(|x| format!(" {}", jonesy_core::proyecto::shell_quote(x)))
+            .collect();
+        match entrada {
+            Some(e) => {
+                let Some(comando) = self.proyecto.comando_memoria(Some(a)) else {
+                    return false;
+                };
+                let redir = jonesy_core::proyecto::shell_quote(&e.to_string_lossy());
+                self.correr_en_panel_con(format!("{comando}{args} < {redir}"), Lectura::Memoria);
+            }
+            None => {
+                self.correr_en_deck(format!("{comando}{args}"));
+                if self.ejecucion.is_some() {
+                    self.informe_memoria = Some(informe);
+                    self.avisar(
+                        "El programa corre con valgrind en la terminal: escribí su entrada; el informe aparece al terminar.",
+                        Nivel::Info,
+                    );
+                }
+            }
+        }
+        true
+    }
+
+    /// Terminó el programa que corría con valgrind en la terminal: su informe.
+    fn fin_memoria_interactiva(&mut self) {
+        let Some(informe) = self.informe_memoria.take() else {
+            return;
+        };
+        let log = std::fs::read_to_string(&informe).unwrap_or_default();
+        let _ = std::fs::remove_file(&informe);
+        let texto = self
+            .ejecucion
+            .as_ref()
+            .map(|d| d.texto())
+            .unwrap_or_default();
+        let r = jonesy_core::valgrind::interpretar(&log, &self.proyecto.raiz);
+        if r.reconocida {
+            self.fin_memoria(r, &texto);
+        } else {
+            self.diag_compilador = diagnostico::parsear_gcc(&texto, &self.proyecto.raiz);
+            self.avisar(
+                "valgrind no llegó a correr el programa: mirá la pestaña Ejecución.",
+                Nivel::Error,
+            );
+        }
     }
 
     fn fin_memoria(&mut self, r: jonesy_core::valgrind::Resultado, salida: &str) {
@@ -7760,6 +7835,9 @@ impl App {
         }
         if self.vigilar_programa && self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_cuelgue();
+        }
+        if self.informe_memoria.is_some() && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
+            self.fin_memoria_interactiva();
         }
         if self.git_remoto.is_some() && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             let op = self.git_remoto.take().unwrap();

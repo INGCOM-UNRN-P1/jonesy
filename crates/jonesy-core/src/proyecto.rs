@@ -409,17 +409,56 @@ impl Proyecto {
     /// Revisar la memoria con valgrind: el objetivo `memcheck` del módulo (o de la raíz);
     /// si no hay, compilar y correr el programa del archivo activo bajo valgrind.
     pub fn comando_memoria(&self, activo: Option<&Path>) -> Option<String> {
+        if let Some(m) = self.modulo_memcheck(activo) {
+            return Some(m.comando("memcheck"));
+        }
+        self.memoria_del_programa(activo, "valgrind --leak-check=full --error-exitcode=1")
+    }
+
+    /// valgrind sobre el programa (no `make memcheck`) con el informe en `informe`, para
+    /// correrlo en la terminal cuando el programa lee del teclado. El programa queda al
+    /// final, para agregarle argumentos y una redirección.
+    pub fn comando_memoria_interactiva(
+        &self,
+        activo: Option<&Path>,
+        informe: &Path,
+    ) -> Option<String> {
+        if self.modulo_memcheck(activo).is_some() {
+            return None;
+        }
+        self.memoria_del_programa(
+            activo,
+            &format!(
+                "valgrind --leak-check=full --error-exitcode=1 --log-file={}",
+                shell_quote(&informe.to_string_lossy())
+            ),
+        )
+    }
+
+    /// ¿El programa del archivo activo lee de la entrada estándar (scanf, getchar, fgets
+    /// de stdin…)?
+    pub fn programa_lee_entrada(&self, activo: &Path) -> bool {
+        let Some(f) = crate::catscan::fuentes_del_programa(self, activo) else {
+            return false;
+        };
+        std::iter::once(&f.main)
+            .chain(&f.otras)
+            .filter_map(|p| std::fs::read_to_string(p).ok())
+            .any(|t| lee_entrada(&t))
+    }
+
+    fn modulo_memcheck(&self, activo: Option<&Path>) -> Option<&crate::estructura::Modulo> {
         use crate::estructura::TipoModulo;
         let modulo = activo.and_then(|a| self.estructura.modulo_de(a));
-        if let Some(m) = modulo.filter(|m| m.tiene("memcheck")).or_else(|| {
+        modulo.filter(|m| m.tiene("memcheck")).or_else(|| {
             self.estructura
                 .modulos
                 .iter()
                 .find(|m| m.tipo == TipoModulo::Raiz && m.tiene("memcheck"))
-        }) {
-            return Some(m.comando("memcheck"));
-        }
-        let valgrind = "valgrind --leak-check=full --error-exitcode=1";
+        })
+    }
+
+    fn memoria_del_programa(&self, activo: Option<&Path>, valgrind: &str) -> Option<String> {
         let compilar = self.comando_compilar(activo)?;
         if let Some(m) = self.modulo_activo(activo) {
             let p = m.programa.as_ref()?;
@@ -694,6 +733,23 @@ pub fn comillas_para(interprete: &str, s: &str) -> String {
     }
 }
 
+/// ¿El código lee de la entrada estándar? `scanf(` (no `sscanf`/`fscanf`), `getchar(`,
+/// `gets(`, y `fgets`/`fscanf`/`getline`/`getc`/`fgetc`/`fread` con `stdin`.
+pub fn lee_entrada(codigo: &str) -> bool {
+    let llamada = |nombre: &str| {
+        codigo.match_indices(nombre).any(|(i, _)| {
+            let antes = codigo[..i].chars().next_back();
+            let despues = codigo[i + nombre.len()..].trim_start();
+            !antes.is_some_and(|c| c.is_alphanumeric() || c == '_') && despues.starts_with('(')
+        })
+    };
+    ["scanf", "getchar", "gets"].iter().any(|f| llamada(f))
+        || (codigo.contains("stdin")
+            && ["fgets", "fscanf", "getline", "getc", "fgetc", "fread"]
+                .iter()
+                .any(|f| llamada(f)))
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -707,6 +763,32 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn programas_que_leen_de_la_entrada() {
+        assert!(lee_entrada("int n; scanf(\"%d\", &n);"));
+        assert!(lee_entrada("int c = getchar ();"));
+        assert!(lee_entrada("fgets(linea, sizeof linea, stdin);"));
+        assert!(!lee_entrada(
+            "sscanf(texto, \"%d\", &n); fgets(l, 10, archivo);"
+        ));
+        assert!(!lee_entrada("int mi_scanf(void); printf(\"hola\");"));
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(
+            d.path().join("eco.c"),
+            "int main(void) { return getchar(); }\n",
+        )
+        .unwrap();
+        std::fs::write(d.path().join("hola.c"), "int main(void) { return 0; }\n").unwrap();
+        let p = Proyecto::abrir(d.path());
+        assert!(p.programa_lee_entrada(&d.path().join("eco.c")));
+        assert!(!p.programa_lee_entrada(&d.path().join("hola.c")));
+        let informe = d.path().join("informe.txt");
+        let c = p
+            .comando_memoria_interactiva(Some(&d.path().join("eco.c")), &informe)
+            .unwrap();
+        assert!(c.contains("--log-file=") && c.ends_with("./eco"), "{c}");
+    }
 
     #[test]
     fn pareja_de_c_y_h() {
