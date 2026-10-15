@@ -888,6 +888,7 @@ mod tests {
         assert_eq!(m[1].nivel, 1);
     }
 
+    #[cfg(unix)]
     fn esperar(g: &mut Gdb, mut pred: impl FnMut(&EventoGdb) -> bool) -> Vec<EventoGdb> {
         let fin = Instant::now() + Duration::from_secs(10);
         let mut todos = vec![];

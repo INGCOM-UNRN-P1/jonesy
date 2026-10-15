@@ -649,6 +649,7 @@ pub enum OpRemota {
 }
 
 /// Estado de la vigilancia de cuelgues (ver `App::vigilar_cuelgue`).
+#[allow(dead_code)]
 struct Vigia {
     texto: u64,
     cpu: u64,
