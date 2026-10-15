@@ -124,6 +124,12 @@ def atender(linea):
 
 
 def main():
+    if hasattr(sys.stdin, "reconfigure"):
+        sys.stdin.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
     # La salida de los plugins (print) no debe corromper el canal: va a stderr.
     canal = sys.stdout
     sys.stdout = sys.stderr

@@ -340,6 +340,8 @@ impl Supervisor {
         let mut hijo = Command::new(&self.python)
             .arg("-I")
             .arg(script.ruta())
+            .env("PYTHONUTF8", "1")
+            .env("PYTHONIOENCODING", "utf-8")
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -676,6 +678,7 @@ def comando_contar_lineas(ctx):
             Err(ErrorPlugin::TiempoAgotado)
         );
         assert!(!s.activo());
+        s.tiempo_limite = TIEMPO_LIMITE;
         let ok = ComandoPlugin {
             plugin: "colgado".into(),
             comando: "ok".into(),
