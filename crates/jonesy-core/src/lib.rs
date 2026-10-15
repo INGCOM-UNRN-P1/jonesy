@@ -4,6 +4,7 @@
 //! (`--headless`, benchmarks) del binario.
 
 pub mod arreglos;
+pub mod asan;
 pub mod buffer;
 pub mod busqueda;
 pub mod casos;

@@ -23,10 +23,10 @@ pub struct Resultado {
 
 /// Un marco de la pila: función y ubicación (`main (mem.c:14)`).
 #[derive(Debug, Clone)]
-struct Marco {
-    funcion: String,
-    archivo: String,
-    linea: usize,
+pub(crate) struct Marco {
+    pub(crate) funcion: String,
+    pub(crate) archivo: String,
+    pub(crate) linea: usize,
 }
 
 fn marco(texto: &str) -> Option<Marco> {
@@ -63,7 +63,7 @@ fn contenido(linea: &str) -> Option<&str> {
 
 /// Ubica `archivo` (valgrind sólo da el nombre) en el directorio donde corrió el
 /// programa o en el proyecto.
-fn ubicar(archivo: &str, base: &Path, raiz: &Path) -> Option<PathBuf> {
+pub(crate) fn ubicar(archivo: &str, base: &Path, raiz: &Path) -> Option<PathBuf> {
     let directo = base.join(archivo);
     if directo.is_file() {
         return Some(directo);
@@ -102,12 +102,12 @@ fn ubicar(archivo: &str, base: &Path, raiz: &Path) -> Option<PathBuf> {
 }
 
 /// Primer marco que cae en un archivo del proyecto.
-fn propio(pila: &[Marco], base: &Path, raiz: &Path) -> Option<(PathBuf, Marco)> {
+pub(crate) fn propio(pila: &[Marco], base: &Path, raiz: &Path) -> Option<(PathBuf, Marco)> {
     pila.iter()
         .find_map(|m| ubicar(&m.archivo, base, raiz).map(|p| (p, m.clone())))
 }
 
-fn donde(pila: &[Marco], base: &Path, raiz: &Path) -> Option<String> {
+pub(crate) fn donde(pila: &[Marco], base: &Path, raiz: &Path) -> Option<String> {
     propio(pila, base, raiz).map(|(p, m)| {
         format!(
             "{}:{} ({}())",

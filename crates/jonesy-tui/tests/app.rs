@@ -1728,6 +1728,44 @@ fn revisar_la_memoria_de_un_programa_que_lee_del_teclado() {
 }
 
 #[test]
+#[cfg(unix)]
+fn revisar_memoria_con_un_informe_de_addresssanitizer() {
+    // Sin valgrind, Revisar la memoria compila con -fsanitize=address; acá un objetivo
+    // memcheck que da el informe de ASan (el de valgrind no se reconoce) basta.
+    if std::process::Command::new("valgrind")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let informe = include_str!("../../jonesy-core/tests/datos/asan_salida.txt");
+    let dir = proyecto(&[
+        ("m.c", "/* … */\n"),
+        ("asan.txt", informe),
+        ("Makefile", "memcheck:\n\t@cat asan.txt; exit 1\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("m.c"), true);
+    a.accion(jonesy_tui::accion::Accion::RevisarMemoria);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Memoria:"))
+    });
+    assert_eq!(
+        a.mensaje.as_ref().unwrap().0,
+        "Memoria: 8 error(es), 16 bytes perdidos (mirá Problemas)."
+    );
+    assert!(a
+        .diag_compilador
+        .iter()
+        .any(|d| d.linea == 16 && d.resumen.as_deref().unwrap_or("").starts_with("free doble")));
+    assert_eq!(a.pestana, Pestana::Problemas);
+}
+
+#[test]
 fn menus_por_letra_y_separadores() {
     use jonesy_tui::accion::Accion;
     let dir = proyecto(&[("main.c", MAIN)]);

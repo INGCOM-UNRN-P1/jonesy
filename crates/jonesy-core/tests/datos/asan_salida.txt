@@ -1,0 +1,143 @@
+=================================================================
+==896757==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x7c14411e001c at pc 0x000000400668 bp 0x7ffc5c8b3260 sp 0x7ffc5c8b3250
+WRITE of size 4 at 0x7c14411e001c thread T0
+    #0 0x000000400667 in main /home/alumno/tp/m.c:14
+    #1 0x7ff44220a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #2 0x7ff44220a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #3 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+0x7c14411e001c is located 0 bytes after 12-byte region [0x7c14411e0010,0x7c14411e001c)
+allocated by thread T0 here:
+    #0 0x7ff44253234f in malloc (/lib64/libasan.so.8+0x13234f)
+    #1 0x000000400531 in pedir /home/alumno/tp/m.c:7
+    #2 0x0000004005c4 in main /home/alumno/tp/m.c:12
+    #3 0x7ff44220a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #4 0x7ff44220a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #5 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+SUMMARY: AddressSanitizer: heap-buffer-overflow /home/alumno/tp/m.c:14 in main
+==896757==ABORTING
+=================================================================
+==896761==ERROR: AddressSanitizer: heap-use-after-free on address 0x7b590f7e0010 at pc 0x0000004006c0 bp 0x7fff321fdce0 sp 0x7fff321fdcd0
+WRITE of size 4 at 0x7b590f7e0010 thread T0
+    #0 0x0000004006bf in main /home/alumno/tp/m.c:15
+    #1 0x7f391080a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #2 0x7f391080a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #3 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+0x7b590f7e0010 is located 0 bytes inside of 12-byte region [0x7b590f7e0010,0x7b590f7e001c)
+freed by thread T0 here:
+    #0 0x7f3910b3112f in free.part.0 (/lib64/libasan.so.8+0x13112f)
+    #1 0x000000400685 in main /home/alumno/tp/m.c:15
+    #2 0x7f391080a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #3 0x7f391080a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #4 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+previously allocated by thread T0 here:
+    #0 0x7f3910b3234f in malloc (/lib64/libasan.so.8+0x13234f)
+    #1 0x000000400531 in pedir /home/alumno/tp/m.c:7
+    #2 0x0000004005c4 in main /home/alumno/tp/m.c:12
+    #3 0x7f391080a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #4 0x7f391080a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #5 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+SUMMARY: AddressSanitizer: heap-use-after-free /home/alumno/tp/m.c:15 in main
+==896761==ABORTING
+=================================================================
+==896764==ERROR: AddressSanitizer: attempting double-free on 0x7b78fede0010 in thread T0:
+    #0 0x7f590013112f in free.part.0 (/lib64/libasan.so.8+0x13112f)
+    #1 0x0000004006f3 in main /home/alumno/tp/m.c:16
+    #2 0x7f58ffe0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #3 0x7f58ffe0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #4 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+0x7b78fede0010 is located 0 bytes inside of 12-byte region [0x7b78fede0010,0x7b78fede001c)
+freed by thread T0 here:
+    #0 0x7f590013112f in free.part.0 (/lib64/libasan.so.8+0x13112f)
+    #1 0x0000004006e4 in main /home/alumno/tp/m.c:16
+    #2 0x7f58ffe0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #3 0x7f58ffe0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #4 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+previously allocated by thread T0 here:
+    #0 0x7f590013234f in malloc (/lib64/libasan.so.8+0x13234f)
+    #1 0x000000400531 in pedir /home/alumno/tp/m.c:7
+    #2 0x0000004005c4 in main /home/alumno/tp/m.c:12
+    #3 0x7f58ffe0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #4 0x7f58ffe0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #5 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+SUMMARY: AddressSanitizer: double-free /home/alumno/tp/m.c:16 in main
+==896764==ABORTING
+=================================================================
+==896767==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7bec9f5f0048 at pc 0x000000400735 bp 0x7ffdde356300 sp 0x7ffdde3562f0
+WRITE of size 4 at 0x7bec9f5f0048 thread T0
+    #0 0x000000400734 in main /home/alumno/tp/m.c:17
+    #1 0x7feca1a0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #2 0x7feca1a0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #3 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+Address 0x7bec9f5f0048 is located in stack of thread T0 at offset 72 in frame
+    #0 0x000000400543 in main /home/alumno/tp/m.c:11
+
+    [48, 52) 'x' (line 19)
+    [64, 72) 'a' (line 17) <== Memory access at offset 72 overflows this variable
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: stack-buffer-overflow /home/alumno/tp/m.c:17 in main
+==896767==ABORTING
+AddressSanitizer:DEADLYSIGNAL
+=================================================================
+==896770==ERROR: AddressSanitizer: SEGV on unknown address 0x000000000000 (pc 0x0000004007eb bp 0x7ffcaf099410 sp 0x7ffcaf099360 T0)
+==896770==The signal is caused by a WRITE memory access.
+==896770==Hint: address points to the zero page.
+    #0 0x0000004007eb in main /home/alumno/tp/m.c:18
+    #1 0x7ff3739eb680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #2 0x7ff3739eb797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #3 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+==896770==Register values:
+rax = 0x0000000000000000  rbx = 0x00007bf3715f0000  rcx = 0x0000000000000003  rdx = 0x0000000000000000  
+rdi = 0x0000100015e0b718  rsi = 0x0000100015e0b700  rbp = 0x00007ffcaf099410  rsp = 0x00007ffcaf099360  
+ r8 = 0x00000fff95e1371c   r9 = 0x00000fff95e1371c  r10 = 0x0000000000000001  r11 = 0x0000000000000005  
+r12 = 0x00007bf3715f0060  r13 = 0x00000f7e6e2be000  r14 = 0x00007ffcaf099390  r15 = 0x0000000000402db8  
+AddressSanitizer can not provide additional info.
+SUMMARY: AddressSanitizer: SEGV /home/alumno/tp/m.c:18 in main
+==896770==ABORTING
+=================================================================
+==896773==ERROR: AddressSanitizer: attempting free on address which was not malloc()-ed: 0x7b1d6b3f0030 in thread T0
+    #0 0x7f1d6db3112f in free.part.0 (/lib64/libasan.so.8+0x13112f)
+    #1 0x000000400818 in main /home/alumno/tp/m.c:19
+    #2 0x7f1d6d80a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #3 0x7f1d6d80a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #4 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+Address 0x7b1d6b3f0030 is located in stack of thread T0 at offset 48 in frame
+    #0 0x000000400543 in main /home/alumno/tp/m.c:11
+
+    [48, 52) 'x' (line 19) <== Memory access at offset 48 is inside this variable
+    [64, 72) 'a' (line 17)
+HINT: this may be a false positive if your program uses some custom stack unwind mechanism, swapcontext or vfork
+      (longjmp and C++ exceptions *are* supported)
+SUMMARY: AddressSanitizer: bad-free /home/alumno/tp/m.c:19 in main
+==896773==ABORTING
+
+=================================================================
+==896776==ERROR: LeakSanitizer: detected memory leaks
+
+Direct leak of 12 byte(s) in 1 object(s) allocated from:
+    #0 0x7efc9bd3234f in malloc (/lib64/libasan.so.8+0x13234f)
+    #1 0x000000400531 in pedir /home/alumno/tp/m.c:7
+    #2 0x0000004005c4 in main /home/alumno/tp/m.c:12
+    #3 0x7efc9ba0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #4 0x7efc9ba0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #5 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+Direct leak of 4 byte(s) in 1 object(s) allocated from:
+    #0 0x7efc9bd3234f in malloc (/lib64/libasan.so.8+0x13234f)
+    #1 0x00000040083d in main /home/alumno/tp/m.c:20
+    #2 0x7efc9ba0a680 in __libc_start_call_main (/lib64/libc.so.6+0x3680)
+    #3 0x7efc9ba0a797 in __libc_start_main@GLIBC_2.2.5 (/lib64/libc.so.6+0x3797)
+    #4 0x000000400454 in _start (/home/alumno/tp/m+0x400454)
+
+SUMMARY: AddressSanitizer: 16 byte(s) leaked in 2 allocation(s).

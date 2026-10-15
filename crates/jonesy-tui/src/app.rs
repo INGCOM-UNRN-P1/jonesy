@@ -433,6 +433,15 @@ enum Lectura {
     Memoria,
 }
 
+/// Dónde queda el informe de memoria de un programa que corre en la terminal.
+#[derive(Debug, Clone)]
+enum InformeMemoria {
+    /// valgrind lo escribe en este archivo (`--log-file`).
+    Valgrind(PathBuf),
+    /// AddressSanitizer lo escribe en la terminal, con la salida del programa.
+    Asan,
+}
+
 #[derive(Debug, Clone)]
 enum Tarea {
     Compilar {
@@ -845,8 +854,8 @@ pub struct App {
     /// Archivo donde /usr/bin/time deja la medida de la última ejecución.
     medida: Option<PathBuf>,
     /// Revisar la memoria de un programa que lee del teclado: corre en la pestaña
-    /// Ejecución y valgrind deja el informe en este archivo, que se lee al terminar.
-    informe_memoria: Option<PathBuf>,
+    /// Ejecución y el informe se lee al terminar.
+    informe_memoria: Option<InformeMemoria>,
     /// Vigilancia de un programa que usa la CPU sin mostrar nada (¿ciclo infinito?).
     vigia: Option<Vigia>,
 
@@ -4219,7 +4228,15 @@ impl App {
                     }
                 }
                 if lectura == Lectura::Memoria {
-                    let r = jonesy_core::valgrind::interpretar(&salida, &self.proyecto.raiz);
+                    let mut r = jonesy_core::valgrind::interpretar(&salida, &self.proyecto.raiz);
+                    if !r.reconocida {
+                        // Sin valgrind: el programa compilado con AddressSanitizer (o un
+                        // `make memcheck` con sanitizers). Sin informe y terminado bien,
+                        // no hubo errores.
+                        r = jonesy_core::asan::interpretar(&salida, &self.proyecto.raiz);
+                        r.reconocida |=
+                            codigo == Some(0) && !jonesy_core::proyecto::en_path("valgrind");
+                    }
                     if r.reconocida {
                         self.fin_memoria(r, &salida);
                         return;
@@ -5932,10 +5949,7 @@ impl App {
     /// el programa, con cada error y fuga explicados en su línea.
     pub fn revisar_memoria(&mut self) {
         if !jonesy_core::proyecto::en_path("valgrind") {
-            self.avisar(
-                "valgrind no está instalado (sudo dnf install valgrind / sudo apt install valgrind). Sin valgrind, cat-scan (Alt+M al depurar) muestra el heap.",
-                Nivel::Aviso,
-            );
+            self.revisar_memoria_con_asan();
             return;
         }
         let activo = self.activo_ruta();
@@ -5950,6 +5964,62 @@ impl App {
             return;
         };
         self.correr_en_panel_con(comando, Lectura::Memoria);
+    }
+
+    /// Sin valgrind (Windows, macOS): el programa compilado con AddressSanitizer, si el
+    /// compilador lo trae; si no, cat-scan.
+    fn revisar_memoria_con_asan(&mut self) {
+        let Some(cc) = jonesy_core::asan::compilador() else {
+            self.avisar(
+                if cfg!(windows) {
+                    "En Windows no hay valgrind y el compilador no trae AddressSanitizer (clang de MSYS2 CLANG64 sí). Mientras tanto, cat-scan (F5 y Alt+M) muestra el heap paso a paso."
+                } else {
+                    "valgrind no está instalado (sudo dnf install valgrind / sudo apt install valgrind) y el compilador no trae AddressSanitizer. Mientras tanto, cat-scan (F5 y Alt+M) muestra el heap paso a paso."
+                },
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let activo = self.activo_ruta();
+        let salida = self.proyecto.dir_estado().join("asan");
+        let _ = std::fs::create_dir_all(&salida);
+        let Some(comando) = activo
+            .as_deref()
+            .and_then(|a| jonesy_core::asan::comando(&self.proyecto, a, cc, &salida))
+        else {
+            self.avisar(
+                "No sé qué revisar: abrí un .c del programa (el ejercicio con su main.c).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let args: String = self
+            .argumentos_de_ejercicio()
+            .iter()
+            .map(|x| format!(" {}", jonesy_core::proyecto::shell_quote(x)))
+            .collect();
+        let clave = self.clave_ejercicio().unwrap_or_default();
+        let entrada = self.entradas.get(&clave).filter(|p| p.is_file()).cloned();
+        let lee = activo
+            .as_deref()
+            .is_some_and(|a| self.proyecto.programa_lee_entrada(a));
+        match entrada {
+            Some(e) => {
+                let redir = jonesy_core::proyecto::shell_quote(&e.to_string_lossy());
+                self.correr_en_panel_con(format!("{comando}{args} < {redir}"), Lectura::Memoria);
+            }
+            None if lee => {
+                self.correr_en_deck(format!("{comando}{args}"));
+                if self.ejecucion.is_some() {
+                    self.informe_memoria = Some(InformeMemoria::Asan);
+                    self.avisar(
+                        "El programa corre con AddressSanitizer en la terminal: escribí su entrada; el informe aparece al terminar.",
+                        Nivel::Info,
+                    );
+                }
+            }
+            None => self.correr_en_panel_con(format!("{comando}{args}"), Lectura::Memoria),
+        }
     }
 
     /// valgrind sobre el programa (no `make memcheck`) con sus argumentos y su entrada:
@@ -5985,7 +6055,7 @@ impl App {
             None => {
                 self.correr_en_deck(format!("{comando}{args}"));
                 if self.ejecucion.is_some() {
-                    self.informe_memoria = Some(informe);
+                    self.informe_memoria = Some(InformeMemoria::Valgrind(informe));
                     self.avisar(
                         "El programa corre con valgrind en la terminal: escribí su entrada; el informe aparece al terminar.",
                         Nivel::Info,
@@ -6001,14 +6071,24 @@ impl App {
         let Some(informe) = self.informe_memoria.take() else {
             return;
         };
-        let log = std::fs::read_to_string(&informe).unwrap_or_default();
-        let _ = std::fs::remove_file(&informe);
         let texto = self
             .ejecucion
             .as_ref()
             .map(|d| d.texto())
             .unwrap_or_default();
-        let r = jonesy_core::valgrind::interpretar(&log, &self.proyecto.raiz);
+        let r = match informe {
+            InformeMemoria::Valgrind(archivo) => {
+                let log = std::fs::read_to_string(&archivo).unwrap_or_default();
+                let _ = std::fs::remove_file(&archivo);
+                jonesy_core::valgrind::interpretar(&log, &self.proyecto.raiz)
+            }
+            InformeMemoria::Asan => {
+                let mut r = jonesy_core::asan::interpretar(&texto, &self.proyecto.raiz);
+                // Sin informe pero el programa terminó bien: no hubo errores.
+                r.reconocida |= texto.contains("[proceso terminado con código 0]");
+                r
+            }
+        };
         if r.reconocida {
             self.fin_memoria(r, &texto);
         } else {
