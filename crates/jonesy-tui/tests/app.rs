@@ -2337,7 +2337,10 @@ fn buscar_en_el_proyecto_con_panel_de_resultados() {
     assert_eq!(a.pestana, Pestana::Busqueda);
     let p = pantalla(&mut a, 120, 30);
     assert!(p.contains("Búsqueda (3)"), "{p}");
-    assert!(p.contains("libs/a/a.c:1"), "{p}");
+    assert!(
+        p.contains("libs/a/a.c:1") || p.contains(r"libs\a\a.c:1"),
+        "{p}"
+    );
     // Palabra completa: subtotal no cuenta. Alt+F llega en cualquier terminal.
     tecla(&mut a, KeyCode::Char('f'), KeyModifiers::ALT);
     tecla(&mut a, KeyCode::Char('p'), KeyModifiers::ALT);
