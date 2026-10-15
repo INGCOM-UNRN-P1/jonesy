@@ -22,6 +22,7 @@ Métodos: ping, cargar {rutas}, al_guardar {archivo, texto}, comandos, ejecutar
 
 import importlib.util
 import json
+import os
 import sys
 import traceback
 
@@ -46,7 +47,7 @@ def cargar(rutas):
     PLUGINS.clear()
     cargados, errores = [], []
     for ruta in rutas:
-        nombre = ruta.rsplit("/", 1)[-1].removesuffix(".py")
+        nombre = os.path.splitext(os.path.basename(ruta))[0]
         try:
             spec = importlib.util.spec_from_file_location(f"jonesy_plugin_{nombre}", ruta)
             modulo = importlib.util.module_from_spec(spec)
