@@ -107,10 +107,21 @@ impl Bloque {
 }
 
 impl Traza {
+    /// Carga `trace.json`; si mem-trace corrió sobre los fuentes juntados (ver
+    /// [`comando_memtrace`]), cada línea vuelve a su archivo.
     pub fn cargar(ruta: &Path) -> Result<Traza, String> {
         let texto =
             std::fs::read_to_string(ruta).map_err(|e| format!("{}: {e}", ruta.display()))?;
-        serde_json::from_str(&texto).map_err(|e| format!("trace.json inválido: {e}"))
+        let mut t: Traza =
+            serde_json::from_str(&texto).map_err(|e| format!("trace.json inválido: {e}"))?;
+        let tramos: Option<Vec<Tramo>> = ruta
+            .parent()
+            .and_then(|d| std::fs::read_to_string(d.join(AMALGAMA)).ok())
+            .and_then(|j| serde_json::from_str(&j).ok());
+        if let Some(tramos) = tramos.filter(|_| t.meta.source.ends_with("programa.c")) {
+            t.desamalgamar(&tramos);
+        }
+        Ok(t)
     }
 
     /// Paso que corresponde a una parada del depurador en `funcion` / `linea` con
@@ -246,9 +257,6 @@ pub fn resumen_final(t: &Traza) -> Vec<(Tono, String)> {
     v
 }
 
-/// Comando de mem-trace para el programa del archivo activo: un `.c` suelto, o el
-/// `main.c` de un ejercicio con Makefile junto con los demás fuentes del módulo y los de
-/// las bibliotecas que usa (por `--cc-arg`, con sus `-I`). None si no hay programa.
 /// ¿Define `main`? (Las pruebas con otro nombre que `prueba.c` tienen su propio `main`, y
 /// compilarlas junto al programa da «multiple definition of main».)
 fn define_main(ruta: &Path) -> bool {
@@ -342,43 +350,45 @@ pub fn fuentes_del_programa(p: &crate::Proyecto, activo: &Path) -> Option<Fuente
     }
 }
 
+/// Comando de mem-trace para el programa del archivo activo: un `.c` suelto, o el
+/// `main.c` de un ejercicio con Makefile junto con los demás fuentes del módulo y los de
+/// las bibliotecas que usa. None si no hay programa.
+///
+/// mem-trace sigue sólo el archivo que recibe: lo que se pide con malloc en otro `.c`
+/// no aparecía y los punteros a esos bloques salían «inválidos». Por eso los fuentes se
+/// juntan en uno solo (`salida/programa.c`) y [`Traza::cargar`] devuelve cada línea a su
+/// archivo con `salida/amalgama.json`. Si algún header propio no tiene guarda (incluirlo
+/// dos veces en un mismo archivo no compilaría), se pasan por separado con `--cc-arg`.
 pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Option<String> {
     use crate::proyecto::shell_quote as q;
     let rel = |x: &Path| p.relativa(x).replace('\\', "/");
-    let mut args: Vec<String> = vec![];
-    let fuente = match p.modulo_activo(Some(activo)) {
-        Some(m) => {
-            let main = m.dir.join("main.c");
-            if !main.is_file() {
-                return None;
-            }
-            args.push(format!("-I {}", q(&rel(&m.dir))));
-            for f in fuentes_de(&m.dir) {
-                args.push(format!("--cc-arg={}", q(&rel(&f))));
-            }
-            for lib in p.bibliotecas_de(m) {
-                let inc = if lib.dir.join("include").is_dir() {
-                    lib.dir.join("include")
-                } else {
-                    lib.dir.clone()
-                };
-                args.push(format!("-I {}", q(&rel(&inc))));
-                let src = if lib.dir.join("src").is_dir() {
-                    lib.dir.join("src")
-                } else {
-                    lib.dir.clone()
-                };
-                for f in fuentes_de(&src) {
-                    args.push(format!("--cc-arg={}", q(&rel(&f))));
+    let f = fuentes_del_programa(p, activo)?;
+    let mut includes = f.includes.clone();
+    for o in &f.otras {
+        if let Some(d) = o.parent().filter(|d| !includes.iter().any(|i| i == d)) {
+            includes.push(d.to_path_buf());
+        }
+    }
+    let mut args: Vec<String> = includes
+        .iter()
+        .map(|i| format!("-I {}", q(&rel(i))))
+        .collect();
+    let fuente = if f.otras.is_empty() {
+        f.main.clone()
+    } else {
+        match amalgamar(&f, salida, &includes) {
+            Some(a) => a,
+            None => {
+                for o in &f.otras {
+                    args.push(format!("--cc-arg={}", q(&rel(o))));
                 }
+                f.main.clone()
             }
-            main
         }
-        None if activo.extension().is_some_and(|e| e == "c") && p.makefile().is_none() => {
-            activo.to_path_buf()
-        }
-        None => return None,
     };
+    if fuente == f.main {
+        let _ = std::fs::remove_file(salida.join(AMALGAMA));
+    }
     Some(format!(
         "mem-trace run {} {} --outdir {} -o {} --max-steps 3000",
         q(&rel(&fuente)),
@@ -386,6 +396,143 @@ pub fn comando_memtrace(p: &crate::Proyecto, activo: &Path, salida: &Path) -> Op
         q(&rel(salida)),
         q(&rel(&salida.join("reporte.html")))
     ))
+}
+
+const AMALGAMA: &str = "amalgama.json";
+
+/// Un tramo del archivo juntado: desde qué línea (1…) y cuántas vienen de `archivo`.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, Deserialize)]
+struct Tramo {
+    desde: usize,
+    lineas: usize,
+    archivo: String,
+}
+
+/// Escribe `salida/programa.c` con `main.c` y los demás fuentes uno detrás de otro, y
+/// `salida/amalgama.json` con de dónde viene cada tramo. None si no conviene juntarlos.
+fn amalgamar(f: &FuentesPrograma, salida: &Path, includes: &[PathBuf]) -> Option<PathBuf> {
+    let sin_guarda = includes.iter().any(|d| {
+        std::fs::read_dir(d)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .any(|e| {
+                let p = e.path();
+                p.extension().is_some_and(|x| x == "h")
+                    && std::fs::read_to_string(&p).is_ok_and(|t| {
+                        !t.contains("#pragma once")
+                            && !(t.contains("#ifndef") && t.contains("#define"))
+                    })
+            })
+    });
+    if sin_guarda {
+        return None;
+    }
+    let mut texto = String::new();
+    let mut tramos = vec![];
+    let mut linea = 1;
+    for archivo in std::iter::once(&f.main).chain(&f.otras) {
+        let mut t = std::fs::read_to_string(archivo).ok()?;
+        if !t.ends_with('\n') {
+            t.push('\n');
+        }
+        let n = t.lines().count();
+        tramos.push(Tramo {
+            desde: linea,
+            lineas: n,
+            archivo: archivo.to_string_lossy().into_owned(),
+        });
+        texto.push_str(&t);
+        linea += n;
+    }
+    std::fs::create_dir_all(salida).ok()?;
+    let destino = salida.join("programa.c");
+    std::fs::write(&destino, texto).ok()?;
+    std::fs::write(salida.join(AMALGAMA), serde_json::to_string(&tramos).ok()?).ok()?;
+    Some(destino)
+}
+
+/// La línea `l` del archivo juntado: en qué archivo y línea original está.
+fn original(tramos: &[Tramo], l: usize) -> Option<(&str, usize)> {
+    tramos
+        .iter()
+        .find(|t| l >= t.desde && l < t.desde + t.lineas)
+        .map(|t| (t.archivo.as_str(), l - t.desde + 1))
+}
+
+impl Traza {
+    /// Devuelve cada paso, marco, bloque y evento a su archivo y línea originales.
+    fn desamalgamar(&mut self, tramos: &[Tramo]) {
+        let juntado = Path::new(&self.meta.source)
+            .file_name()
+            .map(|n| n.to_os_string());
+        let es_juntado = |f: &str| {
+            !f.is_empty() && Path::new(f).file_name().map(|n| n.to_os_string()) == juntado
+        };
+        let arreglar = |file: &mut String, line: &mut usize| {
+            if es_juntado(file) {
+                if let Some((a, l)) = original(tramos, *line) {
+                    *file = a.to_string();
+                    *line = l;
+                }
+            }
+        };
+        let arreglar_heap = |h: &mut Heap| {
+            for b in &mut h.blocks {
+                arreglar(&mut b.site.file, &mut b.site.line);
+                if let Some(s) = &mut b.free_site {
+                    arreglar(&mut s.file, &mut s.line);
+                }
+            }
+        };
+        for p in &mut self.steps {
+            // La línea del paso es la del marco de arriba.
+            let arriba_juntado = p.frames.first().is_none_or(|m| es_juntado(&m.file));
+            if arriba_juntado {
+                if let Some((_, l)) = original(tramos, p.line) {
+                    p.line = l;
+                }
+            }
+            for m in &mut p.frames {
+                arreglar(&mut m.file, &mut m.line);
+            }
+            arreglar_heap(&mut p.heap);
+            for e in &mut p.events {
+                desamalgamar_valor(e, &es_juntado, tramos);
+            }
+        }
+        arreglar_heap(&mut self.meta.final_heap);
+        if let Some(t) = tramos.first() {
+            self.meta.source = t.archivo.clone();
+        }
+    }
+}
+
+/// Los `{"file": …, "line": …}` de un evento (en cualquier profundidad).
+fn desamalgamar_valor(v: &mut Value, es_juntado: &dyn Fn(&str) -> bool, tramos: &[Tramo]) {
+    match v {
+        Value::Object(o) => {
+            let archivo = o.get("file").and_then(Value::as_str).map(str::to_string);
+            let linea = o.get("line").and_then(Value::as_u64);
+            if let (Some(f), Some(l)) = (archivo, linea) {
+                if es_juntado(&f) {
+                    if let Some((a, l)) = original(tramos, l as usize) {
+                        o.insert("file".into(), Value::from(a));
+                        o.insert("line".into(), Value::from(l));
+                    }
+                }
+            }
+            for (_, x) in o.iter_mut() {
+                desamalgamar_valor(x, es_juntado, tramos);
+            }
+        }
+        Value::Array(a) => {
+            for x in a {
+                desamalgamar_valor(x, es_juntado, tramos);
+            }
+        }
+        _ => {}
+    }
 }
 
 // ------------------------------------------------------------------ dibujo
@@ -974,6 +1121,104 @@ mod tests {
             r.iter()
                 .any(|(_, s)| s.contains("fuga: #2 de 4 B reservado en main.c:7")),
             "{r:?}"
+        );
+    }
+
+    #[test]
+    fn la_memoria_pedida_en_otro_archivo_del_ejercicio() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path();
+        let ej = r.join("ejercicios/ej3");
+        std::fs::create_dir_all(&ej).unwrap();
+        std::fs::write(r.join("Makefile"), "all:\n").unwrap();
+        std::fs::write(ej.join("Makefile"), "all:\n\tgcc main.c copia.c -o main\n").unwrap();
+        std::fs::write(
+            ej.join("copia.h"),
+            "#ifndef COPIA_H\n#define COPIA_H\nint *copiar(int n);\n#endif\n",
+        )
+        .unwrap();
+        std::fs::write(
+            ej.join("copia.c"),
+            "#include <stdlib.h>\n#include \"copia.h\"\n\nint *copiar(int n)\n{\n    int *c = malloc(n * sizeof *c);\n    return c;\n}\n",
+        )
+        .unwrap();
+        std::fs::write(
+            ej.join("main.c"),
+            "#include <stdlib.h>\n#include \"copia.h\"\n\nint main(void)\n{\n    int *c = copiar(3);\n    c[0] = 1;\n    free(c);\n    return 0;\n}\n",
+        )
+        .unwrap();
+        let p = crate::Proyecto::abrir(r);
+        let salida = r.join(".jonesy/memtrace");
+        let cmd = comando_memtrace(&p, &ej.join("main.c"), &salida).unwrap();
+        // Los fuentes van juntos en uno: mem-trace sigue sólo el archivo que recibe.
+        assert!(
+            cmd.contains("programa.c") && !cmd.contains("--cc-arg"),
+            "{cmd}"
+        );
+        let juntado = std::fs::read_to_string(salida.join("programa.c")).unwrap();
+        assert!(juntado.contains("int main(void)") && juntado.contains("int *copiar(int n)"));
+        // Una traza sobre el archivo juntado vuelve a los archivos originales.
+        let traza = serde_json::json!({
+            "meta": {"source": salida.join("programa.c"), "final_heap": {"blocks": []}},
+            "steps": [{
+                "n": 1, "func": "copiar", "line": 17,
+                "frames": [
+                    {"func": "copiar", "file": salida.join("programa.c"), "line": 17, "locals": []},
+                    {"func": "main", "file": salida.join("programa.c"), "line": 6, "locals": []}
+                ],
+                "heap": {"blocks": [{"id": 1, "addr": 4096, "size": 12, "status": "alive",
+                    "site": {"func": "copiar", "file": salida.join("programa.c"), "line": 16}}]},
+                "events": [{"kind": "malloc", "id": 1, "site": {"file": salida.join("programa.c"), "line": 16}}]
+            }]
+        });
+        std::fs::write(salida.join("trace.json"), traza.to_string()).unwrap();
+        let t = Traza::cargar(&salida.join("trace.json")).unwrap();
+        let paso = &t.steps[0];
+        assert_eq!(paso.line, 7);
+        assert!(paso.frames[0].file.ends_with("copia.c") && paso.frames[0].line == 7);
+        assert!(paso.frames[1].file.ends_with("main.c") && paso.frames[1].line == 6);
+        let b = &paso.heap.blocks[0];
+        assert!(
+            b.site.file.ends_with("copia.c") && b.site.line == 6,
+            "{b:?}"
+        );
+        assert!(
+            eventos_del_paso(paso)[0].1.contains("copia.c:6"),
+            "{:?}",
+            eventos_del_paso(paso)
+        );
+        assert!(t.meta.source.ends_with("main.c"));
+        // Con un header propio sin guarda, por separado.
+        std::fs::write(ej.join("copia.h"), "int *copiar(int n);\n").unwrap();
+        let cmd = comando_memtrace(&p, &ej.join("main.c"), &salida).unwrap();
+        assert!(
+            cmd.contains("--cc-arg=") && !cmd.contains("programa.c"),
+            "{cmd}"
+        );
+        assert!(!salida.join("amalgama.json").exists());
+        // Con mem-trace instalado, de punta a punta: el bloque de copiar() en copia.c.
+        if !crate::proyecto::en_path("mem-trace") || !crate::proyecto::en_path("gdb") {
+            return;
+        }
+        std::fs::write(
+            ej.join("copia.h"),
+            "#ifndef COPIA_H\n#define COPIA_H\nint *copiar(int n);\n#endif\n",
+        )
+        .unwrap();
+        let cmd = comando_memtrace(&p, &ej.join("main.c"), &salida).unwrap();
+        let o = std::process::Command::new("sh")
+            .args(["-c", &cmd])
+            .current_dir(r)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let t = Traza::cargar(&salida.join("trace.json")).unwrap();
+        let bloques: Vec<&Bloque> = t.steps.iter().flat_map(|p| &p.heap.blocks).collect();
+        assert!(
+            bloques
+                .iter()
+                .any(|b| b.site.file.ends_with("copia.c") && b.site.line == 6),
+            "{bloques:?}"
         );
     }
 

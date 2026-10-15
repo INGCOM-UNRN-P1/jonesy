@@ -907,11 +907,21 @@ mod tests {
         std::fs::write(dir.path().join("libs/arreglos/arreglos.c"), "").unwrap();
         let mt = crate::catscan::comando_memtrace(&p3, &main, &p3.raiz.join(".jonesy/memtrace"))
             .unwrap();
-        assert!(mt.starts_with("mem-trace run ejercicios/ej1/main.c -I ejercicios/ej1 --cc-arg=ejercicios/ej1/lista.c"), "{mt}");
-        assert!(!mt.contains("pruebas.c") && mt.contains("utiles.c"), "{mt}");
+        // Los fuentes van juntos (mem-trace sigue sólo el archivo que recibe).
         assert!(
-            mt.contains("-I libs/memoria") && mt.contains("--cc-arg=libs/arreglos/arreglos.c"),
+            mt.starts_with("mem-trace run .jonesy/memtrace/programa.c -I ejercicios/ej1"),
             "{mt}"
+        );
+        assert!(mt.contains("-I libs/memoria"), "{mt}");
+        let tramos =
+            std::fs::read_to_string(p3.raiz.join(".jonesy/memtrace/amalgama.json")).unwrap();
+        assert!(
+            tramos.contains("ejercicios/ej1/main.c")
+                && tramos.contains("ejercicios/ej1/lista.c")
+                && tramos.contains("ejercicios/ej1/utiles.c")
+                && tramos.contains("libs/arreglos/arreglos.c")
+                && !tramos.contains("pruebas.c"),
+            "{tramos}"
         );
         assert_eq!(
             p.comando_ejecutar(Some(&main)).unwrap(),

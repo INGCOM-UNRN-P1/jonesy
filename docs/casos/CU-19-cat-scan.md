@@ -29,7 +29,9 @@ Las pausas largas (compilar, esperar al programa) se acortan a 2 s al reproducir
 
 ## Notas
 
-mem-trace instrumenta sólo el archivo con `main`: la memoria que se pide en otros `.c`
-del ejercicio (por ejemplo dentro de `copiar()` en `copia.c`) no aparece en el dibujo y
-el puntero se marca como inválido. Por eso la grabación usa una variante del ejercicio 3
-que pide la memoria en `main.c`.
+mem-trace sigue sólo el archivo que recibe; jonesy le pasa los fuentes del ejercicio y
+de sus bibliotecas juntos en uno y devuelve cada línea a su archivo, así que la memoria
+que se pide en otro `.c` (por ejemplo dentro de `copiar()` en `copia.c`) aparece con su
+lugar de origen. Si algún header propio no tiene guarda (`#ifndef`), los fuentes se pasan
+por separado y lo pedido fuera de `main.c` no se ve. La grabación usa una variante del
+ejercicio 3 que pide la memoria en `main.c`.
