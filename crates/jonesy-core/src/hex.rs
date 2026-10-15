@@ -559,7 +559,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     fn elf_y_ar_reales() {
         let d = tempfile::tempdir().unwrap();
         let c = d.path().join("f.c");

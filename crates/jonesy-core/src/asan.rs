@@ -474,7 +474,15 @@ mod tests {
         let salida = d.path().join(".jonesy/asan");
         let c = comando(&p, &d.path().join("m.c"), "clang", &salida).unwrap();
         assert!(c.starts_with("clang -g -O0 -fsanitize=address"), "{c}");
-        assert!(c.contains("m.c -o ") && c.ends_with("programa-asan"), "{c}");
+        let esperado = if cfg!(windows) {
+            "programa-asan.exe"
+        } else {
+            "programa-asan"
+        };
+        assert!(
+            c.contains("m.c") && c.contains("-o ") && c.trim_end_matches('\'').ends_with(esperado),
+            "{c}"
+        );
     }
 
     #[test]

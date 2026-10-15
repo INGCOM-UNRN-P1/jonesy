@@ -618,9 +618,15 @@ mod tests {
             "ejercicios/ej1/promedio.c",
             archivo.to_str().unwrap(),
         ] {
-            let salida = format!(
-                r#"{{"hallazgos": [{{"archivo": "{informado}", "linea": 6, "codigo": "0x0101h", "mensaje": "m"}}]}}"#
-            );
+            let json = serde_json::json!({
+                "hallazgos": [{
+                    "archivo": informado,
+                    "linea": 6,
+                    "codigo": "0x0101h",
+                    "mensaje": "m",
+                }]
+            });
+            let salida = json.to_string();
             let v = interpretar(&i, &salida, &archivo, d.path()).unwrap();
             assert_eq!(
                 v[0].archivo.as_deref(),

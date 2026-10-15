@@ -1148,6 +1148,8 @@ mod tests {
         )
         .unwrap();
         let p = crate::Proyecto::abrir(r);
+        let r = &p.raiz;
+        let ej = r.join("ejercicios/ej3");
         let salida = r.join(".jonesy/memtrace");
         let cmd = comando_memtrace(&p, &ej.join("main.c"), &salida).unwrap();
         // Los fuentes van juntos en uno: mem-trace sigue sólo el archivo que recibe.

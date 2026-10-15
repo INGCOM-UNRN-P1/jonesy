@@ -800,7 +800,7 @@ mod tests {
     #[test]
     fn sobre_comun() {
         let c = vec![
-            binario("sh", "shell", true, ""),
+            binario("cargo", "compilador", true, ""),
             binario("no-existe-jonesy-xyz", "nada", false, "instalalo"),
         ];
         assert!(c[0].ok && !c[1].ok);

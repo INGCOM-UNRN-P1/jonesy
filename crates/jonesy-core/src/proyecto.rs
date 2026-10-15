@@ -806,6 +806,7 @@ mod tests {
             std::fs::write(r.join(f), "").unwrap();
         }
         let p = Proyecto::abrir(r);
+        let r = &p.raiz;
         assert_eq!(
             p.archivo_pareja(&r.join("lista.c")),
             Some(r.join("lista.h"))
@@ -915,12 +916,13 @@ mod tests {
         assert!(mt.contains("-I libs/memoria"), "{mt}");
         let tramos =
             std::fs::read_to_string(p3.raiz.join(".jonesy/memtrace/amalgama.json")).unwrap();
+        let tramos_norm = tramos.replace('\\', "/");
         assert!(
-            tramos.contains("ejercicios/ej1/main.c")
-                && tramos.contains("ejercicios/ej1/lista.c")
-                && tramos.contains("ejercicios/ej1/utiles.c")
-                && tramos.contains("libs/arreglos/arreglos.c")
-                && !tramos.contains("pruebas.c"),
+            tramos_norm.contains("ejercicios/ej1/main.c")
+                && tramos_norm.contains("ejercicios/ej1/lista.c")
+                && tramos_norm.contains("ejercicios/ej1/utiles.c")
+                && tramos_norm.contains("libs/arreglos/arreglos.c")
+                && !tramos_norm.contains("pruebas.c"),
             "{tramos}"
         );
         assert_eq!(
