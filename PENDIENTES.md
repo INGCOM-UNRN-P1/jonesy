@@ -43,16 +43,15 @@ depurar, memoria). Lo de docentes e infraestructura queda en segundo plano.
 Cien mejoras chicas pensadas para el alumno, tipificadas por área (las 50
 primeras y otras 50 sumadas después, #51 a #100). **Impacto**: cuánto cambia el
 día a día de quien cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día
-o dos), L (más). Hechas 58 de 100 (ver el historial de git para cada una). Por
-tipo: Edición 16 · Navegación 9 · Compilación 10 · Ejecución 9 · Pruebas 7 ·
+o dos), L (más). Hechas 59 de 100 (ver el historial de git para cada una). Por
+tipo: Edición 16 · Navegación 9 · Compilación 11 · Ejecución 9 · Pruebas 7 ·
 Depuración 9 · Memoria 7 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 ·
 Mantenimiento 5.
 
 |  #    	|  Mejora                                                                                                      	|  Tipo           	|  Impacto  	|  Esfuerzo  	|  Estado  	|
 |-------	|--------------------------------------------------------------------------------------------------------------	|-----------------	|-----------	|------------	|----------	|
-| 7     	|  Fragmentos de C con Tab: `for`, `while`, `if/else`, `switch`, `main`, `malloc` con su verificación de NULL  	|  Edición        	|  medio    	|  M         	|  falta   	|
-| 10    	|  Plegar funciones y bloques                                                                                  	|  Edición        	|  bajo     	|  M         	|  falta   	|
-| 19    	|  Compilar al guardar (opcional) para ver los errores sin apretar F6                                          	|  Compilación    	|  medio    	|  S         	|  falta   	|
+| 7     	|  Fragmentos de C con Tab: `for`, `while`, `if/else`, `switch`, `main`, `malloc` con su verificación de NULL  	|  Edición        	|  medio    	|  M         	|  descartado   	|
+| 10    	|  Plegar funciones y bloques                                                                                  	|  Edición        	|  bajo     	|  M         	|  descartado   	|
 | 33    	|  Breakpoints condicionales (`i == 5`) y por cantidad de pasadas                                              	|  Depuración     	|  medio    	|  M         	|  falta   	|
 | 36    	|  Para cada fuga, señalar dónde se pierde la última referencia al bloque                                      	|  Memoria        	|  bajo     	|  L         	|  falta   	|
 | 37    	|  Ver el diff de lo que se va a confirmar dentro del diálogo de commit                                        	|  Git            	|  medio    	|  S         	|  falta   	|
@@ -86,7 +85,7 @@ Mantenimiento 5.
 | 83    	|  Proponer un `.gitignore` para C (binarios, `.o`, `test_bin`) al iniciar o si falta                          	|  Git            	|  medio    	|  S         	|  falta   	|
 | 84    	|  Etiquetar versiones (`git tag`) desde el panel, por ejemplo para cada entrega                               	|  Git            	|  bajo     	|  S         	|  falta   	|
 | 86    	|  «¿Qué hace esta línea?»: descripción en español de una línea de C por patrones (sin IA)                     	|  Aprendizaje    	|  medio    	|  L         	|  falta   	|
-| 89    	|  Ejercicios de práctica cortos integrados, con sus casos                                                     	|  Aprendizaje    	|  bajo     	|  L         	|  falta   	|
+| 89    	|  Ejercicios de práctica cortos integrados, con sus casos (como consumidor de guías deckard)               	|  Aprendizaje    	|  bajo     	|  L         	|  falta   	|
 | 90    	|  Dividir el editor en dos (el mismo archivo u otro) lado a lado                                              	|  Interfaz       	|  medio    	|  M         	|  falta   	|
 | 92    	|  Avisar con una señal visual o sonora cuando termina una compilación o prueba larga                          	|  Interfaz       	|  bajo     	|  S         	|  falta   	|
 | 93    	|  Modo accesible para lectores de pantalla (sin cajas, anuncios en la barra de estado)                        	|  Interfaz       	|  medio    	|  L         	|  falta   	|
@@ -108,6 +107,7 @@ Mantenimiento 5.
 | 16    	|  Marcar el primer error de una cascada como «empezá por acá» y atenuar los que dependen de él                	|  Compilación    	|  alto     	|  S         	|  hecho   	|
 | 17    	|  Arreglo rápido de errores simples (falta `;`, falta `#include`, `=` por `==`) con una tecla                 	|  Compilación    	|  alto     	|  M         	|  hecho   	|
 | 18    	|  Subrayar la columna exacta del error en el editor, no sólo marcar la línea                                  	|  Compilación    	|  medio    	|  S         	|  hecho   	|
+| 19    	|  Compilar al guardar (opcional) para ver los errores sin apretar F6                                          	|  Compilación    	|  medio    	|  S         	|  hecho   	|
 | 20    	|  Reconocer los mensajes de gcc en español sin forzar `LC_MESSAGES=C`                                         	|  Compilación    	|  bajo     	|  M         	|  hecho   	|
 | 21    	|  Entrada del programa desde un archivo (`< entrada.txt`) elegible por ejercicio, con varios casos            	|  Ejecución      	|  alto     	|  M         	|  hecho   	|
 | 22    	|  Comparar la salida del programa con la salida esperada de la consigna (diff línea a línea)                  	|  Ejecución      	|  alto     	|  M         	|  hecho   	|
