@@ -9,7 +9,9 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   comandos.
 - **F6** compila con el Makefile o gcc y salta a los errores, **explicados en
   español** (unos 60 errores y advertencias comunes de gcc y del enlazador, con
-  ejemplo en F1); **Ctrl+F5** corre el programa en la terminal interna (`deck`,
+  ejemplo en F1); con **Alt+B** (o el botón «compilar al guardar» de la barra de
+  estado) cada Ctrl+S de un `.c` o `.h` también compila, sin mover el foco;
+  **Ctrl+F5** corre el programa en la terminal interna (`deck`,
   PTY real con vt100) y, si se corta (violación de segmento, abort…), explica
   por qué y **F5** lo depura hasta la línea donde falló; **Ctrl+F6** corre las
   pruebas (`make test` con `p1_test`, u otro framework que informe en **SARIF**

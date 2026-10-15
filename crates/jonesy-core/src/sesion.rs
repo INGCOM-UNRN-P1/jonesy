@@ -18,6 +18,8 @@ pub struct Sesion {
     /// Vista del modo compacto: consigna, codigo, terminal, doc.
     pub vista_compacta: String,
     pub preview_markdown: bool,
+    /// Compilar cada vez que se guarda un .c o .h (botón de la barra de estado, Alt+B).
+    pub compilar_al_guardar: bool,
     pub breakpoints: Vec<(String, usize)>,
     /// Marcadores de línea (Ctrl+F2), relativos a la raíz y 1-based.
     pub marcadores: Vec<(String, usize)>,
@@ -180,6 +182,7 @@ mod tests {
             quickdoc_posicion: Some(PosicionDoc::Inferior),
             vista_compacta: "codigo".into(),
             preview_markdown: false,
+            compilar_al_guardar: true,
             breakpoints: vec![("src/a.c".into(), 7)],
             marcadores: vec![("src/a.c".into(), 3)],
             entradas: vec![("ej1".into(), "ej1/entrada1.txt".into())],

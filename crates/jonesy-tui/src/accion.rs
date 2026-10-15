@@ -129,6 +129,7 @@ pub enum Accion {
     GitDescartar,
     ConteoMemoria,
     SiguientePista,
+    CompilarAlGuardar,
 }
 
 pub struct Info {
@@ -266,6 +267,7 @@ impl Accion {
             GitDescartar => ("Descartar los cambios de este archivo…", ""),
             ConteoMemoria => ("Contar malloc y free por función", ""),
             SiguientePista => ("Ver la siguiente pista de la consigna", ""),
+            CompilarAlGuardar => ("Compilar al guardar (activar o desactivar)", "Alt+B"),
         };
         Info { titulo, atajo }
     }
@@ -392,6 +394,7 @@ impl Accion {
             GitDescartar,
             ConteoMemoria,
             SiguientePista,
+            CompilarAlGuardar,
             Salir,
         ]
     }
@@ -471,7 +474,7 @@ impl Menu {
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
 pub const ALT_GLOBALES: &[char] = &[
-    't', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm', 'i', 'f', 'w',
+    't', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm', 'i', 'f', 'w', 'b',
 ];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
@@ -580,6 +583,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             'c',
             vec![
                 A(Compilar),
+                A(CompilarAlGuardar),
                 A(Ejecutar),
                 A(EjecutarConEntrada),
                 A(ArgumentosPrograma),
@@ -772,6 +776,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Explicar regla (sobre un diagnóstico) | F1 |
 | Quick-doc | F4 (Shift+F4 cambia la orientación) |
 | Compilar | F6 |
+| Compilar al guardar (activar o desactivar; también el botón de la barra) | Alt+B |
 | Compilar y ejecutar en el deck | Ctrl+F5 |
 | Correr las pruebas (make test) | Ctrl+F6 |
 | Depurar / continuar | F5 (Shift+F5 detiene) |

@@ -2632,6 +2632,21 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
         ),
         ("[Terminal]".into(), Accion::Terminal),
     ];
+    // Conmutador de compilar al guardar (Alt+B); achicado queda «[✓]» o «[✗]».
+    botones.insert(
+        1,
+        (
+            format!(
+                "[{} compilar al guardar]",
+                if app.compilar_al_guardar {
+                    "✓"
+                } else {
+                    "✗"
+                }
+            ),
+            Accion::CompilarAlGuardar,
+        ),
+    );
     // Pruebas del ejercicio, si su Makefile (o el de la raíz) tiene objetivo test.
     if app
         .proyecto
@@ -2680,6 +2695,7 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
     if app.mensaje.is_some() && necesario <= r.width {
         let orden = [
             Accion::Terminal,
+            Accion::CompilarAlGuardar,
             Accion::PanelGit,
             Accion::Compilar,
             Accion::Probar,

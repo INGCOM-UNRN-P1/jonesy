@@ -3839,3 +3839,90 @@ fn el_aviso_de_la_barra_de_estado_se_lee_entero() {
     let p = pantalla(&mut a, 100, 30);
     assert!(p.lines().last().unwrap().contains("[F6 Compilar]"), "{p}");
 }
+
+#[test]
+fn compilar_al_guardar_con_el_boton_y_alt_b() {
+    if std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let dir = proyecto(&[
+        ("prueba.c", "int main(void)\n{\n    return 0;\n}\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("prueba.c"), true);
+    // Apagado: guardar no compila.
+    let p = pantalla(&mut a, 200, 30);
+    assert!(
+        p.lines()
+            .last()
+            .unwrap()
+            .contains("[✗ compilar al guardar]"),
+        "{p}"
+    );
+    escribir(&mut a, " ");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    a.tic();
+    assert!(a.tareas_en_curso().iter().all(|t| t != "compilando"));
+    // Alt+B lo activa.
+    tecla(&mut a, KeyCode::Char('b'), KeyModifiers::ALT);
+    assert!(a.compilar_al_guardar);
+    let p = pantalla(&mut a, 200, 30);
+    assert!(
+        p.lines()
+            .last()
+            .unwrap()
+            .contains("[✓ compilar al guardar]"),
+        "{p}"
+    );
+    // Un error: guardar compila sin mover el foco ni cambiar de pestaña.
+    a.foco = Foco::Editor;
+    let pestana = a.pestana;
+    let cero = a.buf().buf.linea_columna_a_pos(2, 11);
+    a.buf_mut().buf.mover_a(cero, false);
+    tecla(&mut a, KeyCode::Delete, KeyModifiers::NONE);
+    escribir(&mut a, "x");
+    assert!(a.buf().buf.contenido().contains("return x;"));
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| !a.diag_compilador.is_empty());
+    assert_eq!(a.diag_compilador[0].linea, 3);
+    assert_eq!(a.foco, Foco::Editor);
+    assert_eq!(a.pestana, pestana);
+    assert!(a
+        .mensaje
+        .as_ref()
+        .unwrap()
+        .0
+        .starts_with("Guardado, pero no compila"));
+    // Arreglado: compila y los errores se van.
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    escribir(&mut a, "0");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("Guardado y compila"))
+    });
+    assert!(a.diag_compilador.is_empty());
+    // El botón de la barra lo apaga con un clic.
+    let p = pantalla(&mut a, 200, 30);
+    let ultima = p.lines().count() as u16 - 1;
+    let x = p.lines().last().unwrap().chars().collect::<Vec<_>>();
+    let col = x
+        .windows(2)
+        .position(|w| w[0] == '[' && w[1] == '✓')
+        .unwrap() as u16;
+    a.evento(Event::Mouse(ratatui::crossterm::event::MouseEvent {
+        kind: ratatui::crossterm::event::MouseEventKind::Down(
+            ratatui::crossterm::event::MouseButton::Left,
+        ),
+        column: col + 2,
+        row: ultima,
+        modifiers: KeyModifiers::NONE,
+    }));
+    assert!(!a.compilar_al_guardar);
+}

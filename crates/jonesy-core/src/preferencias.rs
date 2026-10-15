@@ -22,6 +22,7 @@ pub struct Preferencias {
     pub quickdoc_visible: Option<bool>,
     pub quickdoc_posicion: Option<PosicionDoc>,
     pub preview_markdown: Option<bool>,
+    pub compilar_al_guardar: Option<bool>,
     pub paneles: Option<TamPaneles>,
     /// Integración → encendida.
     pub integraciones: BTreeMap<String, bool>,
@@ -114,6 +115,7 @@ pub fn desde_sesion(s: &Sesion, dir_integraciones: Option<&Path>) -> Preferencia
         quickdoc_visible: Some(s.quickdoc_visible),
         quickdoc_posicion: s.quickdoc_posicion,
         preview_markdown: Some(s.preview_markdown),
+        compilar_al_guardar: Some(s.compilar_al_guardar),
         paneles: s.paneles,
         integraciones: s.integraciones.iter().cloned().collect(),
         manifiesto,
@@ -172,6 +174,9 @@ impl Preferencias {
         }
         if let Some(v) = self.preview_markdown {
             s.preview_markdown = v;
+        }
+        if let Some(v) = self.compilar_al_guardar {
+            s.compilar_al_guardar = v;
         }
         if self.paneles.is_some() {
             s.paneles = self.paneles;

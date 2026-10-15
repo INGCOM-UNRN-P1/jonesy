@@ -416,6 +416,8 @@ pub enum Nivel {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Luego {
     Nada,
+    /// Compilar al guardar: sin abrir el panel ni cambiar de pestaña.
+    Guardado,
     Ejecutar,
     Depurar,
     /// Correr los casos de entrada y salida esperada.
@@ -763,6 +765,13 @@ pub struct App {
     pub quickdoc_posicion: PosicionDoc,
     pub vista: Vista,
     pub preview_markdown: bool,
+    /// Compilar cada vez que se guarda un .c o .h (Alt+B o el botón de la barra).
+    pub compilar_al_guardar: bool,
+    /// Se guardó un .c o .h con compilar al guardar: se compila en el próximo tic (así
+    /// F6, que también guarda, no compila dos veces).
+    compilar_tras_guardar: bool,
+    /// Se guardó mientras compilaba: otra vez al terminar.
+    recompilar_al_terminar: bool,
     pub modal: Option<Modal>,
     pub mensaje: Option<(String, Nivel, Instant)>,
     pub portapapeles: String,
@@ -993,6 +1002,9 @@ impl App {
             quickdoc_posicion: proyecto.config.interfaz.quickdoc,
             vista: Vista::Codigo,
             preview_markdown: false,
+            compilar_al_guardar: false,
+            compilar_tras_guardar: false,
+            recompilar_al_terminar: false,
             modal: None,
             mensaje: None,
             portapapeles: String::new(),
@@ -1164,6 +1176,7 @@ impl App {
                 }
             }
             self.preview_markdown = s.preview_markdown;
+            self.compilar_al_guardar = s.compilar_al_guardar;
             for (rel, linea) in s.breakpoints {
                 self.breakpoints
                     .insert((self.proyecto.raiz.join(rel), linea));
@@ -1256,6 +1269,7 @@ impl App {
             quickdoc_posicion: Some(self.quickdoc_posicion),
             vista_compacta: self.vista.nombre().into(),
             preview_markdown: self.preview_markdown,
+            compilar_al_guardar: self.compilar_al_guardar,
             breakpoints: self
                 .breakpoints
                 .iter()
@@ -1716,6 +1730,9 @@ impl App {
         }
         if ruta.extension().is_some_and(|e| e == "h" || e == "c") && self.doc.is_some() {
             self.reevaluar_doc();
+        }
+        if self.compilar_al_guardar && ruta.extension().is_some_and(|e| e == "h" || e == "c") {
+            self.compilar_tras_guardar = true;
         }
         let texto = self.buffers[i].buf.contenido();
         let nativos = self.registro.diagnosticar(ruta, &texto);
@@ -2526,15 +2543,24 @@ impl App {
     }
 
     pub fn compilar(&mut self, luego: Luego) {
+        let guardado = luego == Luego::Guardado;
         if self
             .procesos
             .values()
             .any(|t| matches!(t, Tarea::Compilar { .. }))
         {
-            self.avisar("Ya hay una compilación en curso.", Nivel::Aviso);
+            if guardado {
+                self.recompilar_al_terminar = true;
+            } else {
+                self.avisar("Ya hay una compilación en curso.", Nivel::Aviso);
+            }
             return;
         }
-        self.guardar_todo();
+        if !guardado {
+            self.guardar_todo();
+            // Ya compila con todo guardado.
+            self.compilar_tras_guardar = false;
+        }
         let activo = self.activo_ruta();
         let comando = if luego == Luego::Depurar
             && !self.proyecto.config.depurar.compilar.trim().is_empty()
@@ -2553,10 +2579,14 @@ impl App {
         self.salida = vec![(format!("$ {comando}"), false)];
         self.titulo_salida = "compilación".into();
         self.salida_desplazamiento = 0;
-        self.diag_compilador.clear();
-        self.panel_inferior = true;
-        self.pestana = Pestana::Salida;
-        self.avisar(format!("Compilando: {comando}"), Nivel::Info);
+        // Al guardar no se mueve nada: los errores anteriores quedan hasta el resultado
+        // y la barra muestra «compilando…».
+        if !guardado {
+            self.diag_compilador.clear();
+            self.panel_inferior = true;
+            self.pestana = Pestana::Salida;
+            self.avisar(format!("Compilando: {comando}"), Nivel::Info);
+        }
         self.lanzar(&comando, Tarea::Compilar { luego });
     }
 
@@ -3530,6 +3560,7 @@ impl App {
             quickdoc_visible: self.quickdoc_visible,
             quickdoc_posicion: Some(self.quickdoc_posicion),
             preview_markdown: self.preview_markdown,
+            compilar_al_guardar: self.compilar_al_guardar,
             paneles: Some(self.paneles),
             integraciones: self
                 .integraciones
@@ -3595,6 +3626,9 @@ impl App {
         }
         if let Some(v) = p.preview_markdown {
             self.preview_markdown = v;
+        }
+        if let Some(v) = p.compilar_al_guardar {
+            self.compilar_al_guardar = v;
         }
         if let Some(t) = p.paneles {
             self.paneles = t.acotar();
@@ -4073,7 +4107,11 @@ impl App {
                     Instant::now(),
                     if codigo == Some(0) { 0 } else { errores.max(1) },
                 ));
-                if let Some(s) = &mut self.simulacro {
+                let guardado = luego == Luego::Guardado;
+                if std::mem::take(&mut self.recompilar_al_terminar) {
+                    self.compilar_tras_guardar = true;
+                }
+                if let Some(s) = self.simulacro.as_mut().filter(|_| !guardado) {
                     s.compilaciones += 1;
                     if codigo != Some(0) {
                         s.con_errores += 1;
@@ -4085,7 +4123,11 @@ impl App {
                         false,
                     ));
                     self.avisar(
-                        format!("Compilación correcta ({advertencias} advertencias)."),
+                        if guardado {
+                            format!("Guardado y compila ({advertencias} advertencias).")
+                        } else {
+                            format!("Compilación correcta ({advertencias} advertencias).")
+                        },
                         Nivel::Ok,
                     );
                     if advertencias > 0 && luego == Luego::Nada {
@@ -4095,7 +4137,7 @@ impl App {
                         Luego::Ejecutar => self.ejecutar_en_deck(),
                         Luego::Casos => self.correr_casos(),
                         Luego::Depurar => self.iniciar_depuracion(),
-                        Luego::Nada => {}
+                        Luego::Nada | Luego::Guardado => {}
                     }
                 } else {
                     self.salida.push((
@@ -4112,9 +4154,20 @@ impl App {
                                 )
                             })
                             .unwrap_or_default();
-                        self.avisar(format!("La compilación falló: {errores} error(es).{primero} Enter en Problemas salta."), Nivel::Error);
-                        self.pestana = Pestana::Problemas;
-                        self.sel_problema = 0;
+                        if guardado {
+                            // Sin mover el foco: los errores se ven en el margen y Alt+N
+                            // va al siguiente.
+                            self.avisar(format!("Guardado, pero no compila: {errores} error(es).{primero} Alt+N va al error."), Nivel::Error);
+                        } else {
+                            self.avisar(format!("La compilación falló: {errores} error(es).{primero} Enter en Problemas salta."), Nivel::Error);
+                            self.pestana = Pestana::Problemas;
+                            self.sel_problema = 0;
+                        }
+                    } else if guardado {
+                        self.avisar(
+                            "Guardado, pero no compila: mirá la pestaña Salida.",
+                            Nivel::Error,
+                        );
                     } else {
                         // Sin errores reconocibles (make, un comando que no existe...): la salida explica.
                         self.avisar(
@@ -6849,6 +6902,17 @@ impl App {
             Accion::SalidaCompilacion => self.mostrar_pestana(Pestana::Salida),
             Accion::PanelGit => self.alternar_lateral(Lateral::Git),
             Accion::PanelReglas => self.alternar_lateral(Lateral::Reglas),
+            Accion::CompilarAlGuardar => {
+                self.compilar_al_guardar = !self.compilar_al_guardar;
+                self.avisar(
+                    if self.compilar_al_guardar {
+                        "Compilar al guardar: activado (Ctrl+S guarda y compila; Alt+B lo apaga)."
+                    } else {
+                        "Compilar al guardar: desactivado."
+                    },
+                    Nivel::Info,
+                );
+            }
             Accion::PreviewMarkdown => {
                 if self.buf().buf.lenguaje == Lenguaje::Markdown {
                     self.preview_markdown = !self.preview_markdown;
@@ -7878,6 +7942,13 @@ impl App {
 
     /// Tareas periódicas tras cada lote de eventos.
     pub fn tic(&mut self) {
+        // Compilar al guardar; no mientras se depura (el programa en gdb es el anterior).
+        if std::mem::take(&mut self.compilar_tras_guardar)
+            && self.compilar_al_guardar
+            && self.depuracion.is_none()
+        {
+            self.compilar(Luego::Guardado);
+        }
         if self.clonando.is_some() && !self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             let destino = self.clonando.take().unwrap();
             if destino.join(".git").is_dir() {
@@ -8250,6 +8321,12 @@ impl App {
             }
             (KeyCode::F(3), true, _, _) | (KeyCode::F(27), _, _, _) => {
                 Some(Accion::BuscarEnProyecto)
+            }
+            (KeyCode::Char('b'), false, true, false)
+                if !(self.foco == Foco::Inferior
+                    && matches!(self.pestana, Pestana::Terminal | Pestana::Ejecucion)) =>
+            {
+                Some(Accion::CompilarAlGuardar)
             }
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
