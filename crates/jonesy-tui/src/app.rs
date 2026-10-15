@@ -8042,11 +8042,21 @@ impl App {
             }
             (KeyCode::F(2), true, _, _) => Some(Accion::AlternarMarcador),
             (KeyCode::F(2), _, _, true) => Some(Accion::SiguienteMarcador),
-            // Ctrl+Shift+F sólo llega en algunas terminales: también Ctrl+F3.
+            // Ctrl+Shift+F sólo llega en algunas terminales y Ctrl+F3 (`ESC[1;5R`) crossterm
+            // lo toma por la respuesta de posición del cursor y lo descarta: Alt+F llega en
+            // todas (salvo en la terminal, donde la shell lo usa para avanzar una palabra).
             (KeyCode::Char('F'), true, _, _) | (KeyCode::Char('f'), true, _, true) => {
                 Some(Accion::BuscarEnProyecto)
             }
-            (KeyCode::F(3), true, _, _) => Some(Accion::BuscarEnProyecto),
+            (KeyCode::Char('f'), false, true, false)
+                if !(self.foco == Foco::Inferior
+                    && matches!(self.pestana, Pestana::Terminal | Pestana::Ejecucion)) =>
+            {
+                Some(Accion::BuscarEnProyecto)
+            }
+            (KeyCode::F(3), true, _, _) | (KeyCode::F(27), _, _, _) => {
+                Some(Accion::BuscarEnProyecto)
+            }
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
                 Some(Accion::Formatear)
@@ -8062,9 +8072,11 @@ impl App {
             (KeyCode::F(4), _, _, _) => Some(Accion::QuickDoc),
             (KeyCode::Char('q'), true, _, _) => Some(Accion::Salir),
             (KeyCode::Char('k'), true, _, _) => Some(Accion::Paleta),
-            // Llega sólo en terminales que lo distinguen de «,» (protocolo de teclado
-            // extendido); el menú Archivo siempre lo tiene.
-            (KeyCode::Char(','), true, _, _) => Some(Accion::Configuracion),
+            // Ctrl+, llega sólo en terminales que lo distinguen de «,» (protocolo de teclado
+            // extendido); Alt+, llega en todas.
+            (KeyCode::Char(','), true, _, _) | (KeyCode::Char(','), false, true, _) => {
+                Some(Accion::Configuracion)
+            }
             _ => None,
         };
         // Alt+letra abre el menú de esa letra (subrayada en la barra), salvo dentro de la
@@ -8640,7 +8652,10 @@ impl App {
             // Ctrl+H: algunas terminales lo mandan como Ctrl+Backspace.
             (KeyCode::Char('h'), true, _) => Some(Accion::Reemplazar),
             (KeyCode::Backspace, true, _) => Some(Accion::Reemplazar),
-            (KeyCode::F(3), _, true) => Some(Accion::BuscarSiguiente),
+            // Shift+F3 (`ESC[1;2R`) sólo llega con el protocolo de teclado extendido (o como
+            // F15); Alt+W, como en nano, llega en todas.
+            (KeyCode::F(3), _, true) | (KeyCode::F(15), _, _) => Some(Accion::BuscarSiguiente),
+            (KeyCode::Char('w'), false, false) if alt => Some(Accion::BuscarSiguiente),
             (KeyCode::F(3), _, false) => Some(Accion::Buscar),
             (KeyCode::Char('g'), true, _) => Some(Accion::IrALinea),
             (KeyCode::Char('o'), true, _) => Some(Accion::Abrir),

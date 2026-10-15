@@ -2235,8 +2235,8 @@ fn buscar_en_el_proyecto_con_panel_de_resultados() {
     let p = pantalla(&mut a, 120, 30);
     assert!(p.contains("Búsqueda (3)"), "{p}");
     assert!(p.contains("libs/a/a.c:1"), "{p}");
-    // Palabra completa: subtotal no cuenta.
-    tecla(&mut a, KeyCode::F(3), KeyModifiers::CONTROL);
+    // Palabra completa: subtotal no cuenta. Alt+F llega en cualquier terminal.
+    tecla(&mut a, KeyCode::Char('f'), KeyModifiers::ALT);
     tecla(&mut a, KeyCode::Char('p'), KeyModifiers::ALT);
     tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
     let p = pantalla(&mut a, 120, 30);
@@ -3696,4 +3696,32 @@ fn un_hallazgo_de_dos_herramientas_se_muestra_una_vez() {
             .insert((herramienta.to_string(), archivo.clone()), d);
     }
     assert_eq!(a.diagnosticos().len(), 1, "{:#?}", a.diagnosticos());
+}
+
+#[test]
+fn atajos_que_llegan_en_cualquier_terminal() {
+    // Shift+F3, Ctrl+F3 y Ctrl+, no llegan sin el protocolo de teclado extendido:
+    // Alt+W, Alt+F y Alt+, sí.
+    let dir = proyecto(&[
+        ("main.c", "int x = 1;\nint y = x + x;\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::Char('f'), KeyModifiers::CONTROL);
+    escribir(&mut a, "x");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    let antes = a.buf().buf.linea_columna();
+    tecla(&mut a, KeyCode::Char('w'), KeyModifiers::ALT);
+    assert_ne!(a.buf().buf.linea_columna(), antes);
+    assert_eq!(a.buf().buf.texto_seleccionado().as_deref(), Some("x"));
+    assert_eq!(a.buf().buf.contenido(), "int x = 1;\nint y = x + x;\n");
+    tecla(&mut a, KeyCode::Char(','), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Integraciones y linters"), "{p}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Char('f'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("Buscar en el proyecto"), "{p}");
 }

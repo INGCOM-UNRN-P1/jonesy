@@ -136,7 +136,7 @@ la invoca.
 > Grabación: [CU-06-moverse-por-el-codigo.cast](casos/CU-06-moverse-por-el-codigo.cast) · [qué muestra](casos/CU-06-moverse-por-el-codigo.md)
 
 - **Flujo:** ir a la definición (F12 o Ctrl+clic) y volver (Alt+←), esquema del archivo
-  (Alt+S), ir a una línea (Ctrl+G), buscar en el proyecto (Ctrl+Shift+F o Ctrl+F3, con
+  (Alt+S), ir a una línea (Ctrl+G), buscar en el proyecto (Alt+F o Ctrl+Shift+F, con
   los resultados en un panel), marcadores (Ctrl+F2, Shift+F2) y el problema siguiente o
   anterior (Alt+N, Alt+Shift+N). El explorador (Alt+E) crea, renombra y borra archivos.
 - **Resultado:** el alumno llega a lo que busca sin recorrer los archivos a mano.
@@ -335,7 +335,7 @@ la invoca.
 
 > Grabación: [CU-25-apariencia-y-preferencias.cast](casos/CU-25-apariencia-y-preferencias.cast) · [qué muestra](casos/CU-25-apariencia-y-preferencias.md)
 
-- **Disparador:** Archivo → Configuración del entorno (Ctrl+,).
+- **Disparador:** Archivo → Configuración del entorno (Alt+,).
 - **Flujo:** elegir tema (oscuro, claro, contraste, turbo, solarizado, fósforo), posición
   del quick-doc, tamaños de paneles e integraciones encendidas. **Exportar mis
   preferencias** las guarda en un `.toml` junto con los manifiestos de integraciones

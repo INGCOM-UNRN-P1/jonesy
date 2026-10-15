@@ -6,7 +6,7 @@
 
 **F12** (o Ctrl+clic) va a la definición de la función bajo el cursor, aunque esté en
 otro archivo, y **Alt+←** vuelve. **Alt+S** muestra el esquema del archivo (funciones,
-tipos, macros) para saltar a cualquiera. **Ctrl+F3** (o Ctrl+Shift+F) busca en todo el
+tipos, macros) para saltar a cualquiera. **Alt+F** (o Ctrl+Shift+F) busca en todo el
 proyecto y deja los resultados en un panel. **Ctrl+F2** pone marcadores y **Shift+F2**
 salta entre ellos.
 

@@ -45,8 +45,8 @@ tecla):
 
 ## Configuración del entorno
 
-**Archivo → Configuración del entorno…** (Ctrl+, en las terminales que transmiten esa
-combinación) reúne lo que configura el IDE, separado de lo que hace el programa. Cuatro
+**Archivo → Configuración del entorno…** (Alt+, o, en las terminales que lo transmiten,
+Ctrl+,) reúne lo que configura el IDE, separado de lo que hace el programa. Cuatro
 solapas (← → o 1-4):
 
 | Solapa | Qué hay |
@@ -121,7 +121,7 @@ comprueba que esté al día.
 │ Pestaña anterior              Ctrl+Shift+Tab │
 ├──────────────────────────────────────────────┤
 │ Simulacro de examen…                         │
-│ Configuración del entorno…            Ctrl+, │
+│ Configuración del entorno…    Alt+, / Ctrl+, │
 ├──────────────────────────────────────────────┤
 │ Salir                                 Ctrl+Q │
 └──────────────────────────────────────────────┘
@@ -130,42 +130,42 @@ comprueba que esté al día.
 ## Editar
 
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ Deshacer                                                             Ctrl+Z │
-│ Rehacer                                                              Ctrl+Y │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Cortar                                                               Ctrl+X │
-│ Copiar                                                               Ctrl+C │
-│ Pegar                                                                Ctrl+V │
-│ Seleccionar todo                                                     Ctrl+A │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Buscar…                                                         F3 / Ctrl+F │
-│ Buscar siguiente                                                   Shift+F3 │
-│ Buscar y reemplazar…                                                 Ctrl+H │
-│ Buscar en el proyecto…                                         Ctrl+Shift+F │
-│ Ir a la línea…                                                       Ctrl+G │
-│ Ir a la definición                                          F12 / Ctrl+clic │
-│ Buscar referencias (dónde se usa)                                 Shift+F12 │
-│ Volver a donde estaba                                                 Alt+← │
-│ Ir al .h / .c correspondiente                                         Alt+I │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Poner / quitar marcador                                             Ctrl+F2 │
-│ Ir al marcador siguiente                                           Shift+F2 │
-│ Marcadores…                                                                 │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Comentar / descomentar líneas                                        Ctrl+/ │
-│ Duplicar línea                                                       Ctrl+D │
-│ Autocompletar el nombre                                        Ctrl+Espacio │
-│ Arreglar el error de la línea (si es simple)                      Alt+Enter │
-│ Mover línea arriba                                                    Alt+↑ │
-│ Mover línea abajo                                                     Alt+↓ │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Autoformatear código (gaff o clang-format)                      Alt+Shift+F │
-│ Quitar espacios al final de las líneas                                      │
-│ Renombrar en su ámbito…                                              Ctrl+R │
-│ Documentar la función (/** @brief, @param… */)                              │
-│ Ver la precedencia de la expresión (paréntesis implícitos)                  │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│ Deshacer                                                                  Ctrl+Z │
+│ Rehacer                                                                   Ctrl+Y │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Cortar                                                                    Ctrl+X │
+│ Copiar                                                                    Ctrl+C │
+│ Pegar                                                                     Ctrl+V │
+│ Seleccionar todo                                                          Ctrl+A │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Buscar…                                                              F3 / Ctrl+F │
+│ Buscar siguiente                                                Alt+W / Shift+F3 │
+│ Buscar y reemplazar…                                                      Ctrl+H │
+│ Buscar en el proyecto…                                      Alt+F / Ctrl+Shift+F │
+│ Ir a la línea…                                                            Ctrl+G │
+│ Ir a la definición                                               F12 / Ctrl+clic │
+│ Buscar referencias (dónde se usa)                                      Shift+F12 │
+│ Volver a donde estaba                                                      Alt+← │
+│ Ir al .h / .c correspondiente                                              Alt+I │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Poner / quitar marcador                                                  Ctrl+F2 │
+│ Ir al marcador siguiente                                                Shift+F2 │
+│ Marcadores…                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Comentar / descomentar líneas                                             Ctrl+/ │
+│ Duplicar línea                                                            Ctrl+D │
+│ Autocompletar el nombre                                             Ctrl+Espacio │
+│ Arreglar el error de la línea (si es simple)                           Alt+Enter │
+│ Mover línea arriba                                                         Alt+↑ │
+│ Mover línea abajo                                                          Alt+↓ │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│ Autoformatear código (gaff o clang-format)                           Alt+Shift+F │
+│ Quitar espacios al final de las líneas                                           │
+│ Renombrar en su ámbito…                                                   Ctrl+R │
+│ Documentar la función (/** @brief, @param… */)                                   │
+│ Ver la precedencia de la expresión (paréntesis implícitos)                       │
+└──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Ver

@@ -378,7 +378,7 @@ def cu06(s):
     """
 **F12** (o Ctrl+clic) va a la definición de la función bajo el cursor, aunque esté en
 otro archivo, y **Alt+←** vuelve. **Alt+S** muestra el esquema del archivo (funciones,
-tipos, macros) para saltar a cualquiera. **Ctrl+F3** (o Ctrl+Shift+F) busca en todo el
+tipos, macros) para saltar a cualquiera. **Alt+F** (o Ctrl+Shift+F) busca en todo el
 proyecto y deja los resultados en un panel. **Ctrl+F2** pone marcadores y **Shift+F2**
 salta entre ellos.
 """
@@ -1019,7 +1019,7 @@ muestra sus atajos, y **Alt+Z** maximiza el panel con el foco.
 @caso("CU-25", "apariencia-y-preferencias", "Ajustar la apariencia y llevarla a otra máquina")
 def cu25(s):
     """
-**Archivo → Configuración del entorno** (Ctrl+,) reúne lo que configura el IDE. En
+**Archivo → Configuración del entorno** (Alt+,) reúne lo que configura el IDE. En
 **Apariencia** se elige el tema (oscuro, claro, contraste, turbo al estilo Turbo C++,
 solarizado, fósforo), la posición del quick-doc y los tamaños de los paneles. **Exportar
 mis preferencias** las guarda en un `.toml` (con los manifiestos de integraciones

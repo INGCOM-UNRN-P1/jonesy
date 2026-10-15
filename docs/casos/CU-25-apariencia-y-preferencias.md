@@ -4,7 +4,7 @@
 
 ## De qué se trata
 
-**Archivo → Configuración del entorno** (Ctrl+,) reúne lo que configura el IDE. En
+**Archivo → Configuración del entorno** (Alt+,) reúne lo que configura el IDE. En
 **Apariencia** se elige el tema (oscuro, claro, contraste, turbo al estilo Turbo C++,
 solarizado, fósforo), la posición del quick-doc y los tamaños de los paneles. **Exportar
 mis preferencias** las guarda en un `.toml` (con los manifiestos de integraciones

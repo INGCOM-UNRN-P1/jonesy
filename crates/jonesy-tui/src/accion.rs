@@ -154,7 +154,7 @@ impl Accion {
             Pegar => ("Pegar", "Ctrl+V"),
             SeleccionarTodo => ("Seleccionar todo", "Ctrl+A"),
             Buscar => ("Buscar…", "F3 / Ctrl+F"),
-            BuscarSiguiente => ("Buscar siguiente", "Shift+F3"),
+            BuscarSiguiente => ("Buscar siguiente", "Alt+W / Shift+F3"),
             IrALinea => ("Ir a la línea…", "Ctrl+G"),
             QuickDoc => ("Documentación contextual (quick-doc)", "F4"),
             OrientacionQuickDoc => ("Quick-doc: derecha ⟷ inferior", "Shift+F4"),
@@ -207,7 +207,7 @@ impl Accion {
             GitDeshacerCommit => ("Deshacer último commit (mantener en stage)", ""),
             Herramientas => ("Herramientas del ecosistema para este archivo…", "Alt+H"),
             Integraciones => ("Configurar integraciones (qué corre y cuándo)…", ""),
-            Configuracion => ("Configuración del entorno…", "Ctrl+,"),
+            Configuracion => ("Configuración del entorno…", "Alt+, / Ctrl+,"),
             LimpiarCompilacion => ("Limpiar compilación (make clean)", ""),
             RestablecerPaneles => ("Restablecer disposición de paneles", ""),
             GuiaRapida => ("Guía rápida para estudiantes de C", ""),
@@ -227,7 +227,7 @@ impl Accion {
             IrADefinicion => ("Ir a la definición", "F12 / Ctrl+clic"),
             Volver => ("Volver a donde estaba", "Alt+←"),
             Esquema => ("Esquema del archivo (funciones y tipos)", "Alt+S"),
-            BuscarEnProyecto => ("Buscar en el proyecto…", "Ctrl+Shift+F"),
+            BuscarEnProyecto => ("Buscar en el proyecto…", "Alt+F / Ctrl+Shift+F"),
             AlternarMarcador => ("Poner / quitar marcador", "Ctrl+F2"),
             SiguienteMarcador => ("Ir al marcador siguiente", "Shift+F2"),
             Marcadores => ("Marcadores…", ""),
@@ -471,7 +471,7 @@ impl Menu {
 
 /// Letras con Alt que son atajos globales (paneles): ganan sobre los menús.
 pub const ALT_GLOBALES: &[char] = &[
-    't', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm', 'i',
+    't', 'g', 'e', 'h', 'y', 's', 'n', 'z', 'r', 'p', 'o', 'm', 'i', 'f', 'w',
 ];
 
 /// Menús de la barra superior, ordenados según el ciclo de trabajo del alumno: archivos,
@@ -743,9 +743,9 @@ pub const AYUDA_ATAJOS: &str = "\
 | Guardar | Ctrl+S, F2 |
 | Deshacer / rehacer | Ctrl+Z / Ctrl+Y |
 | Copiar / cortar / pegar | Ctrl+C / Ctrl+X / Ctrl+V |
-| Buscar | F3, Ctrl+F (Shift+F3 siguiente) |
+| Buscar | F3, Ctrl+F (Alt+W o Shift+F3 siguiente) |
 | Buscar y reemplazar (Tab campo, Alt+M mayúsculas, Alt+P palabra, Enter reemplaza, F3 saltea, Alt+T todas) | Ctrl+H |
-| Buscar en el proyecto (resultados en el panel Búsqueda) | Ctrl+Shift+F o Ctrl+F3 |
+| Buscar en el proyecto (resultados en el panel Búsqueda) | Alt+F (o Ctrl+Shift+F) |
 | Marcador: poner o quitar · siguiente | Ctrl+F2 · Shift+F2 |
 | Problema siguiente · anterior | Alt+N · Alt+Shift+N |
 | Correr la prueba del cursor · correr hasta el cursor | Shift+F6 · Ctrl+F10 |
@@ -784,7 +784,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Reglas de ripley | Alt+R |
 | Vista previa de Markdown | Ctrl+P |
 | Menú | Alt+letra subrayada, F10 y la letra, o clic |
-| Configuración del entorno | Archivo → Configuración (Ctrl+, si la terminal lo transmite) |
+| Configuración del entorno | Alt+, (o Ctrl+, si la terminal lo transmite) |
 | Vistas en modo compacto | F7 consigna, F8 código, F9 terminal, F4 doc |
 | Entregar examen | F12 |
 | Salir | Ctrl+Q |
