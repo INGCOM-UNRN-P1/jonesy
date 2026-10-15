@@ -364,7 +364,9 @@ pub fn interpretar(salida: &str, raiz: &Path) -> Resultado {
             continue;
         };
         // La ubicación: la pila del error (o la del malloc en una fuga), en el código propio.
-        let (archivo, linea) = match propio(&b.pila, &base, raiz) {
+        let (archivo, linea) = match propio(&b.pila, &base, raiz)
+            .or_else(|| b.secciones.iter().find_map(|(_, p)| propio(p, &base, raiz)))
+        {
             Some((p, m)) => (Some(p), m.linea),
             None => (None, 0),
         };

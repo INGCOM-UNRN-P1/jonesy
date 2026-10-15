@@ -914,16 +914,31 @@ mod tests {
             "{mt}"
         );
         assert!(mt.contains("-I libs/memoria"), "{mt}");
-        let tramos =
-            std::fs::read_to_string(p3.raiz.join(".jonesy/memtrace/amalgama.json")).unwrap();
-        let tramos_norm = tramos.replace('\\', "/");
+        let tramos_json: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(p3.raiz.join(".jonesy/memtrace/amalgama.json")).unwrap(),
+        )
+        .unwrap();
+        let archivos: Vec<String> = tramos_json
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|t| t["archivo"].as_str().map(|s| s.replace('\\', "/")))
+            .collect();
         assert!(
-            tramos_norm.contains("ejercicios/ej1/main.c")
-                && tramos_norm.contains("ejercicios/ej1/lista.c")
-                && tramos_norm.contains("ejercicios/ej1/utiles.c")
-                && tramos_norm.contains("libs/arreglos/arreglos.c")
-                && !tramos_norm.contains("pruebas.c"),
-            "{tramos}"
+            archivos
+                .iter()
+                .any(|a| a.ends_with("ejercicios/ej1/main.c"))
+                && archivos
+                    .iter()
+                    .any(|a| a.ends_with("ejercicios/ej1/lista.c"))
+                && archivos
+                    .iter()
+                    .any(|a| a.ends_with("ejercicios/ej1/utiles.c"))
+                && archivos
+                    .iter()
+                    .any(|a| a.ends_with("libs/arreglos/arreglos.c"))
+                && !archivos.iter().any(|a| a.contains("pruebas.c")),
+            "{archivos:?}"
         );
         assert_eq!(
             p.comando_ejecutar(Some(&main)).unwrap(),

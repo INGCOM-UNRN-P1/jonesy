@@ -204,7 +204,10 @@ pub fn interpretar(salida: &str, dir: &Path) -> Resultado {
             let num = partes.next().and_then(|n| n.trim().parse().ok());
             let expr = partes.next().unwrap_or("").trim().to_string();
             actual = Some(Diagnostico {
-                archivo: (!archivo.is_empty()).then(|| base.join(archivo)),
+                archivo: (!archivo.is_empty()).then(|| {
+                    crate::valgrind::ubicar(archivo, &base, dir)
+                        .unwrap_or_else(|| base.join(archivo))
+                }),
                 linea: num.unwrap_or(1),
                 columna: 1,
                 severidad: Severidad::Error,
