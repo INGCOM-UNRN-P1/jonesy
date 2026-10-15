@@ -2385,7 +2385,7 @@ fn marcadores_problemas_y_lineas_que_se_corren() {
     // Problemas siguiente/anterior sin abrir el panel.
     a.diag_compilador = jonesy_core::diagnostico::parsear_gcc(
         "main.c:2:5: error: uno\nmain.c:5:5: warning: dos\n",
-        dir.path(),
+        &jonesy_core::canonica(dir.path()),
     );
     a.buf_mut().buf.mover_a(0, false);
     tecla(&mut a, KeyCode::Char('n'), KeyModifiers::ALT);
@@ -2673,7 +2673,10 @@ fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
     }
     let base = tempfile::tempdir().unwrap();
     let remoto = base.path().join("remoto.git");
-    git(base.path(), &["init", "-q", "--bare", "remoto.git"]);
+    git(
+        base.path(),
+        &["init", "-q", "--bare", "-b", "main", "remoto.git"],
+    );
     let dir = proyecto(&[
         ("a.c", "int x = 1;\n"),
         (
@@ -2701,7 +2704,14 @@ fn git_subir_traer_conflicto_mensaje_y_recordatorio() {
     // Otro clon sube un cambio en la misma línea.
     git(
         base.path(),
-        &["clone", "-q", &remoto.to_string_lossy(), "otro"],
+        &[
+            "clone",
+            "-q",
+            "-b",
+            "main",
+            &remoto.to_string_lossy(),
+            "otro",
+        ],
     );
     std::fs::write(base.path().join("otro/a.c"), "int x = 2;\n").unwrap();
     git(
