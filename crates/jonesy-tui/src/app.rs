@@ -46,6 +46,7 @@ pub const AVISOS_MIN: [u64; 3] = [30, 15, 5];
 /// Las herramientas lentas (ripley tarda ~10 s) corren este tiempo después del último
 /// guardado: guardar seguido no las relanza cada vez.
 pub const DEMORA_LENTAS: Duration = Duration::from_millis(1500);
+static ARCHIVO_TEMP_ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[derive(Debug, Clone)]
 pub struct Opciones {
@@ -801,7 +802,7 @@ pub struct App {
     pub ejecucion: Option<Deck>,
     /// La pestaña Ejecución corre el programa del alumno (Ctrl+F5): al terminar se mira
     /// si se cortó por una señal.
-    vigilar_programa: bool,
+    pub vigilar_programa: bool,
     /// El último programa se cortó por un error (violación de segmento, abort…): F5 lo
     /// depura sin detenerse en main, hasta la línea del fallo.
     pub ultimo_fallo: Option<&'static jonesy_core::fallos::Fallo>,
@@ -2667,8 +2668,9 @@ impl App {
             Some((prog, dir)) => {
                 let medir = jonesy_core::casos::time_gnu()
                     .map(|t| {
+                        let id = ARCHIVO_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         let f = std::env::temp_dir()
-                            .join(format!("jonesy-medida-{}.txt", std::process::id()));
+                            .join(format!("jonesy-medida-{}-{id}.txt", std::process::id()));
                         let _ = std::fs::remove_file(&f);
                         let m = format!(
                             "{t} -f '%e %M' -o {} ",
@@ -6087,8 +6089,9 @@ impl App {
         if entrada.is_none() && !self.proyecto.programa_lee_entrada(a) {
             return false;
         }
+        let id = ARCHIVO_TEMP_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let informe =
-            std::env::temp_dir().join(format!("jonesy-valgrind-{}.txt", std::process::id()));
+            std::env::temp_dir().join(format!("jonesy-valgrind-{}-{id}.txt", std::process::id()));
         let _ = std::fs::remove_file(&informe);
         let Some(comando) = self.proyecto.comando_memoria_interactiva(Some(a), &informe) else {
             return false;
