@@ -913,7 +913,9 @@ mod tests {
     #[test]
     fn documento_de_menus_al_dia() {
         let ruta = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/menus.md");
-        let doc = std::fs::read_to_string(&ruta).expect("docs/menus.md");
+        let doc = std::fs::read_to_string(&ruta)
+            .expect("docs/menus.md")
+            .replace("\r\n", "\n");
         let (antes, resto) = doc.split_once(INICIO).expect("marcador de inicio");
         let (_, despues) = resto.split_once(FIN).expect("marcador de fin");
         let nuevo = format!("{antes}{INICIO}\n{}\n{FIN}{despues}", documento_menus());
