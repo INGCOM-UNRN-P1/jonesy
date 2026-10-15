@@ -397,8 +397,35 @@ pub fn interpretar(
         if d.herramienta.is_none() {
             d.herramienta = herramienta.clone();
         }
+        d.archivo = d.archivo.take().map(|p| ruta_real(p, archivo, dir));
     }
     Ok(v)
+}
+
+/// La ruta de un hallazgo como la de los buffers: cada herramienta informa el archivo a su
+/// manera (`promedio.c`, `ejercicios/ej1/promedio.c`, `./promedio.c`), y si quedan
+/// distintas, lo mismo se mostraría dos veces. Una ruta que no existe se prueba relativa a
+/// la carpeta del archivo analizado; si tiene su mismo nombre, es ese archivo.
+fn ruta_real(p: PathBuf, archivo: &Path, dir: &Path) -> PathBuf {
+    if p.exists() {
+        return crate::canonica(&p);
+    }
+    let analizado = if archivo.is_absolute() {
+        archivo.to_path_buf()
+    } else {
+        dir.join(archivo)
+    };
+    let relativa = p.strip_prefix(dir).unwrap_or(&p);
+    if let Some(base) = analizado.parent() {
+        let candidata = base.join(relativa);
+        if candidata.exists() {
+            return crate::canonica(&candidata);
+        }
+    }
+    if p.file_name().is_some() && p.file_name() == analizado.file_name() {
+        return crate::canonica(&analizado);
+    }
+    p
 }
 
 /// Categorías comunes del ecosistema (yutani.hallazgos.CATEGORIAS) en el orden del programa.
@@ -570,6 +597,37 @@ mod tests {
             d[0].enlace.as_deref(),
             Some("https://ingcom-unrn-p1.github.io/x5008h")
         );
+    }
+
+    #[test]
+    fn la_misma_ruta_para_todas_las_herramientas() {
+        let d = tempfile::tempdir().unwrap();
+        let ej = d.path().join("ejercicios/ej1");
+        std::fs::create_dir_all(&ej).unwrap();
+        std::fs::write(ej.join("promedio.c"), "int x;\n").unwrap();
+        let archivo = ej.join("promedio.c");
+        let i = Integracion {
+            nombre: "x".into(),
+            formato: Formato::Hallazgos,
+            ..Default::default()
+        };
+        let canon = crate::canonica(&archivo);
+        for informado in [
+            "promedio.c",
+            "./promedio.c",
+            "ejercicios/ej1/promedio.c",
+            archivo.to_str().unwrap(),
+        ] {
+            let salida = format!(
+                r#"{{"hallazgos": [{{"archivo": "{informado}", "linea": 6, "codigo": "0x0101h", "mensaje": "m"}}]}}"#
+            );
+            let v = interpretar(&i, &salida, &archivo, d.path()).unwrap();
+            assert_eq!(
+                v[0].archivo.as_deref(),
+                Some(canon.as_path()),
+                "{informado}"
+            );
+        }
     }
 
     #[test]

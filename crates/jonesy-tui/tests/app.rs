@@ -3670,3 +3670,30 @@ fn ejercicios_del_banco_de_deckard() {
     assert_eq!(casos.len(), 1);
     assert_eq!(casos[0].nombre, "tests/caso_01");
 }
+
+#[test]
+fn un_hallazgo_de_dos_herramientas_se_muestra_una_vez() {
+    use jonesy_core::integraciones::{interpretar, Formato, Integracion};
+    let dir = proyecto(&[("ejercicios/ej1/promedio.c", "int f(int v) { return v; }\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let archivo = jonesy_core::canonica(&dir.path().join("ejercicios/ej1/promedio.c"));
+    a.abrir_archivo(&archivo, true);
+    // gaff informa la ruta desde la raíz; ripley, sólo el nombre.
+    for (herramienta, ruta) in [
+        ("gaff", "ejercicios/ej1/promedio.c"),
+        ("ripley", "promedio.c"),
+    ] {
+        let i = Integracion {
+            nombre: herramienta.into(),
+            formato: Formato::Hallazgos,
+            ..Default::default()
+        };
+        let salida = format!(
+            r#"{{"hallazgos": [{{"archivo": "{ruta}", "linea": 1, "columna": 12, "codigo": "0x0101h", "mensaje": "Identificador de una sola letra 'v'."}}]}}"#
+        );
+        let d = interpretar(&i, &salida, &archivo, dir.path()).unwrap();
+        a.diag_herramientas
+            .insert((herramienta.to_string(), archivo.clone()), d);
+    }
+    assert_eq!(a.diagnosticos().len(), 1, "{:#?}", a.diagnosticos());
+}
