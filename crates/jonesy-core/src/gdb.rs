@@ -832,6 +832,7 @@ mod tests {
             otro => panic!("{otro:?}"),
         }
     }
+    #[cfg(unix)]
     use std::time::{Duration, Instant};
 
     #[test]
