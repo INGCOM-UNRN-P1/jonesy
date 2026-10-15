@@ -15,9 +15,10 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   pruebas (`make test` con `p1_test`, u otro framework que informe en **SARIF**
   con `[pruebas] comando` y `sarif`) y deja cada fallo en su línea con lo
   esperado y lo obtenido; **Depurar → Revisar memoria con valgrind** corre
-  valgrind (`make memcheck` o el programa) y explica cada acceso inválido, uso
-  después de `free`, `free` doble y fuga en la línea del alumno, con dónde se
-  pidió o liberó el bloque.
+  valgrind (`make memcheck` o el programa, con su entrada por teclado si la
+  lee) y explica cada acceso inválido, uso después de `free`, `free` doble y
+  fuga en la línea del alumno, con dónde se pidió o liberó el bloque; sin
+  valgrind (Windows), lo mismo con AddressSanitizer si el compilador lo trae.
 - **Edición y navegación**: pares que se cierran solos, comentar (Ctrl+/), mover
   y duplicar líneas, buscar y reemplazar (Ctrl+H), ir a la definición (F12 o
   Ctrl+clic) y volver (Alt+←), esquema del archivo (Alt+S), buscar en el

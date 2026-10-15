@@ -268,7 +268,11 @@ la invoca.
 - **Disparador:** Depurar → Revisar memoria con valgrind.
 - **Flujo:** corre `make memcheck` o el programa bajo valgrind y deja cada acceso
   inválido, uso después de `free`, `free` doble y fuga en la línea del alumno, con dónde
-  se pidió o liberó el bloque.
+  se pidió o liberó el bloque. Si el programa lee del teclado, corre en la pestaña
+  Ejecución para escribirle la entrada (o desde el archivo de Ejecutar con entrada…) y
+  el informe aparece al terminar. Sin valgrind (Windows), compila el programa con
+  AddressSanitizer si el compilador lo trae, con los mismos informes; si no, sugiere
+  cat-scan.
 - **Resultado:** las fugas y los accesos inválidos explicados en su lugar.
 
 ### CU-19 · Ver la memoria dibujada (cat-scan)
