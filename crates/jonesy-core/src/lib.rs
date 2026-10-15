@@ -22,6 +22,7 @@ pub mod entrega;
 pub mod errores_gcc;
 pub mod esqueleto;
 pub mod estructura;
+pub mod explicacion;
 pub mod fallos;
 pub mod gdb;
 pub mod glosario;

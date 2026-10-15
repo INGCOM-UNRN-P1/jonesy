@@ -9,7 +9,7 @@
 
 use serde_json::Value;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Regla {
     pub herramienta: String,
     pub codigo: String,
@@ -105,7 +105,19 @@ pub fn buscar<'a>(
 
 /// La ficha de una regla en Markdown, con el mismo formato que los errores de gcc.
 pub fn markdown(r: &Regla, enlace: Option<&str>) -> String {
+    markdown_hallazgo(r, None, enlace)
+}
+
+/// Como los errores de gcc: título, lo que se marcó en la línea del alumno (si no es
+/// el mismo título), explicación, qué hacer y «Así no» / «Así sí».
+pub fn markdown_hallazgo(r: &Regla, hallazgo: Option<&str>, enlace: Option<&str>) -> String {
     let mut s = format!("# {} · {}\n\n", r.codigo, r.titulo);
+    if let Some(h) = hallazgo
+        .map(str::trim)
+        .filter(|h| !h.is_empty() && *h != r.titulo)
+    {
+        s.push_str(&format!("> `{h}`\n\n"));
+    }
     let mut meta = vec![r.herramienta.clone()];
     if !r.categoria.is_empty() {
         meta.push(r.categoria.clone());

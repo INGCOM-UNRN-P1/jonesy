@@ -942,7 +942,7 @@ descripcion = "Integración de prueba"
 cuando = "guardar"
 archivos = ["*.c"]
 comando = "printf '%s' '{\"hallazgos\": [{\"codigo\": \"ECO1\", \"categoria\": \"memoria\", \"severidad\": \"error\", \"mensaje\": \"falta free\", \"archivo\": \"main.c\", \"linea\": 2, \"columna\": 1, \"enlace\": \"https://ejemplo/memoria\"}]}'"
-explicar = "echo explicación de {codigo}"
+explicar = "printf '%s\\n' '{codigo}: Liberá lo que pedís' '' 'Cada malloc necesita su free.' '' '✓ Así:' 'free(p);'"
 
   [[integracion.accion]]
   titulo = "Reescribir"
@@ -974,7 +974,8 @@ explicar = "echo explicación de {codigo}"
     assert_eq!(d.len(), 1, "{d:?}");
     assert_eq!(d[0].herramienta.as_deref(), Some("eco"));
     assert_eq!(d[0].categoria.as_deref(), Some("memoria"));
-    // F1 en la línea del hallazgo usa el «explicar» de la integración y muestra el apunte.
+    // F1 en la línea del hallazgo usa el «explicar» de la integración y lo muestra como los
+    // errores de gcc: título, lo marcado en la línea, la explicación, «Así sí» y el apunte.
     let pos = a.buf().buf.linea_columna_a_pos(1, 0);
     a.buf_mut().buf.mover_a(pos, false);
     tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
@@ -983,7 +984,11 @@ explicar = "echo explicación de {codigo}"
     });
     let p = pantalla(&mut a, 120, 30);
     assert!(
-        p.contains("explicación de ECO1") && p.contains("https://ejemplo/memoria"),
+        p.contains("ECO1 · Liberá lo que pedís")
+            && p.contains("falta free")
+            && p.contains("Cada malloc necesita su free.")
+            && p.contains("Así sí")
+            && p.contains("https://ejemplo/memoria"),
         "{p}"
     );
     tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);

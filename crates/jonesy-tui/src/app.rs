@@ -455,6 +455,9 @@ enum Tarea {
     Explicar {
         codigo: String,
         enlace: Option<String>,
+        herramienta: String,
+        /// Lo que dijo la herramienta en la línea del alumno.
+        hallazgo: String,
     },
     MemTrace {
         traza: PathBuf,
@@ -1322,6 +1325,10 @@ impl App {
     }
 
     fn lanzar(&mut self, comando: &str, tarea: Tarea) -> u64 {
+        self.lanzar_con(comando, tarea, &[])
+    }
+
+    fn lanzar_con(&mut self, comando: &str, tarea: Tarea, entorno: &[(&str, &str)]) -> u64 {
         let id = self.proximo_id();
         self.procesos.insert(id, tarea);
         let tx = self.tx.clone();
@@ -1333,7 +1340,7 @@ impl App {
                 }
             }
         });
-        proceso::lanzar(id, comando, &self.proyecto.raiz, &[], txp);
+        proceso::lanzar(id, comando, &self.proyecto.raiz, entorno, txp);
         id
     }
 
@@ -4134,7 +4141,23 @@ impl App {
             Tarea::Explicar {
                 codigo: regla,
                 enlace,
+                herramienta,
+                hallazgo,
             } => {
+                // Con el formato de los errores de gcc si se entiende la salida; si no,
+                // tal cual.
+                if let Some(r) = (codigo == Some(0))
+                    .then(|| jonesy_core::explicacion::desde_salida(&herramienta, &regla, &salida))
+                    .flatten()
+                {
+                    let texto = jonesy_core::catalogo::markdown_hallazgo(
+                        &r,
+                        Some(&hallazgo),
+                        enlace.as_deref(),
+                    );
+                    self.visor_explicacion(format!("Regla {regla}"), &texto);
+                    return;
+                }
                 let ancho = self.tam.0.saturating_sub(8).clamp(40, 100);
                 let mut lineas = if codigo == Some(0) && !salida.trim().is_empty() {
                     crate::vt::ansi_a_lineas(&salida, ancho)
@@ -4358,7 +4381,12 @@ impl App {
         }) else {
             return false;
         };
-        let texto = jonesy_core::catalogo::markdown(&r, d.enlace.as_deref());
+        let mut r = r;
+        if r.sugerencia.is_empty() {
+            r.sugerencia = d.sugerencia.clone().unwrap_or_default();
+        }
+        let texto =
+            jonesy_core::catalogo::markdown_hallazgo(&r, Some(&d.mensaje), d.enlace.as_deref());
         self.visor_explicacion(format!("Regla {}", r.codigo), &texto);
         true
     }
@@ -4452,18 +4480,22 @@ impl App {
             .map(|x| x.explicar.clone())
             .unwrap_or_default();
         if plantilla.is_empty() {
-            // Sin comando para explicar: el mensaje, la sugerencia y el apunte.
-            let mut texto = format!("# {herramienta}: {codigo}\n\n{}\n", d.mensaje);
-            if let Some(s) = &d.sugerencia {
-                texto.push_str(&format!("\n**Sugerencia:** {s}\n"));
-            }
+            // Sin comando para explicar: lo que trae el hallazgo, con el mismo formato.
+            let r = jonesy_core::catalogo::Regla {
+                herramienta: herramienta.clone(),
+                codigo: codigo.clone(),
+                titulo: d.mensaje.clone(),
+                sugerencia: d.sugerencia.clone().unwrap_or_default(),
+                categoria: d.categoria.clone().unwrap_or_default(),
+                ..Default::default()
+            };
             if let Some(e) = &d.enlace {
-                texto.push_str(&format!("\n**Apunte:** {e}\n"));
                 if self.proyecto.config.interfaz.osc52 {
                     sistema::osc52(e);
                 }
             }
-            self.visor_explicacion(codigo, &texto);
+            let texto = jonesy_core::catalogo::markdown_hallazgo(&r, None, d.enlace.as_deref());
+            self.visor_explicacion(format!("Regla {codigo}"), &texto);
             return;
         }
         let cmd = jonesy_core::integraciones::expandir(
@@ -4473,12 +4505,16 @@ impl App {
             None,
             Some(&codigo),
         );
-        self.lanzar(
+        // Sin colores y sin cortar renglones, para entender la salida.
+        self.lanzar_con(
             &cmd,
             Tarea::Explicar {
                 codigo,
                 enlace: d.enlace.clone(),
+                herramienta,
+                hallazgo: d.mensaje.clone(),
             },
+            &[("NO_COLOR", "1"), ("COLUMNS", "200")],
         );
     }
 
