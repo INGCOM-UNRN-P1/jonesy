@@ -86,6 +86,17 @@ fn esperar(app: &mut App, rx: &Receiver<Aviso>, mut cond: impl FnMut(&App) -> bo
     }
 }
 
+fn es_gnu_gcc() -> bool {
+    std::process::Command::new("gcc")
+        .arg("--version")
+        .output()
+        .map(|o| {
+            let s = String::from_utf8_lossy(&o.stdout);
+            s.contains("Free Software Foundation") || s.contains("GCC")
+        })
+        .unwrap_or(false)
+}
+
 const MAIN: &str =
     "#include <stdio.h>\n\nint main(void)\n{\n    printf(\"hola\\n\");\n    return 0;\n}\n";
 
@@ -173,11 +184,7 @@ fn quickdoc_muestra_firma_con_parametro_activo() {
 #[test]
 #[cfg(unix)] // usa sh, make, gcc o el deck
 fn compila_y_salta_al_error() {
-    if std::process::Command::new("gcc")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if !es_gnu_gcc() {
         return;
     }
     let roto = "int main(void)\n{\n    return x;\n}\n";
@@ -1398,7 +1405,10 @@ fn nuevo_plugin_python_desde_el_ide() {
         .iter()
         .find(|d| d.mensaje.contains("[contador]"))
         .expect("diagnóstico del plugin");
-    assert_eq!(d.archivo.as_deref(), Some(ruta.as_path()));
+    assert_eq!(
+        d.archivo.as_deref().map(jonesy_core::canonica),
+        Some(jonesy_core::canonica(&ruta))
+    );
     assert_eq!(d.linea, linea_rota);
     // Corregido, el error desaparece.
     tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
@@ -2348,7 +2358,7 @@ fn marcadores_problemas_y_lineas_que_se_corren() {
         (".jonesy.toml", "[ripley]\nactivo = false\n"),
     ]);
     let (mut a, _rx) = app(dir.path(), false);
-    let main = dir.path().join("main.c");
+    let main = jonesy_core::canonica(&dir.path().join("main.c"));
     a.abrir_archivo(&main, true);
     // Marcadores en las líneas 2 y 4; Shift+F2 va de uno a otro.
     let pos = a.buf().buf.linea_columna_a_pos(1, 0);
@@ -2394,11 +2404,7 @@ fn marcadores_problemas_y_lineas_que_se_corren() {
 
 #[test]
 fn cascada_de_errores_y_columna_subrayada() {
-    if std::process::Command::new("gcc")
-        .arg("--version")
-        .output()
-        .is_err()
-    {
+    if !es_gnu_gcc() {
         return;
     }
     // Falta un «;»: gcc se queja de esa línea y además de la variable que no llegó a
@@ -2543,9 +2549,10 @@ fn casos_entrada_argumentos_medida_y_cuelgue() {
                 .is_some_and(|(m, _, _)| m.contains("cortado"))
         });
         esperar(&mut a, &rx, |a| {
-            a.ejecucion
-                .as_ref()
-                .is_some_and(|d| d.texto().contains("[proceso terminado"))
+            !a.vigilar_programa
+                || a.ejecucion
+                    .as_ref()
+                    .is_some_and(|d| d.texto().contains("[proceso terminado"))
         });
     }
 }
@@ -2626,14 +2633,24 @@ fn prueba_del_cursor_y_correr_hasta_el_cursor() {
 }
 
 fn git(dir: &Path, args: &[&str]) {
-    let ok = std::process::Command::new("git")
+    let o = std::process::Command::new("git")
+        .args([
+            "-c",
+            "user.name=Prueba",
+            "-c",
+            "user.email=prueba@localhost",
+        ])
         .args(args)
         .current_dir(dir)
         .output()
-        .unwrap()
-        .status
-        .success();
-    assert!(ok, "git {args:?}");
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "git {:?}: stdout: {}, stderr: {}",
+        args,
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    );
 }
 
 #[test]
@@ -3170,7 +3187,7 @@ fn objetivo_de_make_con_el_teclado() {
 }
 
 #[test]
-#[cfg(unix)] // usa gcc
+#[cfg(target_os = "linux")] // usa gcc y espera formato ELF
 fn visor_hexadecimal_de_binarios() {
     let dir = proyecto(&[("main.c", MAIN)]);
     let ok = std::process::Command::new("gcc")
@@ -3448,6 +3465,9 @@ fn autocompletar_con_ctrl_espacio() {
 #[test]
 #[cfg(unix)] // usa gcc
 fn arreglo_rapido_con_alt_enter() {
+    if !es_gnu_gcc() {
+        return;
+    }
     let dir = proyecto(&[(
         "main.c",
         "int main(void)\n{\n    int x = 0\n    if (x = 5)\n    {\n        printf(\"hola\\n\");\n    }\n    return 0;\n}\n",
