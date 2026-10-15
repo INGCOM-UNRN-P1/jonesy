@@ -89,11 +89,7 @@ pub fn archivos_de_entrega(p: &Proyecto) -> Vec<String> {
         .archivos(5000)
         .iter()
         .map(|a| p.relativa(a))
-        .chain(
-            ["Makefile".to_string(), "makefile".to_string()]
-                .into_iter()
-                .filter(|m| p.raiz.join(m).is_file()),
-        )
+        .chain(p.makefile().map(|m| p.relativa(&m)))
         .filter(|rel| patrones.iter().any(|pat| glob(pat, rel)))
         .collect();
     rels.sort();

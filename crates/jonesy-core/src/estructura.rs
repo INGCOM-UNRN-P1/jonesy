@@ -450,9 +450,13 @@ impl Estructura {
 
     /// Módulo más profundo (no la raíz) cuyo directorio contiene `ruta`; si no hay, la raíz.
     pub fn modulo_de(&self, ruta: &Path) -> Option<&Modulo> {
+        let ruta_c = crate::canonica(ruta);
         self.modulos
             .iter()
-            .filter(|m| m.tipo != TipoModulo::Raiz && ruta.starts_with(&m.dir))
+            .filter(|m| {
+                m.tipo != TipoModulo::Raiz
+                    && (ruta.starts_with(&m.dir) || ruta_c.starts_with(&m.dir))
+            })
             .max_by_key(|m| m.dir.components().count())
             .or_else(|| self.raiz())
     }
