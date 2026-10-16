@@ -1,6 +1,6 @@
 name: Release
 
-# Publica los binarios de jonesy para Linux y Windows.
+# Publica los binarios de jonesy para Linux, macOS y Windows.
 #
 # - Con un tag `vX.Y.Z` (git tag v0.2.0 && git push origin v0.2.0): compila, prueba que
 #   cada binario arranque y crea el release de GitHub con los paquetes y SHA256SUMS.
@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
@@ -68,6 +68,7 @@ jobs:
           - nombre: linux-x86_64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
+            targets: x86_64-unknown-linux-gnu
             exe: jonesy
             formato: tar.gz
           # Estático (musl): sin dependencias de la glibc del sistema, para servidores y
@@ -75,23 +76,43 @@ jobs:
           - nombre: linux-x86_64-musl
             os: ubuntu-24.04
             target: x86_64-unknown-linux-musl
+            targets: x86_64-unknown-linux-musl
+            exe: jonesy
+            formato: tar.gz
+          # Binario universal para macOS (x86_64 + aarch64 combinados con lipo)
+          - nombre: macos-universal
+            os: macos-latest
+            target: universal
+            targets: x86_64-apple-darwin, aarch64-apple-darwin
             exe: jonesy
             formato: tar.gz
           - nombre: windows-x86_64
             os: windows-latest
             target: x86_64-pc-windows-msvc
+            targets: x86_64-pc-windows-msvc
             exe: jonesy.exe
             formato: zip
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.targets }}
       - name: musl-tools
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
       - name: Compilar
-        run: cargo build --release --locked -p jonesy-bin --target ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = "universal" ]; then
+            cargo build --release --locked -p jonesy-bin --target x86_64-apple-darwin
+            cargo build --release --locked -p jonesy-bin --target aarch64-apple-darwin
+            mkdir -p target/universal/release
+            lipo -create -output target/universal/release/jonesy \
+              target/x86_64-apple-darwin/release/jonesy \
+              target/aarch64-apple-darwin/release/jonesy
+          else
+            cargo build --release --locked -p jonesy-bin --target ${{ matrix.target }}
+          fi
       - name: El binario arranca
         shell: bash
         run: |
