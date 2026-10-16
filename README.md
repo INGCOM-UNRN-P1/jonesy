@@ -295,7 +295,7 @@ Las herramientas de la cátedra se integran como **plugins declarativos**
 | Crate              | Contenido                                                                                                                                               |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `jonesy-core`      | buffers, proyecto y `.jonesy.toml`, sesión, procesos, diagnósticos de gcc y ripley, controlador GDB/MI, modelo y dibujo de cat-scan, paquete de entrega |
-| `jonesy-tui`       | aplicación, layout §9.2, dibujo, resaltado, Markdown, paleta, reproductor                                                                               |
+| `jonesy-tui`       | aplicación (`app.rs` y, por área, `app/`: teclado, modales, acciones, mouse, git, depurador, examen), layout §9.2, dibujo (`dibujo/modales.rs`: un dibujo por modal), resaltado, Markdown, paleta, reproductor |
 | `jonesy-doc`       | base offline de quick-doc (`data/libc.toml`) y lexer de contexto de llamada                                                                             |
 | `jonesy-terminal`  | deck: PTY (`portable-pty`) + pantalla virtual `vt100`; PTY del inferior de GDB                                                                          |
 | `jonesy-telemetry` | bitácora encadenada, verificación y replay                                                                                                              |
