@@ -175,6 +175,8 @@ hecho. Queda:
 | Shell y comandos en Windows                        | flojo   | se usa `sh` si está (UCRT64/MSYS2, Git Bash) y si no `cmd /C`, con comillas de cmd. Los comandos de fábrica (`make`, `./programa`) suponen el entorno UCRT64 de `entorno`.   |
 | MSRV                                               | externo | `rust-version` 1.85 se comprueba sólo en la CI (acá está el Rust de dnf).                                                                                                    |
 | ripley tarda ~10 s por archivo                     | externo | jonesy lo corre en segundo plano, con indicador y 1,5 s de espera tras el último guardado; la latencia es de ripley.                                                         |
+| Primer release (v0.1.0)                            | externo | jonesy ya está en el manifiesto del ecosistema (tipo `binario`, perfil estudiante) y tiene skill, pero sin un tag `v0.1.0` empujado no hay binarios en Releases: `release.yml` los arma al subir el tag (N-JONESY-01). |
+| `app.rs` todavía grande                            | flojo   | quedan 7.100 líneas (el estado y la lógica de editor, ejecución, compilación y paneles) y `accion` sigue siendo un `match` de 505 líneas, ahora en `app/acciones.rs`; `dibujar_navegador` (422) y `dibujar_editor` (326) en `dibujo.rs`. Se pueden seguir partiendo con el mismo criterio (N-JONESY-02). |
 
 ## Decisiones tomadas
 
@@ -190,6 +192,8 @@ hecho. Queda:
 
 | Ítem                                                | Requisito        | Cómo quedó                                                                                                                                                                                          |
 | --------------------------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Modales y `app.rs` por área                         | N-JONESY-02      | `tecla_modal` (822 líneas) y `dibujar_modal` (1.081) son despachadores con un método/función por modal (`app/teclas_modal.rs`, `dibujo/modales.rs`); teclado, acciones, mouse, git, depurador y examen salieron de `app.rs` a `app/` (de 10.803 a 7.100 líneas), sin cambios de comportamiento: fmt, clippy y los 285 tests en verde. |
+| En el manifiesto del ecosistema                     | N-JONESY-01      | `ecosistema.toml` de p1-tools la registra con el tipo nuevo `binario` (se clona, no se instala con uv), página `ecosistema/jonesy.md` y skill `skills/jonesy`. |
 | Tráfico en reposo 0 B/s                             | §10 / RNF-A.3    | sólo se redibuja si cambió algo visible: 0 bytes en 10 s de reposo (antes 160).                                                                                                                     |
 | Enlaces de Markdown con teclado                     | RF-8.3           | Tab/Shift+Tab los recorre en la consigna y la vista previa, Enter los abre; las anclas internas saltan dentro del documento.                                                                        |
 | cat-scan: eventos y fugas                           | RF-4.3           | muestra los eventos del paso (doble free, uso tras free) y el resumen final de fugas de mem-trace.                                                                                                  |
