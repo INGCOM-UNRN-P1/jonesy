@@ -98,7 +98,7 @@ comprueba que esté al día.
 | Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
 | Editar | [E]ditar | F10 y E | 29 |
 | Ver | [V]er | Alt+V (o F10 y V) | 17 |
-| Construir | [C]onstruir | Alt+C (o F10 y C) | 13 |
+| Construir | [C]onstruir | Alt+C (o F10 y C) | 14 |
 | Depurar | [D]epurar | Alt+D (o F10 y D) | 12 |
 | Git | [G]it | F10 y G | 9 |
 | Plugins | P[l]ugins | Alt+L (o F10 y L) | 4 |
@@ -198,23 +198,24 @@ comprueba que esté al día.
 ## Construir
 
 ```text
-┌───────────────────────────────────────────────────────────────────┐
-│ Compilar archivo o proyecto                                    F6 │
-│ Compilar al guardar (activar o desactivar)                  Alt+B │
-│ Compilar y ejecutar                                       Ctrl+F5 │
-│ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)           │
-│ Argumentos del programa…                                          │
-│ Comparar con las salidas esperadas                                │
-│ Correr pruebas (make test)                                Ctrl+F6 │
-│ Correr la prueba del cursor                              Shift+F6 │
-│ Crear una prueba para esta función                                │
-├───────────────────────────────────────────────────────────────────┤
-│ Correr un objetivo de make…                              Shift+F9 │
-│ Limpiar compilación (make clean)                                  │
-│ Generar documentación (make doc)                                  │
-├───────────────────────────────────────────────────────────────────┤
-│ Ver ejercicios y objetivos del proyecto                     Alt+Y │
-└───────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ Compilar archivo o proyecto                                          F6 │
+│ Compilar al guardar (activar o desactivar)                        Alt+B │
+│ Compilar y ejecutar                                             Ctrl+F5 │
+│ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)                 │
+│ Ejecutar con sanitizers (memoria y comportamiento indefinido)           │
+│ Argumentos del programa…                                                │
+│ Comparar con las salidas esperadas                                      │
+│ Correr pruebas (make test)                                      Ctrl+F6 │
+│ Correr la prueba del cursor                                    Shift+F6 │
+│ Crear una prueba para esta función                                      │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Correr un objetivo de make…                                    Shift+F9 │
+│ Limpiar compilación (make clean)                                        │
+│ Generar documentación (make doc)                                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│ Ver ejercicios y objetivos del proyecto                           Alt+Y │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Depurar

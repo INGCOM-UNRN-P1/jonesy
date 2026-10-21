@@ -95,6 +95,19 @@ pub struct Integracion {
     /// Comando al guardar, con marcadores (ver [`expandir`]).
     pub comando: String,
     pub formato: Formato,
+    /// Comando que analiza el buffer mientras se escribe, sin guardarlo: recibe el texto por
+    /// la entrada estándar y emite la forma común de hallazgos (`gaff check --stdin …`).
+    /// Además de los marcadores de [`expandir`], `{linea}` es la línea del cursor (lo que se
+    /// está escribiendo, que la herramienta no marca).
+    pub en_vivo: String,
+    /// Comando que traduce la salida del compilador, `{salida}` (un archivo con lo que
+    /// imprimió gcc), a la forma común de hallazgos con su explicación: jonesy compila al
+    /// guardar y con F6, y explica los errores que su catálogo no reconoce
+    /// (`daedalus translate {salida} --json --primer-error`).
+    pub traducir_compilacion: String,
+    /// Comando que traduce lo que imprimió un programa compilado con sanitizers, `{salida}`,
+    /// a la forma común de hallazgos (`tetsuo translate {salida} --json`).
+    pub traducir_sanitizers: String,
     /// Comando para explicar un código con F1 (`gaff explain {codigo}`).
     pub explicar: String,
     /// Comando que emite el catálogo de reglas en JSON (`gaff rules --json`): alimenta el
@@ -126,6 +139,9 @@ impl Default for Integracion {
             archivos: vec![],
             comando: String::new(),
             formato: Formato::Hallazgos,
+            en_vivo: String::new(),
+            traducir_compilacion: String::new(),
+            traducir_sanitizers: String::new(),
             explicar: String::new(),
             catalogo: String::new(),
             omitir_si: String::new(),
@@ -152,6 +168,9 @@ pub struct ConfigIntegraciones {
     pub desactivar: Vec<String>,
     /// Integraciones apagadas por defecto que este proyecto activa (corbel al guardar).
     pub activar: Vec<String>,
+    /// Analizar mientras se escribe con las integraciones que tienen `en_vivo` (gaff): sin
+    /// indicarlo, sí. `false` deja sólo el análisis al guardar.
+    pub en_vivo: Option<bool>,
 }
 
 fn coincide(globs: &[String], ruta: &Path) -> bool {
@@ -332,34 +351,25 @@ pub fn interpretar(
                 crate::sarif::buscar(salida).ok_or("la salida no tiene un documento SARIF")?;
             crate::sarif::interpretar(&doc, dir).diagnosticos
         }
-        Formato::Ripley => crate::diagnostico::parsear_ripley(salida, dir)?,
+        // ripley trae la forma común en `hallazgos` (con la ruta relativa desde la Ola 7);
+        // `ast_findings` queda para las versiones anteriores.
+        Formato::Ripley => match json(salida)?.get("hallazgos").and_then(Value::as_array) {
+            Some(lista) => desde_hallazgos(lista, i, archivo, dir)
+                .into_iter()
+                .map(|d| Diagnostico {
+                    origen: Origen::Ripley,
+                    ..d
+                })
+                .collect(),
+            None => crate::diagnostico::parsear_ripley(salida, dir)?,
+        },
         Formato::Hallazgos => {
             let datos = json(salida)?;
             let lista = datos
                 .get("hallazgos")
                 .and_then(Value::as_array)
                 .ok_or("la salida no tiene «hallazgos»")?;
-            lista
-                .iter()
-                .filter(|h| i.omitir_si.is_empty() || !h[&i.omitir_si].as_bool().unwrap_or(false))
-                .map(|h| Diagnostico {
-                    archivo: ruta_de(&h["archivo"], dir).or_else(|| Some(archivo.to_path_buf())),
-                    linea: h["linea"].as_u64().unwrap_or(1).max(1) as usize,
-                    columna: h["columna"].as_u64().unwrap_or(1).max(1) as usize,
-                    severidad: severidad(h["severidad"].as_str().unwrap_or("")),
-                    mensaje: h["mensaje"].as_str().unwrap_or("").to_string(),
-                    codigo: h["codigo"].as_str().map(str::to_string),
-                    sugerencia: h["sugerencia"]
-                        .as_str()
-                        .filter(|s| !s.is_empty())
-                        .map(str::to_string),
-                    origen: Origen::Herramienta,
-                    herramienta: herramienta.clone(),
-                    categoria: h["categoria"].as_str().map(str::to_string),
-                    enlace: h["enlace"].as_str().map(str::to_string),
-                    resumen: None,
-                })
-                .collect()
+            desde_hallazgos(lista, i, archivo, dir)
         }
         Formato::Corbel => {
             let datos = json(salida)?;
@@ -388,6 +398,7 @@ pub fn interpretar(
                         categoria: Some("documentacion".into()),
                         enlace: None,
                         resumen: None,
+                        explicacion: None,
                     }
                 })
                 .collect()
@@ -398,6 +409,63 @@ pub fn interpretar(
             d.herramienta = herramienta.clone();
         }
         d.archivo = d.archivo.take().map(|p| ruta_real(p, archivo, dir));
+    }
+    Ok(v)
+}
+
+/// Lee la lista plana `hallazgos` con la forma común del ecosistema (yutani.hallazgos): las
+/// mismas claves para todas las herramientas, el archivo relativo al directorio de trabajo y,
+/// opcionales, la sugerencia y la explicación.
+pub fn desde_hallazgos(
+    lista: &[Value],
+    i: &Integracion,
+    archivo: &Path,
+    dir: &Path,
+) -> Vec<Diagnostico> {
+    let texto = |h: &Value, k: &str| {
+        h[k].as_str()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+    lista
+        .iter()
+        .filter(|h| i.omitir_si.is_empty() || !h[&i.omitir_si].as_bool().unwrap_or(false))
+        .map(|h| Diagnostico {
+            archivo: ruta_de(&h["archivo"], dir).or_else(|| Some(archivo.to_path_buf())),
+            linea: h["linea"].as_u64().unwrap_or(1).max(1) as usize,
+            columna: h["columna"].as_u64().unwrap_or(1).max(1) as usize,
+            severidad: severidad(h["severidad"].as_str().unwrap_or("")),
+            mensaje: h["mensaje"].as_str().unwrap_or("").to_string(),
+            codigo: h["codigo"].as_str().map(str::to_string),
+            sugerencia: texto(h, "sugerencia"),
+            origen: Origen::Herramienta,
+            herramienta: Some(i.nombre.clone()),
+            categoria: texto(h, "categoria"),
+            enlace: texto(h, "enlace"),
+            resumen: None,
+            explicacion: texto(h, "explicacion"),
+        })
+        .collect()
+}
+
+/// La salida de un comando `traducir_*` (la forma común de hallazgos) como diagnósticos con
+/// las rutas como las de los buffers. `analizado` es el archivo de referencia para los
+/// hallazgos sin archivo.
+pub fn traduccion(
+    i: &Integracion,
+    salida: &str,
+    analizado: &Path,
+    dir: &Path,
+) -> Result<Vec<Diagnostico>, String> {
+    let datos = json(salida)?;
+    let lista = datos
+        .get("hallazgos")
+        .and_then(Value::as_array)
+        .ok_or("la salida no tiene «hallazgos»")?;
+    let mut v = desde_hallazgos(lista, i, analizado, dir);
+    for d in &mut v {
+        d.archivo = d.archivo.take().map(|p| ruta_real(p, analizado, dir));
     }
     Ok(v)
 }
@@ -515,6 +583,7 @@ mod tests {
             &ConfigIntegraciones {
                 desactivar: vec!["kaneda".into()],
                 activar: vec!["corbel".into()],
+                ..Default::default()
             },
         );
         assert_eq!(errores.len(), 1, "{errores:?}");
@@ -597,6 +666,67 @@ mod tests {
             d[0].enlace.as_deref(),
             Some("https://ingcom-unrn-p1.github.io/x5008h")
         );
+    }
+
+    #[test]
+    fn explicacion_y_ripley_por_la_forma_comun() {
+        let d = tempfile::tempdir().unwrap();
+        let ej = d.path().join("ej1");
+        std::fs::create_dir_all(&ej).unwrap();
+        std::fs::write(ej.join("m.c"), "int main(void){return 0;}\n").unwrap();
+        // ripley con la lista común (relativa a la raíz): se usa en vez de ast_findings.
+        let ripley = Integracion {
+            nombre: "ripley".into(),
+            formato: Formato::Ripley,
+            ..Default::default()
+        };
+        let salida = r#"{"ast_findings": [{"rule_code": "0x0007h", "file": "m.c", "line": 1}],
+          "hallazgos": [{"id": "style:0x0007h", "herramienta": "style", "codigo": "0x0007h",
+            "categoria": "estilo", "severidad": "estilo", "mensaje": "Llave K&R", "archivo": "ej1/m.c",
+            "linea": 1, "columna": 15, "enlace": null, "sugerencia": "Allman",
+            "explicacion": "La llave va en su propia línea."}]}"#;
+        let v = interpretar(&ripley, salida, &ej.join("m.c"), d.path()).unwrap();
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0].origen, Origen::Ripley);
+        assert_eq!((v[0].linea, v[0].columna), (1, 15));
+        assert_eq!(v[0].herramienta.as_deref(), Some("ripley"));
+        assert_eq!(
+            v[0].explicacion.as_deref(),
+            Some("La llave va en su propia línea.")
+        );
+        assert_eq!(v[0].archivo, Some(crate::canonica(&ej.join("m.c"))));
+        // Un ripley anterior, sin la lista común.
+        let viejo = r#"{"ast_findings": [{"rule_code": "0x0007h", "file": "ej1/m.c", "line": 1}]}"#;
+        assert_eq!(
+            interpretar(&ripley, viejo, &ej.join("m.c"), d.path()).unwrap()[0].linea,
+            1
+        );
+        // La traducción de la salida del compilador (daedalus translate).
+        let daedalus = de_fabrica()
+            .into_iter()
+            .find(|i| i.nombre == "daedalus")
+            .unwrap();
+        let t = r#"{"hallazgos": [{"id": "daedalus:sintaxis", "herramienta": "daedalus",
+            "codigo": "sintaxis", "categoria": "sintaxis", "severidad": "error",
+            "mensaje": "Falta un punto y coma (;)", "archivo": "ej1/m.c", "linea": 1, "columna": 9,
+            "enlace": null, "explicacion": "Alguna sentencia previa no fue cerrada."}]}"#;
+        let v = traduccion(&daedalus, t, &ej.join("m.c"), d.path()).unwrap();
+        assert_eq!(v[0].archivo, Some(crate::canonica(&ej.join("m.c"))));
+        assert_eq!(v[0].mensaje, "Falta un punto y coma (;)");
+        assert!(traduccion(&daedalus, "[]", &ej.join("m.c"), d.path()).is_err());
+    }
+
+    #[test]
+    fn comandos_en_vivo_y_de_traduccion_de_fabrica() {
+        let v = de_fabrica();
+        let por = |n: &str| v.iter().find(|i| i.nombre == n).unwrap();
+        assert!(por("gaff").en_vivo.contains("--stdin") && por("gaff").en_vivo.contains("{linea}"));
+        assert!(por("daedalus").traducir_compilacion.contains("{salida}"));
+        assert!(por("tetsuo").traducir_sanitizers.contains("{salida}"));
+        assert!(v
+            .iter()
+            .filter(|i| i.nombre != "gaff")
+            .all(|i| i.en_vivo.is_empty()));
     }
 
     #[test]
@@ -696,6 +826,116 @@ mod tests {
                     "kaneda tendría que marcar gets: {d:?}"
                 );
             }
+        }
+    }
+
+    /// Corre `cmd` en `dir` con `entrada` por stdin; la salida estándar.
+    fn correr_con(cmd: &str, dir: &Path, entrada: Option<&str>) -> String {
+        use std::io::Write;
+        let (prog, opcion) = crate::proceso::interprete();
+        let mut hijo = std::process::Command::new(prog)
+            .arg(opcion)
+            .arg(cmd)
+            .current_dir(dir)
+            .env("NO_COLOR", "1")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut stdin = hijo.stdin.take().unwrap();
+        stdin.write_all(entrada.unwrap_or("").as_bytes()).unwrap();
+        drop(stdin);
+        String::from_utf8_lossy(&hijo.wait_with_output().unwrap().stdout).into_owned()
+    }
+
+    #[test]
+    fn en_vivo_y_traducciones_con_las_herramientas_reales_si_estan() {
+        // El contrato de gaff --stdin, daedalus translate y tetsuo translate con las versiones
+        // instaladas (se saltea si no están o son anteriores a la Ola 7).
+        let dir = tempfile::tempdir().unwrap();
+        let ej = dir.path().join("ej1");
+        std::fs::create_dir_all(&ej).unwrap();
+        let fuente = ej.join("main.c");
+        let v = de_fabrica();
+        let por = |n: &str| v.iter().find(|i| i.nombre == n).unwrap().clone();
+        let soporta = |prog: &str, que: &str| {
+            std::process::Command::new(prog)
+                .args([que, "--help"])
+                .output()
+                .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--json"))
+        };
+        let gaff = por("gaff");
+        if gaff.disponible()
+            && std::process::Command::new("gaff")
+                .args(["check", "--help"])
+                .output()
+                .is_ok_and(|o| String::from_utf8_lossy(&o.stdout).contains("--stdin"))
+        {
+            // Una función a medio escribir: el nombre en camelCase se marca (es de una
+            // línea); la línea del cursor, no.
+            let texto = "int main(void)\n{\n    int miTotal = 0;\n    int otroValor = 1;\n    if (miTotal > 0)\n    {\n";
+            let cmd = expandir(
+                &gaff.en_vivo.replace("{linea}", "4"),
+                dir.path(),
+                Some(&fuente),
+                None,
+                None,
+            );
+            let salida = correr_con(&cmd, dir.path(), Some(texto));
+            let d = interpretar(&gaff, &salida, &fuente, dir.path())
+                .unwrap_or_else(|e| panic!("gaff --stdin: {e}\n{salida}"));
+            assert!(d.iter().any(|x| x.linea == 3), "{d:?}");
+            assert!(d.iter().all(|x| x.linea != 4), "{d:?}");
+            assert!(!fuente.exists());
+        }
+        std::fs::write(&fuente, "int main(void)\n{\n    return cantidad;\n}\n").unwrap();
+        let daedalus = por("daedalus");
+        if daedalus.disponible() && soporta("daedalus", "translate") {
+            let log = dir.path().join("gcc.txt");
+            std::fs::write(
+                &log,
+                format!(
+                    "{}:3:12: error: 'cantidad' undeclared (first use in this function)\n",
+                    fuente.display()
+                ),
+            )
+            .unwrap();
+            let cmd = daedalus.traducir_compilacion.replace(
+                "{salida}",
+                &crate::proyecto::shell_quote(&log.to_string_lossy()),
+            );
+            let salida = correr_con(&cmd, dir.path(), None);
+            if salida.contains("\"hallazgos\"") {
+                let d = traduccion(&daedalus, &salida, &fuente, dir.path()).unwrap();
+                assert_eq!(d[0].linea, 3);
+                assert_eq!(d[0].archivo, Some(crate::canonica(&fuente)));
+                assert!(d[0].explicacion.is_some(), "{d:?}");
+            }
+        }
+        let tetsuo = por("tetsuo");
+        if tetsuo.disponible() && soporta("tetsuo", "translate") {
+            let log = dir.path().join("asan.txt");
+            std::fs::write(
+                &log,
+                format!(
+                    "==1==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x502000000020 at pc 0x1 bp 0x2 sp 0x3\nWRITE of size 4 at 0x502000000020 thread T0\n    #0 0x55d4 in main {}:3\n",
+                    fuente.display()
+                ),
+            )
+            .unwrap();
+            let cmd = tetsuo.traducir_sanitizers.replace(
+                "{salida}",
+                &crate::proyecto::shell_quote(&log.to_string_lossy()),
+            );
+            let salida = correr_con(&cmd, dir.path(), None);
+            let d = traduccion(&tetsuo, &salida, &fuente, dir.path())
+                .unwrap_or_else(|e| panic!("tetsuo translate: {e}\n{salida}"));
+            assert_eq!(
+                (d[0].linea, d[0].archivo.clone()),
+                (3, Some(crate::canonica(&fuente)))
+            );
+            assert!(d[0].explicacion.is_some());
         }
     }
 }

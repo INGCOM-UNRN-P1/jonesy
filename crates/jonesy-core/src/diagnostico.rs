@@ -53,6 +53,9 @@ pub struct Diagnostico {
     pub enlace: Option<String>,
     /// El mensaje en español claro (errores de gcc reconocidos, ver `errores_gcc`).
     pub resumen: Option<String>,
+    /// El porqué en español, en Markdown, para F1: lo trae la forma común de hallazgos
+    /// (`explicacion` de daedalus, tetsuo, hal o gaff).
+    pub explicacion: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

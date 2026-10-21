@@ -6,7 +6,12 @@
 # integración con el mismo `nombre` pisa a la de fábrica. Ver docs/integraciones.md.
 #
 # Marcadores en los comandos: {archivo} (ruta relativa a la raíz), {dir} (directorio
-# del archivo), {modulo} (directorio del módulo con Makefile), {codigo} (en `explicar`).
+# del archivo), {modulo} (directorio del módulo con Makefile), {codigo} (en `explicar`),
+# {linea} (en `en_vivo`, la del cursor) y {salida} (en `traducir_*`, un archivo con lo que
+# imprimió el compilador o el programa).
+#
+# Todas las salidas JSON se leen por la lista plana `hallazgos`, con la forma común de
+# yutani.hallazgos (el archivo relativo a la raíz y, opcional, la explicación para F1).
 
 [[integracion]]
 nombre = "ripley"
@@ -29,6 +34,9 @@ comando = "gaff check {archivo} --json"
 formato = "hallazgos"
 catalogo = "gaff rules --json"
 explicar = "gaff explain {codigo}"
+# Mientras se escribe: el buffer por la entrada estándar, con las reglas del TP del archivo
+# y sin marcar la línea del cursor ni lo que todavía no está cerrado.
+en_vivo = "gaff check --stdin --stdin-filename {archivo} --linea {linea} --json"
 
   [[integracion.accion]]
   titulo = "Corregir el estilo automáticamente (gaff fix)"
@@ -96,6 +104,9 @@ cuando = "manual"
 archivos = ["*.c"]
 comando = "daedalus compile {archivo} --json"
 formato = "hallazgos"
+# Al compilar (al guardar o con F6), la salida de gcc se traduce sin compilar de nuevo: el
+# primer error, el que causa los demás, con su explicación en español.
+traducir_compilacion = "daedalus translate {salida} --json --primer-error"
 
   [[integracion.accion]]
   titulo = "Compilar con explicaciones en español (daedalus)"
@@ -108,6 +119,8 @@ descripcion = "Sanitizers (ASan, UBSan, LSan) explicados"
 binario = "tetsuo"
 cuando = "manual"
 archivos = ["*.c"]
+# Construir → Ejecutar con sanitizers: lo que imprimió el programa, explicado y en su línea.
+traducir_sanitizers = "tetsuo translate {salida} --json"
 
   [[integracion.accion]]
   titulo = "Ejecutar con sanitizers (tetsuo run)"

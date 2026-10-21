@@ -21,6 +21,10 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   lee) y explica cada acceso inválido, uso después de `free`, `free` doble y
   fuga en la línea del alumno, con dónde se pidió o liberó el bloque; sin
   valgrind (Windows), lo mismo con AddressSanitizer si el compilador lo trae.
+  **Construir → Ejecutar con sanitizers** corre el programa con AddressSanitizer
+  y UBSan en la pestaña Ejecución: el primer acceso fuera de límites, uso
+  después de `free` o comportamiento indefinido lo detiene, se explica en
+  Problemas (con tetsuo, si está) y el cursor queda en la sentencia que lo causó.
 - **Edición y navegación**: pares que se cierran solos, comentar (Ctrl+/), mover
   y duplicar líneas, buscar y reemplazar (Ctrl+H), ir a la definición (F12 o
   Ctrl+clic) y volver (Alt+←), esquema del archivo (Alt+S), buscar en el
@@ -258,6 +262,13 @@ Las herramientas de la cátedra se integran como **plugins declarativos**
   virtual, en Problemas con el nombre de la herramienta, y en el panel Alt+R
   agrupados por tema (memoria, punteros, seguridad, estilo…). Lo repetido entre
   herramientas se muestra una vez.
+- **Mientras se escribe**, gaff revisa el buffer sin guardar (`gaff check
+  --stdin`) con las reglas del TP: sangría, llaves y nombres al instante, sin
+  marcar la línea que se está escribiendo ni lo que todavía no está cerrado
+  (`[integraciones] en_vivo = false` lo apaga).
+- **Si no compila**, daedalus traduce la salida de gcc (sin compilar de nuevo):
+  el primer error, el que causa los demás, explicado en español en su línea y
+  con F1, también los que el catálogo de jonesy no reconoce.
 - **F1** explica el hallazgo con la herramienta que lo informó (`gaff explain`,
   `kaneda explain`…) y muestra el enlace al apunte.
 - **Acciones de las herramientas (Alt+H)**: `gaff fix`, `gaff explain-syntax`,

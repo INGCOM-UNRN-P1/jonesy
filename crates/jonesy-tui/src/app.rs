@@ -49,6 +49,8 @@ mod teclas_modal;
 
 pub const AUTOGUARDADO: Duration = Duration::from_secs(30);
 pub const DEBOUNCE_PREVIEW: Duration = Duration::from_millis(120);
+/// Pausa al escribir antes de analizar el buffer con las integraciones en vivo (gaff).
+pub const DEBOUNCE_VIVO: Duration = Duration::from_millis(600);
 pub const SONDEO_GIT: Duration = Duration::from_secs(2);
 pub const AVISOS_MIN: [u64; 3] = [30, 15, 5];
 /// Las herramientas lentas (ripley tarda ~10 s) corren este tiempo después del último
@@ -451,6 +453,9 @@ enum InformeMemoria {
     Valgrind(PathBuf),
     /// AddressSanitizer lo escribe en la terminal, con la salida del programa.
     Asan,
+    /// Construir → Ejecutar con sanitizers (ASan y UBSan): el informe en la terminal, que
+    /// tetsuo explica si está; si no, `asan::interpretar`.
+    Sanitizers,
 }
 
 #[derive(Debug, Clone)]
@@ -492,6 +497,24 @@ enum Tarea {
     Formatear {
         archivo: PathBuf,
         temporal: PathBuf,
+        version: u64,
+    },
+    /// Traducción de lo que imprimió el compilador (`traducir_compilacion`, daedalus) o un
+    /// programa con sanitizers (`traducir_sanitizers`, tetsuo).
+    Traducir {
+        integracion: String,
+        sanitizers: bool,
+        /// El archivo activo (para los hallazgos sin archivo).
+        analizado: PathBuf,
+        /// La compilación que se traduce: si hubo otra, el resultado ya es viejo.
+        compilacion: u64,
+        /// Lo que imprimió el programa (para mostrarlo con el informe).
+        texto: String,
+    },
+    /// Análisis del buffer sin guardar mientras se escribe (`en_vivo`, gaff).
+    EnVivo {
+        nombre: String,
+        archivo: PathBuf,
         version: u64,
     },
 }
@@ -805,6 +828,13 @@ pub struct App {
     integraciones_pendientes: BTreeSet<(String, PathBuf)>,
     /// Integraciones lentas programadas para después del último guardado.
     integraciones_programadas: HashMap<(String, PathBuf), Instant>,
+    /// Compilaciones terminadas: la traducción de una vieja se descarta.
+    compilaciones: u64,
+    /// Versión de cada buffer analizada (o en análisis) en vivo.
+    analizado_en_vivo: HashMap<PathBuf, u64>,
+    /// Integraciones cuyo análisis en vivo falló (una versión sin `--stdin`): quedan sólo
+    /// al guardar.
+    en_vivo_rotas: BTreeSet<String>,
 
     pub terminal: Option<Deck>,
     pub ejecucion: Option<Deck>,
@@ -1032,6 +1062,9 @@ impl App {
             integraciones_ausentes: BTreeSet::new(),
             integraciones_pendientes: BTreeSet::new(),
             integraciones_programadas: HashMap::new(),
+            compilaciones: 0,
+            analizado_en_vivo: HashMap::new(),
+            en_vivo_rotas: BTreeSet::new(),
             terminal: None,
             ejecucion: None,
             vigilar_programa: false,
@@ -1366,6 +1399,16 @@ impl App {
     }
 
     fn lanzar_con(&mut self, comando: &str, tarea: Tarea, entorno: &[(&str, &str)]) -> u64 {
+        self.lanzar_con_entrada(comando, tarea, entorno, None)
+    }
+
+    fn lanzar_con_entrada(
+        &mut self,
+        comando: &str,
+        tarea: Tarea,
+        entorno: &[(&str, &str)],
+        entrada: Option<String>,
+    ) -> u64 {
         let id = self.proximo_id();
         self.procesos.insert(id, tarea);
         let tx = self.tx.clone();
@@ -1377,7 +1420,7 @@ impl App {
                 }
             }
         });
-        proceso::lanzar(id, comando, &self.proyecto.raiz, entorno, txp);
+        proceso::lanzar_con_entrada(id, comando, &self.proyecto.raiz, entorno, entrada, txp);
         id
     }
 
@@ -1884,6 +1927,237 @@ impl App {
         }
     }
 
+    // ------------------------------------------------------------ en vivo y traducciones
+
+    /// Mientras se escribe: tras una pausa, el buffer sin guardar va por la entrada estándar
+    /// a las integraciones con `en_vivo` (gaff), que no marcan la línea del cursor ni lo que
+    /// todavía no está cerrado. Sus hallazgos reemplazan a los del último guardado.
+    fn analizar_en_vivo(&mut self) {
+        if self.proyecto.config.integraciones.en_vivo == Some(false) || self.examen_en_pausa() {
+            return;
+        }
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let b = self.buf();
+        if !b.buf.modificado() || b.hex.is_some() || b.ultimo_cambio.elapsed() < DEBOUNCE_VIVO {
+            return;
+        }
+        let version = b.buf.version;
+        if self.analizado_en_vivo.get(&ruta) == Some(&version)
+            || self
+                .procesos
+                .values()
+                .any(|t| matches!(t, Tarea::EnVivo { archivo, .. } if *archivo == ruta))
+        {
+            return;
+        }
+        let integraciones: Vec<(String, String)> = self
+            .integraciones_activas()
+            .filter(|x| {
+                !x.en_vivo.is_empty()
+                    && x.aplica_a(&ruta)
+                    && !self.en_vivo_rotas.contains(&x.nombre)
+            })
+            .map(|x| (x.nombre.clone(), x.en_vivo.clone()))
+            .collect();
+        if integraciones.is_empty() {
+            return;
+        }
+        let linea = b.buf.linea_columna().0 + 1;
+        let texto = b.buf.contenido();
+        self.analizado_en_vivo.insert(ruta.clone(), version);
+        let modulo = self
+            .proyecto
+            .estructura
+            .modulo_de(&ruta)
+            .map(|m| m.dir.clone());
+        for (nombre, plantilla) in integraciones {
+            let cmd = jonesy_core::integraciones::expandir(
+                &plantilla.replace("{linea}", &linea.to_string()),
+                &self.proyecto.raiz,
+                Some(&ruta),
+                modulo.as_deref(),
+                None,
+            );
+            self.lanzar_con_entrada(
+                &cmd,
+                Tarea::EnVivo {
+                    nombre,
+                    archivo: ruta.clone(),
+                    version,
+                },
+                &[],
+                Some(texto.clone()),
+            );
+        }
+    }
+
+    /// Cuánto falta para el próximo análisis en vivo del buffer activo (None si no hay uno
+    /// pendiente).
+    fn espera_en_vivo(&self) -> Option<Duration> {
+        let ruta = self.activo_ruta()?;
+        let b = self.buf();
+        let pendiente = b.buf.modificado()
+            && self.analizado_en_vivo.get(&ruta) != Some(&b.buf.version)
+            && self.proyecto.config.integraciones.en_vivo != Some(false)
+            && self.integraciones_activas().any(|x| {
+                !x.en_vivo.is_empty()
+                    && x.aplica_a(&ruta)
+                    && !self.en_vivo_rotas.contains(&x.nombre)
+            });
+        pendiente.then(|| DEBOUNCE_VIVO.saturating_sub(b.ultimo_cambio.elapsed()))
+    }
+
+    fn fin_en_vivo(
+        &mut self,
+        nombre: String,
+        archivo: PathBuf,
+        version: u64,
+        codigo: Option<i32>,
+        salida: String,
+    ) {
+        if codigo == Some(127) {
+            self.integraciones_ausentes.insert(nombre);
+            return;
+        }
+        // Si siguió escribiendo, el próximo análisis trae lo vigente.
+        let vigente = self
+            .buffers
+            .iter()
+            .any(|b| b.buf.ruta.as_deref() == Some(archivo.as_path()) && b.buf.version == version);
+        let Some(x) = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == nombre)
+            .cloned()
+        else {
+            return;
+        };
+        match jonesy_core::integraciones::interpretar(&x, &salida, &archivo, &self.proyecto.raiz) {
+            Ok(d) if vigente => {
+                self.diag_herramientas.insert((nombre, archivo), d);
+            }
+            Ok(_) => {}
+            Err(_) => {
+                self.en_vivo_rotas.insert(nombre.clone());
+                self.avisar(
+                    format!("{nombre} no puede analizar mientras escribís (¿una versión anterior a --stdin?): sigue al guardar."),
+                    Nivel::Aviso,
+                );
+            }
+        }
+    }
+
+    /// La integración activa que traduce la salida del compilador (daedalus) o la de un
+    /// programa con sanitizers (tetsuo).
+    fn traductora(&self, sanitizers: bool) -> Option<jonesy_core::integraciones::Integracion> {
+        self.integraciones_activas()
+            .find(|x| {
+                if sanitizers {
+                    !x.traducir_sanitizers.is_empty()
+                } else {
+                    !x.traducir_compilacion.is_empty()
+                }
+            })
+            .cloned()
+    }
+
+    /// Escribe `texto` en el estado del proyecto y lanza el `traducir_*` de `x` sobre él.
+    fn lanzar_traduccion(
+        &mut self,
+        x: &jonesy_core::integraciones::Integracion,
+        sanitizers: bool,
+        texto: &str,
+    ) -> bool {
+        let dir = self.proyecto.dir_estado();
+        let _ = std::fs::create_dir_all(&dir);
+        let archivo = dir.join(if sanitizers {
+            "salida-sanitizers.txt"
+        } else {
+            "salida-compilacion.txt"
+        });
+        if std::fs::write(&archivo, texto).is_err() {
+            return false;
+        }
+        let plantilla = if sanitizers {
+            &x.traducir_sanitizers
+        } else {
+            &x.traducir_compilacion
+        };
+        let activo = self.activo_ruta();
+        let cmd = jonesy_core::integraciones::expandir(
+            &plantilla.replace(
+                "{salida}",
+                &jonesy_core::proyecto::shell_quote(&archivo.to_string_lossy()),
+            ),
+            &self.proyecto.raiz,
+            activo.as_deref(),
+            None,
+            None,
+        );
+        let analizado = activo.unwrap_or_else(|| self.proyecto.raiz.clone());
+        self.lanzar(
+            &cmd,
+            Tarea::Traducir {
+                integracion: x.nombre.clone(),
+                sanitizers,
+                analizado,
+                compilacion: self.compilaciones,
+                texto: if sanitizers {
+                    texto.to_string()
+                } else {
+                    String::new()
+                },
+            },
+        );
+        true
+    }
+
+    /// La compilación falló: su salida va a `traducir_compilacion` (daedalus translate
+    /// --primer-error), sin compilar de nuevo, para explicar el error que causa los demás.
+    fn traducir_compilacion(&mut self, salida: &str) {
+        if let Some(x) = self.traductora(false) {
+            self.lanzar_traduccion(&x, false, salida);
+        }
+    }
+
+    /// Suma la explicación traducida a los errores de gcc de la misma línea: el resumen
+    /// (al final de la línea y en Problemas) si el catálogo de jonesy no lo reconoció, y el
+    /// porqué para F1.
+    fn fin_traducir_compilacion(&mut self, integracion: &str, analizado: &Path, salida: &str) {
+        let Some(x) = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == integracion)
+            .cloned()
+        else {
+            return;
+        };
+        // Sin traducción (la herramienta falló) quedan los errores de gcc como estaban.
+        let Ok(traducidos) =
+            jonesy_core::integraciones::traduccion(&x, salida, analizado, &self.proyecto.raiz)
+        else {
+            return;
+        };
+        for t in traducidos {
+            let Some(d) = self.diag_compilador.iter_mut().find(|d| {
+                d.origen == jonesy_core::Origen::Compilador
+                    && d.linea == t.linea
+                    && d.archivo.as_deref().map(jonesy_core::canonica) == t.archivo
+            }) else {
+                continue;
+            };
+            d.explicacion = Some(markdown_traduccion(&t, &d.mensaje));
+            if d.resumen.is_none() {
+                d.resumen = Some(t.mensaje.clone());
+            }
+            d.categoria = d.categoria.take().or(t.categoria);
+            d.enlace = d.enlace.take().or(t.enlace);
+            d.sugerencia = d.sugerencia.take().or(t.sugerencia);
+        }
+    }
+
     /// Acciones de las integraciones activas que aplican al archivo activo:
     /// (integración, índice de la acción, título).
     pub fn acciones_disponibles(&self) -> Vec<(String, usize, String)> {
@@ -2074,15 +2348,18 @@ impl App {
         let mut v: Vec<String> = self
             .procesos
             .values()
-            .map(|t| match t {
-                Tarea::Compilar { .. } => "compilando".into(),
-                Tarea::Integracion { nombre, .. } => nombre.clone(),
-                Tarea::AccionHerramienta { integracion, .. } => integracion.clone(),
-                Tarea::Verificar => "verificando".into(),
-                Tarea::Explicar { .. } => "explicando".into(),
-                Tarea::MemTrace { .. } => "mem-trace".into(),
-                Tarea::Objetivo { .. } => "make".into(),
-                Tarea::Formatear { .. } => "formateando".into(),
+            .filter_map(|t| match t {
+                Tarea::Compilar { .. } => Some("compilando".into()),
+                Tarea::Integracion { nombre, .. } => Some(nombre.clone()),
+                Tarea::AccionHerramienta { integracion, .. } => Some(integracion.clone()),
+                Tarea::Verificar => Some("verificando".into()),
+                Tarea::Explicar { .. } => Some("explicando".into()),
+                Tarea::MemTrace { .. } => Some("mem-trace".into()),
+                Tarea::Objetivo { .. } => Some("make".into()),
+                Tarea::Formatear { .. } => Some("formateando".into()),
+                Tarea::Traducir { integracion, .. } => Some(integracion.clone()),
+                // Corre a cada pausa al escribir: en la barra sería un parpadeo.
+                Tarea::EnVivo { .. } => None,
             })
             .collect();
         v.extend(
@@ -3293,11 +3570,15 @@ impl App {
                     exit_code: codigo,
                 });
                 self.diag_compilador = diagnostico::parsear_gcc(&salida, &self.proyecto.raiz);
+                self.compilaciones += 1;
                 let errores = self
                     .diag_compilador
                     .iter()
                     .filter(|d| d.severidad == Severidad::Error)
                     .count();
+                if codigo != Some(0) && errores > 0 {
+                    self.traducir_compilacion(&salida);
+                }
                 let advertencias = self.diag_compilador.len() - errores;
                 self.ultima_compilacion = Some((
                     Instant::now(),
@@ -3377,6 +3658,24 @@ impl App {
             Tarea::Integracion { nombre, archivo } => {
                 self.fin_integracion(nombre, archivo, codigo, salida)
             }
+            Tarea::Traducir {
+                integracion,
+                sanitizers,
+                analizado,
+                compilacion,
+                texto,
+            } => {
+                if sanitizers {
+                    self.fin_traducir_sanitizers(&integracion, &analizado, &texto, &salida);
+                } else if compilacion == self.compilaciones {
+                    self.fin_traducir_compilacion(&integracion, &analizado, &salida);
+                }
+            }
+            Tarea::EnVivo {
+                nombre,
+                archivo,
+                version,
+            } => self.fin_en_vivo(nombre, archivo, version, codigo, salida),
             Tarea::AccionHerramienta {
                 integracion,
                 titulo,
@@ -3609,6 +3908,15 @@ impl App {
             self.visor_explicacion("Error de compilación".into(), &texto);
             return;
         }
+        // Un error de gcc que el catálogo no reconoce, explicado por daedalus.
+        if let Some(t) = d
+            .as_ref()
+            .filter(|d| d.codigo.is_none())
+            .and_then(|d| d.explicacion.clone())
+        {
+            self.visor_explicacion("Error de compilación".into(), &t);
+            return;
+        }
         let Some(d) = d.filter(|d| d.codigo.is_some()) else {
             self.abrir_paleta();
             return;
@@ -3755,6 +4063,7 @@ impl App {
                 herramienta: herramienta.clone(),
                 codigo: codigo.clone(),
                 titulo: d.mensaje.clone(),
+                descripcion: d.explicacion.clone().unwrap_or_default(),
                 sugerencia: d.sugerencia.clone().unwrap_or_default(),
                 categoria: d.categoria.clone().unwrap_or_default(),
                 ..Default::default()
@@ -5122,6 +5431,148 @@ impl App {
         }
     }
 
+    /// Construir → Ejecutar con sanitizers: el programa compilado con AddressSanitizer y
+    /// UndefinedBehaviorSanitizer corre en la pestaña Ejecución (se le puede escribir la
+    /// entrada, o va el archivo de Ejecutar con entrada…). El primer acceso inválido o
+    /// comportamiento indefinido lo detiene; al terminar, el informe (explicado por tetsuo
+    /// si está) queda en Problemas y el cursor en la sentencia que lo causó.
+    pub fn ejecutar_con_sanitizers(&mut self) {
+        let Some((cc, banderas)) = jonesy_core::asan::compilador_sanitizers() else {
+            self.avisar(
+                if cfg!(windows) {
+                    "El compilador no trae los sanitizers: en Windows, el clang de MSYS2 CLANG64 sí (o WSL). Mientras tanto, Revisar la memoria y cat-scan."
+                } else {
+                    "El compilador no trae los sanitizers: instalá libasan y libubsan (sudo dnf install libasan libubsan / sudo apt install libasan8 libubsan1)."
+                },
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let activo = self.activo_ruta();
+        let salida = self.proyecto.dir_estado().join("asan");
+        let _ = std::fs::create_dir_all(&salida);
+        let Some(comando) = activo
+            .as_deref()
+            .and_then(|a| jonesy_core::asan::comando_con(&self.proyecto, a, cc, banderas, &salida))
+        else {
+            self.avisar(
+                "No sé qué ejecutar: abrí un .c del programa (el ejercicio con su main.c).",
+                Nivel::Aviso,
+            );
+            return;
+        };
+        let args: String = self
+            .argumentos_de_ejercicio()
+            .iter()
+            .map(|x| format!(" {}", jonesy_core::proyecto::shell_quote(x)))
+            .collect();
+        let clave = self.clave_ejercicio().unwrap_or_default();
+        let redir = self
+            .entradas
+            .get(&clave)
+            .filter(|p| p.is_file())
+            .map(|e| {
+                format!(
+                    " < {}",
+                    jonesy_core::proyecto::shell_quote(&e.to_string_lossy())
+                )
+            })
+            .unwrap_or_default();
+        self.correr_en_deck(format!("{comando}{args}{redir}"));
+        if self.ejecucion.is_some() {
+            self.informe_memoria = Some(InformeMemoria::Sanitizers);
+            self.avisar(
+                if banderas.contains("undefined") {
+                    "Corre con AddressSanitizer y UBSan: el primer error de memoria o comportamiento indefinido lo detiene y se explica en su línea."
+                } else {
+                    "Corre con AddressSanitizer: el primer error de memoria lo detiene y se explica en su línea (este compilador no trae UBSan)."
+                },
+                Nivel::Info,
+            );
+        }
+    }
+
+    /// tetsuo tradujo lo que imprimió el programa con sanitizers.
+    fn fin_traducir_sanitizers(
+        &mut self,
+        integracion: &str,
+        analizado: &Path,
+        texto: &str,
+        salida: &str,
+    ) {
+        let x = self
+            .integraciones
+            .iter()
+            .find(|x| x.nombre == integracion)
+            .cloned();
+        let d = x.and_then(|x| {
+            jonesy_core::integraciones::traduccion(&x, salida, analizado, &self.proyecto.raiz).ok()
+        });
+        match d {
+            Some(mut d) => {
+                for x in &mut d {
+                    // Lo que muestra la línea: el título; F1, el porqué y qué hacer.
+                    x.resumen = Some(x.mensaje.clone());
+                }
+                self.fin_sanitizers(d, texto)
+            }
+            // tetsuo falló: lo que entiende jonesy.
+            None => {
+                let r = jonesy_core::asan::interpretar(texto, &self.proyecto.raiz);
+                self.fin_sanitizers(r.diagnosticos, texto)
+            }
+        }
+    }
+
+    /// El informe de los sanitizers en Problemas, con el cursor en la sentencia que causó el
+    /// primer error (la que detuvo al programa).
+    fn fin_sanitizers(&mut self, diagnosticos: Vec<Diagnostico>, salida: &str) {
+        let mut d = diagnostico::parsear_gcc(salida, &self.proyecto.raiz);
+        d.extend(diagnosticos);
+        self.diag_compilador = d;
+        let errores = self
+            .diag_compilador
+            .iter()
+            .filter(|d| d.severidad == Severidad::Error)
+            .count();
+        if errores == 0 {
+            let texto = "Sanitizers: sin errores de memoria ni comportamiento indefinido.";
+            self.salida.push((format!("[{texto}]"), false));
+            self.avisar(texto, Nivel::Ok);
+            return;
+        }
+        let causa = self
+            .diag_compilador
+            .iter()
+            .find(|d| d.severidad == Severidad::Error && d.archivo.is_some())
+            .map(|d| {
+                (
+                    d.archivo.clone().unwrap(),
+                    d.linea,
+                    d.columna,
+                    d.resumen.clone(),
+                )
+            });
+        let texto = format!("Sanitizers: {errores} error(es) (mirá Problemas; F1 lo explica).");
+        self.salida.push((format!("[{texto}]"), true));
+        self.pestana = Pestana::Problemas;
+        self.sel_problema = 0;
+        if let Some((archivo, linea, columna, resumen)) = causa {
+            self.ir_a(&archivo, linea, columna);
+            self.foco = Foco::Editor;
+            self.avisar(
+                format!(
+                    "{}:{linea}: {}",
+                    self.proyecto.relativa(&archivo),
+                    resumen.unwrap_or(texto)
+                ),
+                Nivel::Error,
+            );
+        } else {
+            self.avisar(texto, Nivel::Error);
+        }
+    }
+
     /// valgrind sobre el programa (no `make memcheck`) con sus argumentos y su entrada:
     /// con un archivo de entrada elegido corre en el panel; si el programa lee del teclado
     /// y no hay archivo, en la pestaña Ejecución para poder escribirle (sin teclado
@@ -5177,12 +5628,24 @@ impl App {
             .as_ref()
             .map(|d| d.texto())
             .unwrap_or_default();
+        if matches!(informe, InformeMemoria::Sanitizers) {
+            // tetsuo lo explica si está; si no, lo que entiende jonesy (ASan y UBSan).
+            match self.traductora(true) {
+                Some(x) if self.lanzar_traduccion(&x, true, &texto) => {}
+                _ => {
+                    let r = jonesy_core::asan::interpretar(&texto, &self.proyecto.raiz);
+                    self.fin_sanitizers(r.diagnosticos, &texto);
+                }
+            }
+            return;
+        }
         let r = match informe {
             InformeMemoria::Valgrind(archivo) => {
                 let log = std::fs::read_to_string(&archivo).unwrap_or_default();
                 let _ = std::fs::remove_file(&archivo);
                 jonesy_core::valgrind::interpretar(&log, &self.proyecto.raiz)
             }
+            InformeMemoria::Sanitizers => unreachable!("se trata antes"),
             InformeMemoria::Asan => {
                 let mut r = jonesy_core::asan::interpretar(&texto, &self.proyecto.raiz);
                 // Sin informe pero el programa terminó bien: no hubo errores.
@@ -6315,6 +6778,9 @@ impl App {
                     .max(Duration::from_millis(10)),
             );
         }
+        if let Some(t) = self.espera_en_vivo() {
+            espera = espera.min(t.max(Duration::from_millis(10)));
+        }
         if !self.procesos.is_empty() || self.vigilar_programa {
             espera = espera.min(Duration::from_millis(500));
         }
@@ -6365,6 +6831,7 @@ impl App {
                 .remove(&(nombre.clone(), archivo.clone()));
             self.lanzar_integracion(&nombre, &archivo);
         }
+        self.analizar_en_vivo();
         if self.vigilar_programa && self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_cuelgue();
         }
@@ -6817,6 +7284,30 @@ pub fn columna_de_visual(chars: &[char], objetivo: usize) -> usize {
         }
     }
     chars.len()
+}
+
+/// La explicación de F1 para un hallazgo traducido (daedalus, tetsuo): título, lo que dijo
+/// el compilador o el programa, el porqué, qué hacer y el apunte.
+pub fn markdown_traduccion(t: &Diagnostico, original: &str) -> String {
+    let mut s = format!("# {}\n\n", t.mensaje);
+    let original = original.trim();
+    if !original.is_empty() && original != t.mensaje {
+        s.push_str(&format!("> `{original}`\n\n"));
+    }
+    if let Some(e) = &t.explicacion {
+        s.push_str(e.trim());
+        s.push('\n');
+    }
+    if let Some(q) = &t.sugerencia {
+        s.push_str(&format!("\n**Qué hacer:** {}\n", q.trim()));
+    }
+    if let Some(e) = &t.enlace {
+        s.push_str(&format!("\n**Apunte:** {e}\n"));
+    }
+    if let Some(h) = &t.herramienta {
+        s.push_str(&format!("\n_Explicación de {h}._\n"));
+    }
+    s
 }
 
 fn centrar(b: &mut Buffer, margen: usize) {

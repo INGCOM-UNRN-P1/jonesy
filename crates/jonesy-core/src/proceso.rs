@@ -37,8 +37,6 @@ pub fn interprete() -> (&'static str, &'static str) {
     })
 }
 
-/// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
-/// `Fin` incluye toda la salida combinada, para parsear diagnósticos o JSON.
 /// Tiempo de CPU (en ticks, 1/100 s) de los descendientes de `pid` (Linux, /proc).
 pub fn cpu_de_descendientes(pid: u32) -> u64 {
     let Ok(it) = std::fs::read_dir("/proc") else {
@@ -76,7 +74,22 @@ pub fn cpu_de_descendientes(pid: u32) -> u64 {
     total
 }
 
+/// Lanza `comando` con el [`interprete`] en `dir`. Devuelve enseguida; el progreso llega por `tx`.
+/// `Fin` incluye toda la salida combinada, para parsear diagnósticos o JSON.
 pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: Sender<Salida>) {
+    lanzar_con_entrada(id, comando, dir, entorno, None, tx)
+}
+
+/// Como [`lanzar`], escribiéndole `entrada` por la entrada estándar (el buffer sin guardar
+/// para un análisis en vivo, `gaff check --stdin`).
+pub fn lanzar_con_entrada(
+    id: u64,
+    comando: &str,
+    dir: &Path,
+    entorno: &[(&str, &str)],
+    entrada: Option<String>,
+    tx: Sender<Salida>,
+) {
     let comando = comando.to_string();
     let dir = dir.to_path_buf();
     let entorno: Vec<(String, String)> = entorno
@@ -89,7 +102,11 @@ pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: 
         cmd.arg(opcion)
             .arg(&comando)
             .current_dir(&dir)
-            .stdin(Stdio::null())
+            .stdin(if entrada.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
         // Salida sin colores ni barras de progreso: se muestra en un panel, no en una terminal.
@@ -119,6 +136,13 @@ pub fn lanzar(id: u64, comando: &str, dir: &Path, entorno: &[(&str, &str)], tx: 
         };
         let (tx_lineas, rx_lineas) = std::sync::mpsc::channel::<(String, bool)>();
         let mut lectores = Vec::new();
+        if let (Some(texto), Some(mut stdin)) = (entrada, hijo.stdin.take()) {
+            // En otro hilo: si el programa no lee todo, escribir no bloquea a los lectores.
+            lectores.push(std::thread::spawn(move || {
+                use std::io::Write;
+                let _ = stdin.write_all(texto.as_bytes());
+            }));
+        }
         if let Some(out) = hijo.stdout.take() {
             let t = tx_lineas.clone();
             lectores.push(std::thread::spawn(move || {
@@ -204,5 +228,20 @@ mod tests {
             }
         }
         assert_eq!(lineas, 2);
+    }
+
+    #[test]
+    #[cfg(unix)] // cat
+    fn escribe_la_entrada() {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let texto = "int main(void)\n{\n".repeat(20_000);
+        lanzar_con_entrada(8, "cat", Path::new("."), &[], Some(texto.clone()), tx);
+        loop {
+            if let Salida::Fin { codigo, salida, .. } = rx.recv().unwrap() {
+                assert_eq!(codigo, Some(0));
+                assert_eq!(salida, texto);
+                break;
+            }
+        }
     }
 }

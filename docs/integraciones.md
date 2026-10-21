@@ -21,6 +21,7 @@ Cada una se activa sola si su `binario` está en el `PATH`. En `.jonesy.toml`:
 [integraciones]
 desactivar = ["spunkmeyer"]   # no correrlas en este proyecto
 activar = ["mi-linter"]       # encender las que un manifiesto trae con activa = false
+en_vivo = false               # sólo al guardar, no mientras se escribe (por defecto, sí)
 ```
 
 Dentro del IDE, *Archivo → Configuración del entorno* (solapa Integraciones) muestra el estado de cada una y permite
@@ -41,6 +42,9 @@ formato = "hallazgos"                      # cómo leer la salida (ver abajo)
 explicar = "kaneda explain {codigo}"       # F1 sobre uno de sus hallazgos
 catalogo = "kaneda rules --json"           # catálogo de reglas (Ayuda y F1 unificado)
 omitir_si = ""                             # campo booleano que descarta un hallazgo
+en_vivo = ""                               # mientras se escribe: el buffer por stdin (ver abajo)
+traducir_compilacion = ""                  # explica la salida de gcc (ver abajo)
+traducir_sanitizers = ""                   # explica la de un programa con sanitizers
 activa = true                              # encendida por defecto
 examen = true                              # permitida en modo examen
 lento = false                              # tarda segundos (se indica en la barra)
@@ -60,6 +64,8 @@ lento = false                              # tarda segundos (se indica en la bar
 | `{dir}` | su directorio |
 | `{modulo}` | directorio del módulo con Makefile (biblioteca o ejercicio) |
 | `{codigo}` | código del hallazgo, en `explicar` |
+| `{linea}` | línea del cursor, en `en_vivo` (lo que se está escribiendo) |
+| `{salida}` | archivo con lo que imprimió el compilador o el programa, en `traducir_*` |
 
 Los comandos corren desde la raíz del proyecto con `sh -c` (o `cmd /C` en Windows sin sh),
 sin colores (`NO_COLOR=1`). Antes de una acción se guardan todos los archivos.
@@ -68,8 +74,8 @@ sin colores (`NO_COLOR=1`). Antes de una acción se guardan todos los archivos.
 
 | `formato` | Qué espera |
 |---|---|
-| `hallazgos` | JSON con una lista `"hallazgos"` en la forma común de `yutani.hallazgos`: `codigo`, `categoria`, `severidad`, `mensaje`, `archivo`, `linea`, `columna`, `enlace`, `sugerencia`. Es lo que emiten con `--json` gaff, kaneda, spunkmeyer, daedalus, tetsuo y hal. |
-| `ripley` | `ripley check --format json` (`ast_findings`). |
+| `hallazgos` | JSON con la lista plana `"hallazgos"` en la forma común de `yutani.hallazgos`: `codigo`, `categoria`, `severidad`, `mensaje`, `archivo` (relativo a la raíz, con `/`), `linea`, `columna`, `enlace` y, opcionales, `sugerencia` y `explicacion` (el porqué, que F1 muestra si la herramienta no tiene `explicar` ni catálogo). Es lo que emiten con `--json` gaff, kaneda, spunkmeyer, daedalus, tetsuo y hal. |
+| `ripley` | `ripley check --format json`: su lista `hallazgos` (la forma común); con un ripley anterior, `ast_findings`. |
 | `corbel` | `corbel check --json` (`missing`). |
 | `gcc` | líneas `archivo:línea:col: error: mensaje` (también sigue los `make -C`). |
 | `sarif` | SARIF 2.1.0, el formato estándar de analizadores (gcc con `-fdiagnostics-format=sarif-stderr`, clang, `cppcheck --output-format=sarif`, CodeQL…): nivel, mensaje, regla con su descripción y enlace (`helpUri`), y la primera ubicación. |
@@ -86,6 +92,36 @@ resuelven contra la raíz del proyecto; un hallazgo sin archivo se asigna al ana
 | `visor` | ventana con la salida, con sus colores |
 | `recargar` | la herramienta modifica el archivo en disco; el buffer toma el contenido nuevo como una edición que Ctrl+Z deshace |
 | `diagnosticos` | interpreta la salida con el `formato` de la integración y la muestra en Problemas |
+
+## Mientras se escribe (`en_vivo`)
+
+Tras una pausa al escribir (0,6 s), jonesy le pasa el buffer **sin guardar** por la entrada
+estándar al comando `en_vivo` de las integraciones activas que lo tienen, y sus hallazgos
+reemplazan a los del último guardado. La de fábrica es la de gaff:
+
+```toml
+en_vivo = "gaff check --stdin --stdin-filename {archivo} --linea {linea} --json"
+```
+
+gaff toma la configuración del TP de `{archivo}` (`.gaffrc.yaml`, las reglas que el
+`ripley.toml` no evalúa), no toca el disco y no marca la línea del cursor ni, en un bloque
+todavía sin cerrar, más que las reglas de una línea (sangría, llaves, nombres). Si el comando
+no devuelve hallazgos (una versión sin `--stdin`), se avisa una vez y la integración sigue
+sólo al guardar. `[integraciones] en_vivo = false` en `.jonesy.toml` lo apaga.
+
+## Traducir la salida del compilador y de los sanitizers
+
+- `traducir_compilacion`: cuando la compilación (al guardar o con F6) falla, lo que imprimió
+  gcc va a un archivo (`{salida}`) y se le pasa a este comando, sin compilar de nuevo. La de
+  fábrica es `daedalus translate {salida} --json --primer-error`: el primer error, el que
+  suele causar los demás, con su explicación. Se suma al error de gcc de la misma línea: el
+  resumen al final de la línea si el catálogo de jonesy no lo reconoce, y el porqué para F1.
+- `traducir_sanitizers`: *Construir → Ejecutar con sanitizers* compila el programa con
+  AddressSanitizer y UBSan (`-fno-sanitize-recover`: el primer error lo detiene) y lo corre en
+  la pestaña Ejecución, donde se le puede escribir la entrada. Al terminar, lo que imprimió va
+  a este comando (`tetsuo translate {salida} --json`), los hallazgos quedan en Problemas y el
+  cursor en la sentencia que lo detuvo. Sin tetsuo, jonesy interpreta los informes de ASan y
+  UBSan por su cuenta.
 
 ## Catálogo de reglas
 
@@ -162,7 +198,9 @@ líneas propio de una materia o un TP, un plugin (ver `docs/plugin-ejemplo.py`).
 Para que jonesy la integre sin código nuevo alcanza con:
 
 1. un comando que analice **un archivo** y emita `--json` con `"hallazgos"` en la forma
-   de `yutani.hallazgos` (con `categoria` y `enlace` al apunte);
+   de `yutani.hallazgos` (con `categoria`, `enlace` al apunte, el `archivo` relativo al
+   directorio de trabajo y, si puede, la `explicacion`); `python -m yutani.hallazgos` la
+   valida;
 2. un comando `explain <código>` para F1;
 3. si corrige archivos, que lo haga en el lugar (modo `recargar`);
 4. `doctor --json` y `--version` (jonesy los usa en `jonesy doctor`).

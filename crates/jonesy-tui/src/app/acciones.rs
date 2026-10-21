@@ -435,6 +435,7 @@ impl App {
             Accion::IrADefinicion => self.ir_a_definicion(),
             Accion::AlternarMarcador => self.alternar_marcador(),
             Accion::EjecutarConEntrada => self.elegir_archivo_de_entrada(),
+            Accion::EjecutarConSanitizers => self.ejecutar_con_sanitizers(),
             Accion::CompararSalidas => self.compilar(Luego::Casos),
             Accion::ArgumentosPrograma => {
                 let texto = self

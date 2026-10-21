@@ -3965,3 +3965,182 @@ fn compilar_al_guardar_con_el_boton_y_alt_b() {
     }));
     assert!(!a.compilar_al_guardar);
 }
+
+/// Un analizador de prueba con la forma común de hallazgos: marca la primera línea con
+/// «TODO» del texto que recibe por la entrada estándar (o del archivo, al guardar).
+const ANALIZADOR_VIVO: &str = r#"texto=$(cat "${3:-/dev/stdin}")
+l=$(printf '%s\n' "$texto" | grep -n TODO | head -1 | cut -d: -f1)
+if [ -z "$l" ]; then echo '{"hallazgos": []}'; exit 0; fi
+printf '{"hallazgos": [{"id": "vivo:todo", "herramienta": "vivo", "codigo": "todo", "categoria": "estilo", "severidad": "estilo", "mensaje": "TODO pendiente (cursor en %s)", "archivo": "%s", "linea": %s, "columna": 1, "enlace": null, "explicacion": "Terminá lo pendiente."}]}\n' "$2" "$1" "$l"
+"#;
+
+#[test]
+#[cfg(unix)] // sh
+fn analiza_el_buffer_sin_guardar_mientras_se_escribe() {
+    let dir = proyecto(&[
+        ("main.c", "int main(void)\n{\n    return 0;\n}\n"),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n\n[integraciones]\ndesactivar = [\"gaff\", \"kaneda\", \"spunkmeyer\"]\n",
+        ),
+        (".jonesy/vivo.sh", ANALIZADOR_VIVO),
+        (
+            ".jonesy/integraciones/vivo.toml",
+            "[[integracion]]\nnombre = \"vivo\"\nbinario = \"\"\ncuando = \"manual\"\narchivos = [\"*.c\"]\nformato = \"hallazgos\"\nen_vivo = \"sh .jonesy/vivo.sh {archivo} {linea}\"\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Down, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::End, KeyModifiers::NONE);
+    escribir(&mut a, " // TODO");
+    // Tras la pausa al escribir, sin guardar: la marca en la línea 3 del buffer.
+    esperar(&mut a, &rx, |a| {
+        a.diagnosticos()
+            .iter()
+            .any(|d| d.codigo.as_deref() == Some("todo"))
+    });
+    let d = a
+        .diagnosticos()
+        .into_iter()
+        .find(|d| d.codigo.as_deref() == Some("todo"))
+        .cloned()
+        .unwrap();
+    assert_eq!(d.linea, 3);
+    assert_eq!(d.mensaje, "TODO pendiente (cursor en 3)");
+    assert_eq!(d.explicacion.as_deref(), Some("Terminá lo pendiente."));
+    assert!(d.archivo.as_deref().unwrap().ends_with("main.c"));
+    // No tocó el disco.
+    assert!(!std::fs::read_to_string(dir.path().join("main.c"))
+        .unwrap()
+        .contains("TODO"));
+    // Se borra el TODO: el próximo análisis lo saca.
+    for _ in 0.." // TODO".len() {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, " ");
+    esperar(&mut a, &rx, |a| {
+        !a.diagnosticos()
+            .iter()
+            .any(|d| d.codigo.as_deref() == Some("todo"))
+    });
+}
+
+#[test]
+#[cfg(unix)] // sh
+fn en_vivo_se_puede_apagar() {
+    let dir = proyecto(&[
+        ("main.c", "int main(void)\n{\n    return 0;\n}\n"),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n\n[integraciones]\nen_vivo = false\ndesactivar = [\"gaff\"]\n",
+        ),
+        (".jonesy/vivo.sh", ANALIZADOR_VIVO),
+        (
+            ".jonesy/integraciones/vivo.toml",
+            "[[integracion]]\nnombre = \"vivo\"\nbinario = \"\"\narchivos = [\"*.c\"]\nen_vivo = \"sh .jonesy/vivo.sh {archivo} {linea}\"\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    escribir(&mut a, "// TODO\n");
+    std::thread::sleep(jonesy_tui::app::DEBOUNCE_VIVO + Duration::from_millis(100));
+    a.tic();
+    assert!(a.tareas_en_curso().is_empty(), "{:?}", a.tareas_en_curso());
+}
+
+#[test]
+#[cfg(unix)] // sh y gcc
+fn la_compilacion_fallida_se_traduce_con_su_explicacion() {
+    if !es_gnu_gcc() {
+        return;
+    }
+    // Un traductor de prueba con la forma de `daedalus translate --json --primer-error`:
+    // el primer error de la salida de gcc, explicado.
+    let traductor = r#"l=$(grep -m1 ': error:' "$1" | cut -d: -f2)
+printf '{"hallazgos": [{"id": "trad:no-declarado", "herramienta": "trad", "codigo": "no-declarado", "categoria": "declaraciones", "severidad": "error", "mensaje": "Usás una variable que no declaraste", "archivo": "m.c", "linea": %s, "columna": 12, "enlace": "https://ingcom-unrn-p1.github.io/funciones", "sugerencia": "Declarala antes de usarla.", "explicacion": "C exige declarar cada variable antes de usarla."}]}\n' "$l"
+"#;
+    let dir = proyecto(&[
+        ("m.c", "int main(void)\n{\n    return cantidad;\n}\n"),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n\n[integraciones]\ndesactivar = [\"daedalus\", \"gaff\", \"kaneda\", \"spunkmeyer\"]\n",
+        ),
+        (".jonesy/trad.sh", traductor),
+        (
+            ".jonesy/integraciones/trad.toml",
+            "[[integracion]]\nnombre = \"trad\"\nbinario = \"\"\narchivos = [\"*.c\"]\ntraducir_compilacion = \"sh .jonesy/trad.sh {salida}\"\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("m.c"), true);
+    tecla(&mut a, KeyCode::F(6), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.diag_compilador.iter().any(|d| d.explicacion.is_some())
+    });
+    let d = a
+        .diag_compilador
+        .iter()
+        .find(|d| d.explicacion.is_some())
+        .unwrap();
+    assert_eq!(d.linea, 3);
+    let e = d.explicacion.as_deref().unwrap();
+    assert!(
+        e.contains("# Usás una variable que no declaraste")
+            && e.contains("C exige declarar")
+            && e.contains("**Qué hacer:** Declarala")
+            && e.contains("_Explicación de trad._"),
+        "{e}"
+    );
+    // El resumen de la línea sigue siendo el del catálogo de jonesy, que reconoce el error.
+    assert!(d.resumen.is_some());
+    assert_eq!(
+        d.enlace.as_deref(),
+        Some("https://ingcom-unrn-p1.github.io/funciones")
+    );
+}
+
+#[test]
+fn ejecutar_con_sanitizers_esta_en_construir() {
+    use jonesy_tui::accion::Accion;
+    assert!(Accion::todas().contains(&Accion::EjecutarConSanitizers));
+    let dir = proyecto(&[(".jonesy.toml", "[ripley]\nactivo = false\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    // Sin un .c abierto (o sin sanitizers en el compilador) avisa qué falta.
+    a.accion(Accion::EjecutarConSanitizers);
+    let (m, _, _) = a.mensaje.as_ref().unwrap();
+    assert!(m.contains("abrí un .c") || m.contains("sanitizers"), "{m}");
+}
+
+#[test]
+#[cfg(unix)]
+fn ejecutar_con_sanitizers_detiene_y_marca_la_sentencia() {
+    if !es_gnu_gcc() || jonesy_core::asan::compilador_sanitizers().is_none() {
+        return; // sin libasan/libubsan (el CI de Linux los tiene)
+    }
+    let dir = proyecto(&[
+        (
+            "m.c",
+            "#include <stdlib.h>\n\nint main(void)\n{\n    int *v = malloc(4 * sizeof *v);\n    v[4] = 1;\n    free(v);\n    return 0;\n}\n",
+        ),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n\n[integraciones]\ndesactivar = [\"tetsuo\"]\n",
+        ),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("m.c"), true);
+    a.accion(jonesy_tui::accion::Accion::EjecutarConSanitizers);
+    esperar(&mut a, &rx, |a| {
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.starts_with("m.c:6"))
+    });
+    assert_eq!(a.pestana, Pestana::Problemas);
+    assert_eq!(a.buf().buf.linea_columna().0, 5);
+    assert!(a
+        .diag_compilador
+        .iter()
+        .any(|d| d.linea == 6 && d.resumen.is_some()));
+}

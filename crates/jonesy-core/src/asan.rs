@@ -298,7 +298,60 @@ pub fn interpretar(salida: &str, raiz: &Path) -> Resultado {
             resumen,
         ));
     }
+    for d in ubsan(salida, raiz) {
+        r.reconocida = true;
+        r.errores += 1;
+        r.diagnosticos.push(d);
+    }
     r
+}
+
+/// Los errores de UndefinedBehaviorSanitizer: una línea «m.c:7:9: runtime error: …» (con
+/// `-fno-sanitize-recover`, el programa se detiene en el primero).
+fn ubsan(salida: &str, raiz: &Path) -> Vec<Diagnostico> {
+    salida
+        .lines()
+        .filter_map(|l| {
+            let (ubic, mensaje) = l.trim().split_once(": runtime error: ")?;
+            let mut partes: Vec<&str> = ubic.rsplitn(3, ':').collect();
+            partes.reverse();
+            let (archivo, linea, columna) = match partes.as_slice() {
+                [a, l, c] => (*a, l.parse().ok()?, c.parse().unwrap_or(1)),
+                [a, l] => (*a, l.parse().ok()?, 1),
+                _ => return None,
+            };
+            let p = PathBuf::from(archivo);
+            let p = if p.is_absolute() { p } else { raiz.join(p) };
+            let mut d = diagnostico(
+                Some(p),
+                linea,
+                Severidad::Error,
+                format!("UndefinedBehaviorSanitizer: {mensaje}"),
+                format!("Comportamiento indefinido: {}", explicar_ubsan(mensaje)),
+            );
+            d.columna = columna;
+            Some(d)
+        })
+        .collect()
+}
+
+fn explicar_ubsan(mensaje: &str) -> String {
+    let m = mensaje.to_ascii_lowercase();
+    if m.contains("signed integer overflow") {
+        "la cuenta se pasa del máximo (o mínimo) de un int con signo: usá un tipo más grande o verificá antes de operar".into()
+    } else if m.contains("division by zero") {
+        "división por cero: verificá el divisor antes de dividir".into()
+    } else if m.contains("out of bounds for type") || m.contains("index") {
+        "índice fuera del arreglo: revisá el rango del lazo (de 0 a N-1)".into()
+    } else if m.contains("null pointer") {
+        "se usa un puntero NULL: verificá que apunte a algo antes de usarlo".into()
+    } else if m.contains("shift") {
+        "desplazamiento de bits fuera de rango (negativo o de más bits que el tipo)".into()
+    } else if m.contains("misaligned") {
+        "acceso a una dirección desalineada para el tipo (¿un cast de puntero?)".into()
+    } else {
+        mensaje.to_string()
+    }
 }
 
 fn ubicacion(pila: &[Marco], base: &Path, raiz: &Path) -> (Option<PathBuf>, usize) {
@@ -341,12 +394,39 @@ pub fn compilador() -> Option<&'static str> {
     *C.get_or_init(|| {
         ["gcc", "clang"]
             .into_iter()
-            .find(|cc| crate::proyecto::en_path(cc) && funciona(cc))
+            .find(|cc| crate::proyecto::en_path(cc) && funciona(cc, BANDERAS_ASAN))
     })
 }
 
-fn funciona(cc: &str) -> bool {
-    let d = std::env::temp_dir().join(format!("jonesy-asan-{}-{cc}", std::process::id()));
+const BANDERAS_ASAN: &str = "-fsanitize=address";
+/// AddressSanitizer y UndefinedBehaviorSanitizer, deteniéndose en el primer error (UBSan sólo
+/// avisa y sigue, sin `-fno-sanitize-recover`).
+pub const BANDERAS_SANITIZERS: &str = "-fsanitize=address,undefined -fno-sanitize-recover=all";
+
+/// Compilador y banderas para Construir → Ejecutar con sanitizers: ASan y UBSan si el
+/// compilador los trae (gcc con libasan y libubsan, clang de MSYS2 CLANG64); si sólo trae
+/// ASan, ASan. Se averigua una vez.
+pub fn compilador_sanitizers() -> Option<(&'static str, &'static str)> {
+    static C: OnceLock<Option<(&'static str, &'static str)>> = OnceLock::new();
+    *C.get_or_init(|| {
+        let disponibles: Vec<&'static str> = ["gcc", "clang"]
+            .into_iter()
+            .filter(|cc| crate::proyecto::en_path(cc))
+            .collect();
+        disponibles
+            .iter()
+            .find(|cc| funciona(cc, BANDERAS_SANITIZERS))
+            .map(|cc| (*cc, BANDERAS_SANITIZERS))
+            .or_else(|| compilador().map(|cc| (cc, BANDERAS_ASAN)))
+    })
+}
+
+fn funciona(cc: &str, banderas: &str) -> bool {
+    let d = std::env::temp_dir().join(format!(
+        "jonesy-asan-{}-{cc}-{}",
+        std::process::id(),
+        banderas.len()
+    ));
     if std::fs::create_dir_all(&d).is_err() {
         return false;
     }
@@ -360,7 +440,8 @@ fn funciona(cc: &str) -> bool {
         return false;
     }
     let compila = std::process::Command::new(cc)
-        .args(["-fsanitize=address", "-g"])
+        .args(banderas.split_whitespace())
+        .arg("-g")
         .arg(&fuente)
         .arg("-o")
         .arg(&programa)
@@ -380,6 +461,17 @@ fn funciona(cc: &str) -> bool {
 /// en su directorio; el programa queda al final del comando para agregarle argumentos y
 /// una redirección. None si no hay programa.
 pub fn comando(p: &crate::Proyecto, activo: &Path, cc: &str, salida: &Path) -> Option<String> {
+    comando_con(p, activo, cc, BANDERAS_ASAN, salida)
+}
+
+/// Como [`comando`], con otras banderas de sanitizers (ver [`compilador_sanitizers`]).
+pub fn comando_con(
+    p: &crate::Proyecto,
+    activo: &Path,
+    cc: &str,
+    banderas: &str,
+    salida: &Path,
+) -> Option<String> {
     use crate::proyecto::shell_quote as q;
     let f = crate::catscan::fuentes_del_programa(p, activo)?;
     let programa = salida.join(if cfg!(windows) {
@@ -389,7 +481,7 @@ pub fn comando(p: &crate::Proyecto, activo: &Path, cc: &str, salida: &Path) -> O
     });
     let mut partes = vec![
         cc.to_string(),
-        "-g -O0 -fsanitize=address -fno-omit-frame-pointer".into(),
+        format!("-g -O0 {banderas} -fno-omit-frame-pointer"),
     ];
     for i in &f.includes {
         partes.push(format!("-I {}", q(&i.to_string_lossy())));
@@ -481,6 +573,46 @@ mod tests {
         };
         assert!(
             c.contains("m.c") && c.contains("-o ") && c.trim_end_matches('\'').ends_with(esperado),
+            "{c}"
+        );
+    }
+
+    #[test]
+    fn comportamiento_indefinido_de_ubsan() {
+        let d = tempfile::tempdir().unwrap();
+        let salida = format!(
+            "ingresá: 5\n{}/m.c:7:15: runtime error: signed integer overflow: 2147483647 + 1 cannot be represented in type 'int'\n",
+            d.path().display()
+        );
+        let r = interpretar(&salida, d.path());
+        assert!(r.reconocida && r.errores == 1);
+        let x = &r.diagnosticos[0];
+        assert_eq!((x.linea, x.columna), (7, 15));
+        assert!(x.resumen.as_deref().unwrap().contains("máximo"));
+        assert_eq!(x.archivo.as_deref(), Some(d.path().join("m.c").as_path()));
+        let r = interpretar("t.c:3:5: runtime error: division by zero\n", d.path());
+        assert!(r.diagnosticos[0]
+            .resumen
+            .as_deref()
+            .unwrap()
+            .contains("divisor"));
+    }
+
+    #[test]
+    fn compilar_con_ubsan() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::write(d.path().join("m.c"), "int main(void) { return 0; }\n").unwrap();
+        let p = crate::Proyecto::abrir(d.path());
+        let c = comando_con(
+            &p,
+            &d.path().join("m.c"),
+            "gcc",
+            BANDERAS_SANITIZERS,
+            &d.path().join(".jonesy/asan"),
+        )
+        .unwrap();
+        assert!(
+            c.starts_with("gcc -g -O0 -fsanitize=address,undefined -fno-sanitize-recover=all"),
             "{c}"
         );
     }
