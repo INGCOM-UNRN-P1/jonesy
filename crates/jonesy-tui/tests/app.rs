@@ -23,12 +23,18 @@ fn proyecto(archivos: &[(&str, &str)]) -> tempfile::TempDir {
 
 /// Estado del usuario (proyectos recientes, bienvenida vista) en un directorio propio de
 /// las pruebas, para no tocar el real.
+///
+/// Las variables se fijan una sola vez: son del proceso y las pruebas corren en paralelo, así
+/// que volver a fijarlas en cada una pisaba el directorio propio de la de la bienvenida.
 fn estado_de_prueba() {
     static ESTADO: std::sync::OnceLock<tempfile::TempDir> = std::sync::OnceLock::new();
-    let d = ESTADO.get_or_init(|| tempfile::tempdir().unwrap());
-    std::env::set_var("JONESY_ESTADO", d.path());
-    // Sin las preferencias ni los manifiestos de integraciones de quien corre las pruebas.
-    std::env::set_var("JONESY_CONFIG", d.path().join("config"));
+    ESTADO.get_or_init(|| {
+        let d = tempfile::tempdir().unwrap();
+        std::env::set_var("JONESY_ESTADO", d.path());
+        // Sin las preferencias ni los manifiestos de integraciones de quien corre las pruebas.
+        std::env::set_var("JONESY_CONFIG", d.path().join("config"));
+        d
+    });
 }
 
 fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
