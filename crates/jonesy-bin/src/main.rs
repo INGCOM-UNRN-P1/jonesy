@@ -31,7 +31,7 @@ Opciones:
   --telemetria       registra la bitácora también fuera del examen
   --simulacro [min]  simulacro de examen: cronómetro y avisos, sin entregar (90 min)
   -h, --help         esta ayuda
-  -V, --version      versión
+  -v, -V, --version  versión
 
 Benchmarks (§10 de la especificación; salen con código 1 si exceden el presupuesto):
   --headless --benchmark-startup [dir]
@@ -84,7 +84,8 @@ fn correr(args: &[String]) -> anyhow::Result<ExitCode> {
         print!("{AYUDA}");
         return Ok(ExitCode::SUCCESS);
     }
-    if tiene("-V") || tiene("--version") {
+    // -v por el contrato del ecosistema (LINEAMIENTOS §3.2); -V, como cargo y rustc.
+    if tiene("-v") || tiene("-V") || tiene("--version") {
         println!("jonesy {}", env!("CARGO_PKG_VERSION"));
         return Ok(ExitCode::SUCCESS);
     }

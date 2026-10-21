@@ -283,7 +283,12 @@ Las herramientas de la cátedra se integran como **plugins declarativos**
   corre un programa de prueba), depuración (gdb lo depura, ptrace), memoria
   (valgrind lo revisa), git (nombre y correo para los commits), terminal (UTF-8,
   TERM, color verdadero), Python, proyecto (`.jonesy.toml` válido, permisos),
-  entorno de la cátedra y herramientas del ecosistema. ✗ es necesario (sale con
+  entorno de la cátedra y herramientas del ecosistema; además, para qué
+  plataforma compila gcc (MinGW en Windows), si los sanitizers (ASan y UBSan)
+  funcionan, variables de entorno que apuntan a algo que no existe
+  (`P1_ENTORNO`, `CC`, `CPATH`…) y cabeceras que el proyecto incluye y no se
+  encuentran, con la biblioteca de la cátedra que las trae (treadstone, bitmaps,
+  sonido). ✗ es necesario (sale con
   código 1), ! recomendado, · opcional. `--rapido` saltea las pruebas de humo;
   `--json` emite el sobre común del ecosistema. También desde _Ayuda →
   Diagnóstico del entorno_ (con `JONESY_DOCTOR_RAPIDO=1`, sin las pruebas de

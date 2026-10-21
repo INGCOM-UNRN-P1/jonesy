@@ -1,7 +1,9 @@
 //! `jonesy doctor`: la salud del entorno. No sólo qué programas están en el PATH: también
-//! si funcionan (gcc compila y corre un programa, gdb lo depura, valgrind lo revisa), si
-//! git puede hacer commits, si la terminal muestra bien la interfaz y si el proyecto se
-//! puede usar. Agrupado por categoría y con tres niveles: lo requerido (sin eso jonesy no
+//! si funcionan (gcc compila y corre un programa, gdb lo depura, valgrind lo revisa, los
+//! sanitizers detienen un programa), para qué plataforma compila gcc (MinGW en Windows), si
+//! git puede hacer commits, si la terminal muestra bien la interfaz, si las variables de
+//! entorno apuntan a algo que existe, si las cabeceras que incluye el proyecto (las de
+//! treadstone, bitmaps o sonido) se encuentran y si el proyecto se puede usar. Agrupado por categoría y con tres niveles: lo requerido (sin eso jonesy no
 //! sirve), lo recomendado (sin eso falta algo importante) y lo opcional.
 //!
 //! Emite el sobre JSON común del ecosistema (`yutani.doctor`, LINEAMIENTOS §3.2):
@@ -219,12 +221,13 @@ pub fn sugerencia_ecosistema(nombre: &str) -> String {
 }
 
 /// Orden de las categorías en el informe.
-pub const CATEGORIAS: [&str; 9] = [
+pub const CATEGORIAS: [&str; 10] = [
     "Compilación",
     "Depuración",
     "Memoria",
     "Git",
     "Terminal",
+    "Variables",
     "Python",
     "Proyecto",
     "Cátedra",
@@ -376,6 +379,382 @@ fn humo(v: &mut Vec<Chequeo>) {
         );
     }
     let _ = std::fs::remove_dir_all(&dir);
+    v.push(sanitizers());
+}
+
+/// Construir → Ejecutar con sanitizers: si el compilador trae AddressSanitizer y
+/// UndefinedBehaviorSanitizer (compila y corre un programa con ellos).
+fn sanitizers() -> Chequeo {
+    let (ok, detalle) = match crate::asan::compilador_sanitizers() {
+        Some((cc, b)) if b.contains("undefined") => (
+            true,
+            format!("{cc} compila y corre con AddressSanitizer y UBSan"),
+        ),
+        Some((cc, _)) => (
+            false,
+            format!("{cc} trae AddressSanitizer pero no UBSan (comportamiento indefinido)"),
+        ),
+        None => (
+            false,
+            "ni gcc ni clang compilan con -fsanitize=address (faltan libasan y libubsan)".into(),
+        ),
+    };
+    Chequeo::nuevo(
+        "sanitizers",
+        "recomendado",
+        ok,
+        detalle,
+        "Construir → Ejecutar con sanitizers y Revisar memoria sin valgrind",
+    )
+    .en("Memoria")
+    .sugerir(if cfg!(windows) {
+        "En Windows, el clang de MSYS2 CLANG64 (pacman -S mingw-w64-clang-x86_64-clang) o WSL"
+    } else {
+        "sudo dnf install libasan libubsan / sudo apt install libasan8 libubsan1"
+    })
+}
+
+/// Para qué plataforma compila gcc (`gcc -dumpmachine`): en Windows tiene que ser MinGW
+/// (UCRT64/MINGW64 de MSYS2); el gcc de Cygwin o de MSYS «a secas» genera programas que
+/// necesitan su DLL y no corren fuera de su terminal.
+fn toolchain() -> Option<Chequeo> {
+    let gcc = buscar("gcc")?;
+    let (_, salida) = correr(
+        Command::new(gcc).arg("-dumpmachine"),
+        Duration::from_secs(10),
+    )?;
+    let destino = primera_linea(&salida);
+    let mingw = destino.contains("mingw") || destino.contains("w64");
+    let ok = !cfg!(windows) || mingw;
+    Some(
+        Chequeo::nuevo(
+            "toolchain",
+            if cfg!(windows) { "requerido" } else { "opcional" },
+            ok && !destino.is_empty(),
+            if destino.is_empty() {
+                "gcc -dumpmachine no respondió".to_string()
+            } else if cfg!(windows) && !mingw {
+                format!("{destino}: no es MinGW (los programas no corren fuera de su terminal)")
+            } else {
+                format!("gcc compila para {destino}")
+            },
+            "Programas que corren en esta máquina",
+        )
+        .en("Compilación")
+        .sugerir("Usá el gcc de MSYS2 UCRT64 (el del entorno de la cátedra): pacman -S mingw-w64-ucrt-x86_64-gcc"),
+    )
+}
+
+/// Las variables de entorno que usan jonesy y gcc, si están definidas: que apunten a algo
+/// que existe (una ruta mal escrita hace que falten cabeceras o el entorno de la cátedra
+/// sin ningún error claro).
+fn variables(v: &mut Vec<Chequeo>, entorno: impl Fn(&str) -> Option<String>) {
+    let definida = |k: &str| entorno(k).filter(|x| !x.trim().is_empty());
+    if let Some(e) = definida("P1_ENTORNO") {
+        let ok = Path::new(&e).is_dir();
+        v.push(
+            Chequeo::nuevo(
+                "P1_ENTORNO",
+                "recomendado",
+                ok,
+                if ok {
+                    e.clone()
+                } else {
+                    format!("{e}: no existe")
+                },
+                "El entorno de la cátedra (comandos, gdbinit, bibliotecas)",
+            )
+            .en("Variables")
+            .sugerir("Corregí la variable o volvé a instalar el entorno (https://github.com/INGCOM-UNRN-P1/entorno)"),
+        );
+    }
+    for (k, proposito) in [
+        ("CC", "El compilador que usan make y los Makefiles"),
+        ("JONESY_PYTHON", "El Python de los plugins"),
+    ] {
+        if let Some(prog) = definida(k) {
+            let primero = prog.split_whitespace().next().unwrap_or("").to_string();
+            let ok = Path::new(&primero).is_file() || buscar(&primero).is_some();
+            v.push(
+                Chequeo::nuevo(
+                    k,
+                    "recomendado",
+                    ok,
+                    if ok {
+                        prog.clone()
+                    } else {
+                        format!("{prog}: no está en el PATH")
+                    },
+                    proposito,
+                )
+                .en("Variables")
+                .sugerir(format!(
+                    "Corregí {k} o borrala (unset {k}) para usar el de siempre"
+                )),
+            );
+        }
+    }
+    let separador = if cfg!(windows) { ';' } else { ':' };
+    for (k, proposito) in [
+        ("CPATH", "Dónde busca gcc las cabeceras (#include)"),
+        ("C_INCLUDE_PATH", "Dónde busca gcc las cabeceras (#include)"),
+        (
+            "LIBRARY_PATH",
+            "Dónde busca el enlazador las bibliotecas (-l)",
+        ),
+    ] {
+        if let Some(valor) = definida(k) {
+            let faltan: Vec<&str> = valor
+                .split(separador)
+                .filter(|d| !d.is_empty() && !Path::new(d).is_dir())
+                .collect();
+            v.push(
+                Chequeo::nuevo(
+                    k,
+                    "opcional",
+                    faltan.is_empty(),
+                    if faltan.is_empty() {
+                        valor.clone()
+                    } else {
+                        format!("no existe: {}", faltan.join(", "))
+                    },
+                    proposito,
+                )
+                .en("Variables")
+                .sugerir(format!("Sacá de {k} las carpetas que no existen")),
+            );
+        }
+    }
+}
+
+/// La biblioteca de la cátedra que trae una cabecera, para sugerir cómo sumarla.
+pub fn biblioteca_de(cabecera: &str) -> Option<&'static str> {
+    let n = cabecera.to_ascii_lowercase();
+    let base = n.rsplit('/').next().unwrap_or(&n);
+    if base.starts_with("p1_") || n.contains("treadstone") || n == "tda/contracts.h" {
+        Some("treadstone")
+    } else if base == "bmp.h" || n.contains("bitmap") {
+        Some("bitmaps")
+    } else if n.contains("sonido") || base == "wav.h" {
+        Some("sonido")
+    } else if base == "mini_valgrind.h" {
+        Some("mini_valgrind")
+    } else {
+        None
+    }
+}
+
+/// Carpetas de cabeceras del sistema según gcc (`gcc -E -v`), una vez.
+fn carpetas_del_sistema() -> &'static [PathBuf] {
+    static C: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+    C.get_or_init(|| {
+        let Some(gcc) = buscar("gcc") else {
+            return vec![];
+        };
+        let Some((_, salida)) = correr(
+            Command::new(gcc).args(["-xc", "-E", "-v", "-"]),
+            Duration::from_secs(10),
+        ) else {
+            return vec![];
+        };
+        salida
+            .lines()
+            .skip_while(|l| !l.starts_with("#include <...>"))
+            .skip(1)
+            .take_while(|l| !l.starts_with("End of search list"))
+            .map(|l| PathBuf::from(l.trim().trim_end_matches(" (framework directory)")))
+            .collect()
+    })
+}
+
+/// Una cabecera incluida que no se encuentra: (cabecera, archivo que la incluye, línea).
+pub type CabeceraFaltante = (String, PathBuf, usize);
+
+/// Las cabeceras que incluye el proyecto y no se encuentran: ni junto al archivo, ni en
+/// una carpeta del proyecto con cabeceras (lo que suelen agregar los Makefile con -I), ni
+/// en CPATH/C_INCLUDE_PATH, ni en las del sistema. `sistema` son las carpetas del
+/// compilador (vacío: no se revisan las de `<…>`).
+pub fn cabeceras_faltantes(raiz: &Path, sistema: &[PathBuf]) -> Vec<CabeceraFaltante> {
+    let mut fuentes = vec![];
+    let mut pila = vec![raiz.to_path_buf()];
+    while let Some(d) = pila.pop() {
+        let Ok(it) = std::fs::read_dir(&d) else {
+            continue;
+        };
+        for e in it.flatten() {
+            let p = e.path();
+            let nombre = e.file_name().to_string_lossy().into_owned();
+            if p.is_dir() {
+                if !nombre.starts_with('.')
+                    && !["build", "target", "node_modules"].contains(&nombre.as_str())
+                {
+                    pila.push(p);
+                }
+            } else if (nombre.ends_with(".c") || nombre.ends_with(".h")) && fuentes.len() < 2000 {
+                fuentes.push(p);
+            }
+        }
+    }
+    let mut carpetas: Vec<PathBuf> = fuentes
+        .iter()
+        .filter(|f| f.extension().is_some_and(|e| e == "h"))
+        .filter_map(|f| f.parent().map(Path::to_path_buf))
+        .collect();
+    // Una cabecera con carpeta (tda/contracts.h) se busca desde las carpetas de arriba.
+    let mut extra: Vec<PathBuf> = carpetas
+        .iter()
+        .flat_map(|c| c.ancestors().skip(1).take_while(|a| a.starts_with(raiz)))
+        .map(Path::to_path_buf)
+        .collect();
+    carpetas.append(&mut extra);
+    let separador = if cfg!(windows) { ';' } else { ':' };
+    for k in ["CPATH", "C_INCLUDE_PATH"] {
+        if let Ok(v) = std::env::var(k) {
+            carpetas.extend(
+                v.split(separador)
+                    .filter(|x| !x.is_empty())
+                    .map(PathBuf::from),
+            );
+        }
+    }
+    carpetas.sort();
+    carpetas.dedup();
+    let mut faltan: Vec<CabeceraFaltante> = vec![];
+    for f in &fuentes {
+        let Ok(texto) = std::fs::read_to_string(f) else {
+            continue;
+        };
+        // Bloques condicionales abiertos: true si es de otra plataforma (#ifdef _WIN32…) o
+        // está apagado (#if 0); sus #include pueden no existir en esta máquina.
+        let mut condiciones: Vec<bool> = vec![];
+        for (n, linea) in texto.lines().enumerate() {
+            let l = linea.trim_start();
+            let Some(resto) = l.strip_prefix('#') else {
+                continue;
+            };
+            let directiva = resto.trim_start();
+            if let Some(cond) = ["ifdef", "ifndef", "if"].iter().find_map(|d| {
+                directiva
+                    .strip_prefix(d)
+                    .filter(|r| r.starts_with([' ', '\t', '(']))
+            }) {
+                condiciones.push(condicional(cond));
+                continue;
+            }
+            if let Some(cond) = directiva.strip_prefix("elif") {
+                if let Some(u) = condiciones.last_mut() {
+                    *u = *u || condicional(cond);
+                }
+                continue;
+            }
+            if directiva.starts_with("endif") {
+                condiciones.pop();
+                continue;
+            }
+            if condiciones.iter().any(|c| *c) {
+                continue;
+            }
+            let Some(resto) = directiva.strip_prefix("include") else {
+                continue;
+            };
+            let resto = resto.trim_start();
+            let (comillas, cierre) = match resto.chars().next() {
+                Some('"') => (true, '"'),
+                Some('<') => (false, '>'),
+                _ => continue,
+            };
+            let Some(cabecera) = resto[1..].split(cierre).next().filter(|c| !c.is_empty()) else {
+                continue;
+            };
+            if !comillas && sistema.is_empty() {
+                continue;
+            }
+            let junto = comillas && f.parent().is_some_and(|d| d.join(cabecera).is_file());
+            let encontrada = junto
+                || carpetas.iter().any(|c| c.join(cabecera).is_file())
+                || sistema.iter().any(|c| c.join(cabecera).is_file());
+            if !encontrada && !faltan.iter().any(|(c, _, _)| c == cabecera) {
+                faltan.push((cabecera.to_string(), f.clone(), n + 1));
+            }
+        }
+    }
+    faltan
+}
+
+/// ¿La condición de un `#if`/`#ifdef` es de una plataforma (sus cabeceras pueden no estar
+/// en esta máquina), de `__has_include` o un `#if 0`?
+fn condicional(cond: &str) -> bool {
+    const PLATAFORMAS: [&str; 11] = [
+        "_WIN32",
+        "_WIN64",
+        "WIN32",
+        "__MINGW",
+        "_MSC_VER",
+        "__CYGWIN__",
+        "__APPLE__",
+        "__MACH__",
+        "__linux__",
+        "__unix__",
+        "__has_include",
+    ];
+    let c = cond.trim();
+    c == "0" || PLATAFORMAS.iter().any(|p| c.contains(p))
+}
+
+/// El chequeo de las cabeceras del proyecto (con la biblioteca de la cátedra que falta).
+fn cabeceras(raiz: &Path) -> Chequeo {
+    let faltan = cabeceras_faltantes(raiz, carpetas_del_sistema());
+    let detalle = if faltan.is_empty() {
+        "todas las que incluye el proyecto se encuentran".to_string()
+    } else {
+        let mut partes: Vec<String> = faltan
+            .iter()
+            .take(5)
+            .map(|(c, f, l)| {
+                let rel = f
+                    .strip_prefix(raiz)
+                    .unwrap_or(f)
+                    .to_string_lossy()
+                    .replace('\\', "/");
+                format!("{c} ({rel}:{l})")
+            })
+            .collect();
+        if faltan.len() > 5 {
+            partes.push(format!("y {} más", faltan.len() - 5));
+        }
+        format!("no se encuentran: {}", partes.join(", "))
+    };
+    let mut libs: Vec<&str> = faltan
+        .iter()
+        .filter_map(|(c, _, _)| biblioteca_de(c))
+        .collect();
+    libs.sort();
+    libs.dedup();
+    let tp = raiz.join("tp.sh").is_file();
+    let sugerencia = if libs.is_empty() {
+        "Revisá el nombre de la cabecera y el -I del Makefile (o instalá la biblioteca que falta)"
+            .to_string()
+    } else {
+        libs.iter()
+            .map(|l| {
+                if tp {
+                    format!("{l} es de la cátedra: ./tp.sh add-lib {l}")
+                } else {
+                    format!("{l} es de la cátedra: https://github.com/INGCOM-UNRN-P1/{l}")
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" · ")
+    };
+    Chequeo::nuevo(
+        "cabeceras",
+        "recomendado",
+        faltan.is_empty(),
+        detalle,
+        "Los #include del proyecto (treadstone, bitmaps, sonido…)",
+    )
+    .en("Cátedra")
+    .sugerir(sugerencia)
 }
 
 /// Un directorio temporal propio (sin depender de tempfile).
@@ -663,6 +1042,9 @@ pub fn chequeos(
         .en("Cátedra")
         .sugerir("https://github.com/INGCOM-UNRN-P1/entorno"),
     );
+    v.push(cabeceras(raiz));
+    v.extend(toolchain());
+    variables(&mut v, |k| std::env::var(k).ok());
     // Ecosistema: las herramientas de las integraciones.
     let mut vistos: Vec<String> = ["gcc", "make", "git", "gdb", "valgrind", "python3"]
         .iter()
@@ -854,6 +1236,86 @@ mod tests {
     }
 
     #[test]
+    fn cabeceras_de_la_catedra_que_faltan() {
+        let d = tempfile::tempdir().unwrap();
+        let raiz = d.path();
+        let archivo = |r: &str, t: &str| {
+            let p = raiz.join(r);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, t).unwrap();
+        };
+        archivo(
+            "ejercicios/ej1/prueba.c",
+            "#include \"p1_test.h\"\n#include \"operaciones.h\"\n  #  include <tda/contracts.h>\n#include <stdio.h>\n#include <bmp.h>\n",
+        );
+        archivo("ejercicios/ej1/operaciones.h", "int suma(int, int);\n");
+        archivo("bibliotecas/contratos/include/tda/contracts.h", "\n");
+        archivo(".oculto/x.c", "#include \"no_se_revisa.h\"\n");
+        archivo(
+            "ejercicios/ej1/plataforma.h",
+            "#ifndef PLATAFORMA_H\n#define PLATAFORMA_H\n#ifdef _WIN32\n#include <io.h>\n#elif defined(__APPLE__)\n#include <mach/mach.h>\n#else\n#include <unistd_inexistente.h>\n#endif\n#if 0\n#include \"viejo.h\"\n#endif\n#endif\n",
+        );
+        let sistema = raiz.join("sistema");
+        std::fs::create_dir_all(&sistema).unwrap();
+        std::fs::write(sistema.join("stdio.h"), "").unwrap();
+        let faltan = cabeceras_faltantes(raiz, &[sistema]);
+        let nombres: Vec<(&str, usize)> = faltan.iter().map(|(c, _, l)| (c.as_str(), *l)).collect();
+        assert_eq!(nombres, [("p1_test.h", 1), ("bmp.h", 5)]);
+        assert!(faltan[0].1.ends_with("ejercicios/ej1/prueba.c"));
+        // Sin las carpetas del sistema no se revisan las de <…>.
+        assert_eq!(cabeceras_faltantes(raiz, &[]).len(), 1);
+        let c = cabeceras(raiz);
+        assert!(
+            !c.ok && c.detalle.contains("p1_test.h (ejercicios/ej1/prueba.c:1)"),
+            "{}",
+            c.detalle
+        );
+        assert!(c.sugerencia.contains("treadstone"), "{}", c.sugerencia);
+        assert_eq!(biblioteca_de("p1_arrays.h"), Some("treadstone"));
+        assert_eq!(biblioteca_de("treadstone.h"), Some("treadstone"));
+        assert_eq!(biblioteca_de("bitmaps.h"), Some("bitmaps"));
+        assert_eq!(biblioteca_de("../bitmap/libreria.h"), Some("bitmaps"));
+        assert_eq!(biblioteca_de("sonido.h"), Some("sonido"));
+        assert_eq!(biblioteca_de("stdio.h"), None);
+    }
+
+    #[test]
+    fn variables_de_entorno_que_no_apuntan_a_nada() {
+        let d = tempfile::tempdir().unwrap();
+        let existe = d.path().to_string_lossy().into_owned();
+        let sep = if cfg!(windows) { ";" } else { ":" };
+        let valores = [
+            (
+                "P1_ENTORNO",
+                d.path().join("no-esta").to_string_lossy().into_owned(),
+            ),
+            ("CC", "compilador-que-no-existe -O2".to_string()),
+            (
+                "CPATH",
+                format!("{existe}{sep}{}", d.path().join("falta").display()),
+            ),
+            ("LIBRARY_PATH", existe.clone()),
+        ];
+        let mut v = vec![];
+        variables(&mut v, |k| {
+            valores
+                .iter()
+                .find(|(n, _)| *n == k)
+                .map(|(_, x)| x.clone())
+        });
+        let por = |n: &str| v.iter().find(|c| c.nombre == n).unwrap();
+        assert!(!por("P1_ENTORNO").ok && por("P1_ENTORNO").detalle.ends_with("no existe"));
+        assert!(!por("CC").ok && por("CC").sugerencia.contains("unset CC"));
+        assert!(!por("CPATH").ok && por("CPATH").detalle.contains("falta"));
+        assert!(por("LIBRARY_PATH").ok);
+        // Las que no están definidas no se informan.
+        assert!(v
+            .iter()
+            .all(|c| c.nombre != "JONESY_PYTHON" && c.nombre != "C_INCLUDE_PATH"));
+        assert!(v.iter().all(|c| c.categoria == "Variables"));
+    }
+
+    #[test]
     fn salud_del_entorno_con_humo() {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join(".jonesy.toml"), "esto [no es toml").unwrap();
@@ -869,11 +1331,16 @@ mod tests {
         assert!(!cfg.ok && cfg.detalle.contains(".jonesy.toml"));
         assert!(buscar("escritura").ok);
         assert!(!buscar("integración").ok);
-        // Con gcc instalado, la prueba de humo compila y corre.
+        // Con gcc instalado, la prueba de humo compila y corre, y se informa para qué
+        // plataforma compila y si trae los sanitizers.
         if super::buscar("gcc").is_some() {
             let g = buscar("gcc compila y corre");
             assert!(g.ok, "{}", g.detalle);
+            assert!(buscar("toolchain").detalle.starts_with("gcc compila para"));
+            let s = buscar("sanitizers");
+            assert!(s.ok || !s.sugerencia.is_empty(), "{s:?}");
         }
+        assert!(buscar("cabeceras").ok);
         // Ordenados por categoría.
         let orden: Vec<usize> = v
             .iter()
