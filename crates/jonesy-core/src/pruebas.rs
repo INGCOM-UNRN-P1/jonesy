@@ -288,8 +288,10 @@ pub fn interpretar(salida: &str, dir: &Path) -> Resultado {
         } else if let Some(n) = numero_tras(t, "Tests desaprobados") {
             fallan_resumen += n;
             con_resumen = true;
-        } else if !t.is_empty() && !linea.starts_with(' ') {
-            cerrar(&mut actual, &mut detalles, &mut r);
+        } else if !t.is_empty() && !linea.starts_with(' ') && !linea.starts_with('\t') {
+            if !t.starts_with("make") {
+                cerrar(&mut actual, &mut detalles, &mut r);
+            }
         }
     }
     cerrar(&mut actual, &mut detalles, &mut r);
