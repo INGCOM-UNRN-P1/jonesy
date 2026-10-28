@@ -35,6 +35,7 @@ fn leer_en_hilo(
     vivo: Arc<AtomicBool>,
     pendiente: Arc<AtomicBool>,
     notificar: Arc<dyn Fn() + Send + Sync>,
+    salida: Option<Arc<Mutex<Vec<u8>>>>,
 ) {
     std::thread::Builder::new()
         .name("deck-lector".into())
@@ -48,6 +49,13 @@ fn leer_en_hilo(
                     Ok(n) => {
                         if let Ok(mut p) = parser.lock() {
                             p.process(&buf[..n]);
+                        }
+                        if let Some(s) = &salida {
+                            if let Ok(mut guard) = s.lock() {
+                                if guard.len() < 2 * 1024 * 1024 {
+                                    guard.extend_from_slice(&buf[..n]);
+                                }
+                            }
                         }
                         if !pendiente.swap(true, Ordering::AcqRel) {
                             notificar();
@@ -70,6 +78,7 @@ pub struct Deck {
     hijo: Box<dyn Child + Send + Sync>,
     vivo: Arc<AtomicBool>,
     pendiente: Arc<AtomicBool>,
+    salida: Arc<Mutex<Vec<u8>>>,
     pub titulo: String,
     /// Cuándo se vio que el proceso terminó (para esperar a leer su última salida).
     termino: Option<std::time::Instant>,
@@ -114,12 +123,14 @@ impl Deck {
         )));
         let vivo = Arc::new(AtomicBool::new(true));
         let pendiente = Arc::new(AtomicBool::new(false));
+        let salida = Arc::new(Mutex::new(Vec::new()));
         leer_en_hilo(
             lector,
             parser.clone(),
             vivo.clone(),
             pendiente.clone(),
             Arc::new(notificar),
+            Some(salida.clone()),
         );
         let titulo = std::iter::once(prog.as_str())
             .chain(args.iter().map(String::as_str))
@@ -132,6 +143,7 @@ impl Deck {
             hijo,
             vivo,
             pendiente,
+            salida,
             titulo,
             termino: None,
         })
@@ -195,6 +207,11 @@ impl Deck {
 
     /// Texto visible (sin atributos); útil para pruebas y para copiar.
     pub fn texto(&self) -> String {
+        if let Ok(s) = self.salida.lock() {
+            if !s.is_empty() {
+                return String::from_utf8_lossy(&s).to_string();
+            }
+        }
         self.con_pantalla(|s| s.contents())
     }
 }
@@ -250,6 +267,7 @@ impl PtyInferior {
             Arc::new(AtomicBool::new(true)),
             pendiente.clone(),
             Arc::new(notificar),
+            None,
         );
         Ok(PtyInferior {
             parser,
