@@ -5626,7 +5626,7 @@ impl App {
         let texto = self
             .ejecucion
             .as_ref()
-            .map(|d| d.texto())
+            .map(|d| d.salida_completa())
             .unwrap_or_default();
         if matches!(informe, InformeMemoria::Sanitizers) {
             // tetsuo lo explica si está; si no, lo que entiende jonesy (ASan y UBSan).

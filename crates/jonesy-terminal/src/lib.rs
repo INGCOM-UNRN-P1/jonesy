@@ -207,12 +207,17 @@ impl Deck {
 
     /// Texto visible (sin atributos); útil para pruebas y para copiar.
     pub fn texto(&self) -> String {
+        self.con_pantalla(|s| s.contents())
+    }
+
+    /// Salida acumulada leída del proceso (para informes de sanitizers/memoria).
+    pub fn salida_completa(&self) -> String {
         if let Ok(s) = self.salida.lock() {
             if !s.is_empty() {
                 return String::from_utf8_lossy(&s).to_string();
             }
         }
-        self.con_pantalla(|s| s.contents())
+        self.texto()
     }
 }
 
