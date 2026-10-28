@@ -239,6 +239,8 @@ fn explicar(inf: &Informe, base: &Path, raiz: &Path) -> Option<String> {
 
 /// Interpreta la salida de un programa compilado con `-fsanitize=address`.
 pub fn interpretar(salida: &str, raiz: &Path) -> Resultado {
+    let limpia = crate::explicacion::sin_ansi(salida);
+    let salida = limpia.as_str();
     let mut r = Resultado::default();
     let base = raiz.to_path_buf();
     for inf in leer(salida) {
@@ -621,5 +623,13 @@ mod tests {
     fn sin_informe_no_se_reconoce() {
         let r = interpretar("hola\n[proceso terminado con código 0]\n", Path::new("."));
         assert!(!r.reconocida && r.diagnosticos.is_empty());
+    }
+
+    #[test]
+    fn informe_con_secuencias_ansi() {
+        let salida = "\x1b[1m\x1b[31m==1234==ERROR: AddressSanitizer: heap-buffer-overflow on address 0x1234\x1b[0m\nWRITE of size 4 at 0x1234 thread T0\n    #0 0x400 in main /tmp/m.c:6\n";
+        let r = interpretar(salida, Path::new("/tmp"));
+        assert!(r.reconocida);
+        assert_eq!(r.errores, 1);
     }
 }

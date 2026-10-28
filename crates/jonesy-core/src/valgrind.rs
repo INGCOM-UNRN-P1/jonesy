@@ -284,6 +284,8 @@ fn bytes_de_fuga(titulo: &str) -> String {
 
 /// Interpreta la salida de valgrind (mezclada con la de make) corrida desde `raiz`.
 pub fn interpretar(salida: &str, raiz: &Path) -> Resultado {
+    let limpia = crate::explicacion::sin_ansi(salida);
+    let salida = limpia.as_str();
     let mut r = Resultado::default();
     let mut pila_dirs: Vec<PathBuf> = vec![raiz.to_path_buf()];
     let mut bloques: Vec<(PathBuf, Bloque)> = vec![];

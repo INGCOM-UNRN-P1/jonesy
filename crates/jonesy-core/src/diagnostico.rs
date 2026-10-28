@@ -72,6 +72,8 @@ pub enum Origen {
 /// Interpreta la salida de GCC/Clang: líneas `archivo:línea:col: severidad: mensaje`.
 /// Las rutas relativas se resuelven contra `dir`.
 pub fn parsear_gcc(salida: &str, dir: &Path) -> Vec<Diagnostico> {
+    let limpia = crate::explicacion::sin_ansi(salida);
+    let salida = limpia.as_str();
     let mut diags = Vec::new();
     // `make -C sub` imprime «Entering directory '…'»: las rutas de gcc que siguen son
     // relativas a ese directorio, no a la raíz.

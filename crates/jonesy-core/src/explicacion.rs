@@ -246,7 +246,7 @@ fn ejemplo(v: &[String]) -> String {
     s
 }
 
-fn sin_ansi(s: &str) -> String {
+pub(crate) fn sin_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut it = s.chars().peekable();
     while let Some(c) = it.next() {

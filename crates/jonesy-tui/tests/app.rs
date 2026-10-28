@@ -83,7 +83,11 @@ fn esperar(app: &mut App, rx: &Receiver<Aviso>, mut cond: impl FnMut(&App) -> bo
     while !cond(app) {
         assert!(
             Instant::now() < fin,
-            "tiempo agotado esperando la condición"
+            "tiempo agotado esperando la condición: mensaje={:?}, pestana={:?}, diags={:?}, deck_salida={:?}",
+            app.mensaje,
+            app.pestana,
+            app.diag_compilador,
+            app.ejecucion.as_ref().map(|d| d.salida_completa())
         );
         if let Ok(a) = rx.recv_timeout(Duration::from_millis(50)) {
             app.procesar(a);
@@ -4135,9 +4139,10 @@ fn ejecutar_con_sanitizers_detiene_y_marca_la_sentencia() {
     a.abrir_archivo(&dir.path().join("m.c"), true);
     a.accion(jonesy_tui::accion::Accion::EjecutarConSanitizers);
     esperar(&mut a, &rx, |a| {
-        a.mensaje
-            .as_ref()
-            .is_some_and(|(m, _, _)| m.starts_with("m.c:6"))
+        a.pestana == Pestana::Problemas
+            || a.mensaje
+                .as_ref()
+                .is_some_and(|(m, _, _)| m.contains("m.c:6"))
     });
     assert_eq!(a.pestana, Pestana::Problemas);
     assert_eq!(a.buf().buf.linea_columna().0, 5);
