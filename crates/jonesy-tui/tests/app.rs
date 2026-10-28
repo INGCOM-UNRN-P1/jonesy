@@ -3969,6 +3969,7 @@ fn compilar_al_guardar_con_el_boton_y_alt_b() {
 
 /// Un analizador de prueba con la forma común de hallazgos: marca la primera línea con
 /// «TODO» del texto que recibe por la entrada estándar (o del archivo, al guardar).
+#[allow(dead_code)]
 const ANALIZADOR_VIVO: &str = r#"texto=$(cat "${3:-/dev/stdin}")
 l=$(printf '%s\n' "$texto" | grep -n TODO | head -1 | cut -d: -f1)
 if [ -z "$l" ]; then echo '{"hallazgos": []}'; exit 0; fi
