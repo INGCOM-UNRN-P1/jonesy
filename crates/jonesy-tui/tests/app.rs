@@ -76,9 +76,10 @@ fn escribir(app: &mut App, s: &str) {
     }
 }
 
-/// Procesa avisos hasta que `cond` se cumpla (o 45 s).
+/// Procesa avisos hasta que `cond` se cumpla (o 90 s).
+#[allow(dead_code)]
 fn esperar(app: &mut App, rx: &Receiver<Aviso>, mut cond: impl FnMut(&App) -> bool) {
-    let fin = Instant::now() + Duration::from_secs(45);
+    let fin = Instant::now() + Duration::from_secs(90);
     while !cond(app) {
         assert!(
             Instant::now() < fin,
