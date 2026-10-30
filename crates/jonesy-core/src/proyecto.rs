@@ -339,6 +339,41 @@ impl Proyecto {
         ))
     }
 
+    /// Comando de la revisión rápida (Alt+K): sólo el archivo activo, con `gcc -fsyntax-only`
+    /// (sin enlazar ni pasar por make), con las carpetas de headers de su módulo y de las
+    /// bibliotecas que usa. Sirve para ver los errores de un archivo en un TP que todavía no
+    /// enlaza entero.
+    pub fn comando_revisar(&self, activo: &Path) -> Option<String> {
+        let ext = activo.extension()?.to_str()?;
+        if ext != "c" && ext != "h" {
+            return None;
+        }
+        let mut dirs: Vec<PathBuf> = vec![activo.parent()?.to_path_buf()];
+        if let Some(m) = self.modulo_activo(Some(activo)) {
+            dirs.push(m.dir.clone());
+            dirs.push(m.dir.join("include"));
+            for lib in self.bibliotecas_de(m) {
+                dirs.push(lib.dir.clone());
+                dirs.push(lib.dir.join("include"));
+            }
+        }
+        dirs.push(self.raiz.join("include"));
+        let mut vistos = std::collections::BTreeSet::new();
+        let incluir: Vec<String> = dirs
+            .into_iter()
+            .filter(|d| d.is_dir() && vistos.insert(d.clone()))
+            .map(|d| {
+                let rel = self.relativa(&d);
+                format!("-I{}", shell_quote(if rel.is_empty() { "." } else { &rel }))
+            })
+            .collect();
+        Some(format!(
+            "gcc -std=c11 -Wall -Wextra -fsyntax-only {} {}",
+            incluir.join(" "),
+            shell_quote(&self.relativa(activo))
+        ))
+    }
+
     /// Comando de ejecución (Ctrl+F5): compilar y correr.
     pub fn comando_ejecutar(&self, activo: Option<&Path>) -> Option<String> {
         if !self.config.ejecutar.comando.trim().is_empty() {
@@ -756,6 +791,46 @@ pub fn lee_entrada(codigo: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn comando_revisar_un_archivo_con_sus_headers() {
+        let d = tempfile::tempdir().unwrap();
+        let raiz = d.path();
+        std::fs::write(raiz.join("suelto.c"), "int main(void) { return 0; }\n").unwrap();
+        let p = Proyecto::abrir(raiz);
+        assert_eq!(
+            p.comando_revisar(&raiz.join("suelto.c")).unwrap(),
+            "gcc -std=c11 -Wall -Wextra -fsyntax-only -I. suelto.c"
+        );
+        assert!(p.comando_revisar(&raiz.join("notas.md")).is_none());
+
+        // TP: el ejercicio ve los headers de la biblioteca que usa.
+        for (ruta, texto) in [
+            ("Makefile", "all:\n"),
+            ("libs/pila/Makefile", "LIB_NAME = pila\nall:\n"),
+            ("libs/pila/include/pila.h", "int apilar(int x);\n"),
+            (
+                "ejercicios/ej1/Makefile",
+                "LIB_NAME = pila\nPROG_TARGET = ej1\nall:\n",
+            ),
+            (
+                "ejercicios/ej1/main.c",
+                "#include \"pila.h\"\nint main(void) { return apilar(1); }\n",
+            ),
+        ] {
+            let r = raiz.join(ruta);
+            std::fs::create_dir_all(r.parent().unwrap()).unwrap();
+            std::fs::write(r, texto).unwrap();
+        }
+        let p = Proyecto::abrir(raiz);
+        let cmd = p
+            .comando_revisar(&raiz.join("ejercicios/ej1/main.c"))
+            .unwrap();
+        assert!(
+            cmd.contains("-Iejercicios/ej1 ") && cmd.contains("-Ilibs/pila/include"),
+            "{cmd}"
+        );
+        assert!(cmd.ends_with(" ejercicios/ej1/main.c"), "{cmd}");
+    }
 
     #[test]
     fn comillas_segun_el_interprete() {

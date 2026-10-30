@@ -4239,3 +4239,52 @@ fn terminal_pura_de_16_colores() {
     }
     jonesy_tui::tema::usar_profundidad(jonesy_core::colores::Profundidad::Verdadero);
 }
+
+#[test]
+fn revisar_solo_este_archivo_con_alt_k() {
+    if !es_gnu_gcc() {
+        return;
+    }
+    // Un TP que no enlaza (falta `apilar`): Alt+K revisa sólo el archivo, con los headers de
+    // la biblioteca, y marca el error de sintaxis sin pasar por make.
+    let dir = proyecto(&[
+        ("Makefile", "all:\n\t@false\n"),
+        ("libs/pila/Makefile", "LIB_NAME = pila\nall:\n"),
+        ("libs/pila/include/pila.h", "int apilar(int x);\n"),
+        (
+            "ejercicios/ej1/Makefile",
+            "LIB_NAME = pila\nPROG_TARGET = ej1\nall:\n",
+        ),
+        (
+            "ejercicios/ej1/main.c",
+            "#include \"pila.h\"\nint main(void) {\n    int x = apilar(1)\n    return x;\n}\n",
+        ),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("ejercicios/ej1/main.c"), true);
+    pantalla(&mut a, 120, 30);
+    tecla(&mut a, KeyCode::Char('k'), KeyModifiers::ALT);
+    esperar(&mut a, &rx, |a| !a.diag_compilador.is_empty());
+    assert!(a.salida[0].0.contains("-fsyntax-only"), "{:?}", a.salida[0]);
+    assert!(
+        a.salida[0].0.contains("-Ilibs/pila/include"),
+        "{:?}",
+        a.salida[0]
+    );
+    // gcc informa el `;` que falta en la línea siguiente, antes del `return`.
+    assert_eq!(a.diag_compilador[0].linea, 4);
+    assert_eq!(a.pestana, Pestana::Problemas);
+
+    // Arreglado: sin errores, y el aviso dice que F6 compila el programa entero.
+    let fin = a.buf().buf.contenido().find("apilar(1)").unwrap() + "apilar(1)".len();
+    a.buf_mut().buf.mover_a(fin, false);
+    escribir(&mut a, ";");
+    tecla(&mut a, KeyCode::Char('k'), KeyModifiers::ALT);
+    esperar(&mut a, &rx, |a| {
+        a.diag_compilador.is_empty()
+            && a.mensaje
+                .as_ref()
+                .is_some_and(|m| m.0.contains("Sin errores"))
+    });
+}

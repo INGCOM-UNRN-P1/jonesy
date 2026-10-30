@@ -186,6 +186,7 @@ impl App {
                 self.quickdoc_visible = true;
             }
             Accion::Compilar => self.compilar(Luego::Nada),
+            Accion::RevisarArchivo => self.revisar_archivo(),
             Accion::Ejecutar => self.compilar(Luego::Ejecutar),
             Accion::Probar => self.probar(),
             Accion::ProbarAqui => self.probar_aqui(),

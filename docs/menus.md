@@ -200,6 +200,7 @@ comprueba que esté al día.
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
 │ Compilar archivo o proyecto                                          F6 │
+│ Revisar sólo este archivo (rápido, sin enlazar)                   Alt+K │
 │ Compilar al guardar (activar o desactivar)                        Alt+B │
 │ Compilar y ejecutar                                             Ctrl+F5 │
 │ Ejecutar con entrada… (archivo de entrada para Ctrl+F5)                 │

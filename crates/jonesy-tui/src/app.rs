@@ -433,6 +433,8 @@ pub enum Luego {
     Depurar,
     /// Correr los casos de entrada y salida esperada.
     Casos,
+    /// La revisión rápida de un archivo (Alt+K): no hay programa que correr después.
+    Revisar,
 }
 
 /// Cómo interpretar la salida de un objetivo de make.
@@ -2698,6 +2700,45 @@ impl App {
         self.lanzar(&comando, Tarea::Compilar { luego });
     }
 
+    /// Revisión rápida (Alt+K): sólo el archivo activo con `gcc -fsyntax-only` y los headers de
+    /// su módulo y bibliotecas, sin make ni enlazar. Los errores van a Problemas como los de
+    /// F6 (explicados, Alt+N y Enter saltan).
+    pub fn revisar_archivo(&mut self) {
+        if self
+            .procesos
+            .values()
+            .any(|t| matches!(t, Tarea::Compilar { .. }))
+        {
+            self.avisar("Ya hay una compilación en curso.", Nivel::Aviso);
+            return;
+        }
+        let Some(activo) = self.activo_ruta() else {
+            self.avisar("Abrí un .c o un .h para revisarlo.", Nivel::Aviso);
+            return;
+        };
+        let Some(comando) = self.proyecto.comando_revisar(&activo) else {
+            self.avisar("Alt+K revisa archivos .c y .h.", Nivel::Aviso);
+            return;
+        };
+        self.guardar(self.activo);
+        self.salida = vec![(format!("$ {comando}"), false)];
+        self.titulo_salida = "revisión del archivo".into();
+        self.salida_desplazamiento = 0;
+        self.diag_compilador.clear();
+        self.panel_inferior = true;
+        self.pestana = Pestana::Salida;
+        self.avisar(
+            format!("Revisando {}…", self.proyecto.relativa(&activo)),
+            Nivel::Info,
+        );
+        self.lanzar(
+            &comando,
+            Tarea::Compilar {
+                luego: Luego::Revisar,
+            },
+        );
+    }
+
     /// Clave del ejercicio activo (su módulo o, si es un archivo suelto, el archivo) para
     /// recordar su entrada y sus argumentos.
     pub fn clave_ejercicio(&self) -> Option<String> {
@@ -3650,19 +3691,21 @@ impl App {
                     self.avisar(
                         if guardado {
                             format!("Guardado y compila ({advertencias} advertencias).")
+                        } else if luego == Luego::Revisar {
+                            format!("Sin errores en este archivo ({advertencias} advertencias). F6 compila el programa entero.")
                         } else {
                             format!("Compilación correcta ({advertencias} advertencias).")
                         },
                         Nivel::Ok,
                     );
-                    if advertencias > 0 && luego == Luego::Nada {
+                    if advertencias > 0 && matches!(luego, Luego::Nada | Luego::Revisar) {
                         self.pestana = Pestana::Problemas;
                     }
                     match luego {
                         Luego::Ejecutar => self.ejecutar_en_deck(),
                         Luego::Casos => self.correr_casos(),
                         Luego::Depurar => self.iniciar_depuracion(),
-                        Luego::Nada | Luego::Guardado => {}
+                        Luego::Nada | Luego::Guardado | Luego::Revisar => {}
                     }
                 } else {
                     self.salida.push((

@@ -368,6 +368,12 @@ impl App {
             {
                 Some(Accion::CompilarAlGuardar)
             }
+            (KeyCode::Char('k'), false, true, false)
+                if !(self.foco == Foco::Inferior
+                    && matches!(self.pestana, Pestana::Terminal | Pestana::Ejecucion)) =>
+            {
+                Some(Accion::RevisarArchivo)
+            }
             (KeyCode::Char('n'), true, false, _) => Some(Accion::NuevoArchivo),
             (KeyCode::Char('F'), false, true, _) | (KeyCode::Char('f'), false, true, true) => {
                 Some(Accion::Formatear)

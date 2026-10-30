@@ -131,6 +131,7 @@ pub enum Accion {
     ConteoMemoria,
     SiguientePista,
     CompilarAlGuardar,
+    RevisarArchivo,
 }
 
 pub struct Info {
@@ -273,6 +274,7 @@ impl Accion {
             ConteoMemoria => ("Contar malloc y free por función", ""),
             SiguientePista => ("Ver la siguiente pista de la consigna", ""),
             CompilarAlGuardar => ("Compilar al guardar (activar o desactivar)", "Alt+B"),
+            RevisarArchivo => ("Revisar sólo este archivo (rápido, sin enlazar)", "Alt+K"),
         };
         Info { titulo, atajo }
     }
@@ -401,6 +403,7 @@ impl Accion {
             ConteoMemoria,
             SiguientePista,
             CompilarAlGuardar,
+            RevisarArchivo,
             Salir,
         ]
     }
@@ -589,6 +592,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             'c',
             vec![
                 A(Compilar),
+                A(RevisarArchivo),
                 A(CompilarAlGuardar),
                 A(Ejecutar),
                 A(EjecutarConEntrada),
@@ -783,6 +787,7 @@ pub const AYUDA_ATAJOS: &str = "\
 | Explicar regla (sobre un diagnóstico) | F1 |
 | Quick-doc | F4 (Shift+F4 cambia la orientación) |
 | Compilar | F6 |
+| Revisar sólo este archivo (gcc -fsyntax-only, sin make ni enlazar) | Alt+K |
 | Compilar al guardar (activar o desactivar; también el botón de la barra) | Alt+B |
 | Compilar y ejecutar en el deck | Ctrl+F5 |
 | Correr las pruebas (make test) | Ctrl+F6 |
