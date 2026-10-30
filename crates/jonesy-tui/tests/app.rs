@@ -4151,3 +4151,54 @@ fn ejecutar_con_sanitizers_detiene_y_marca_la_sentencia() {
         .iter()
         .any(|d| d.linea == 6 && d.resumen.is_some()));
 }
+
+#[test]
+fn estructura_del_c_sin_compilar() {
+    // Falta la llave que cierra `doble`: gcc lo diría en otra parte; jonesy marca dónde abre.
+    let roto =
+        "int doble(int x) {\n    return 2 * x;\n\nint main(void) {\n    return doble(2);\n}\n";
+    let dir = proyecto(&[
+        ("prueba.c", roto),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    pantalla(&mut a, 120, 30);
+    a.tic();
+    let propios = |a: &App| -> Vec<(usize, String)> {
+        a.diagnosticos()
+            .into_iter()
+            .filter(|d| d.herramienta.as_deref() == Some("jonesy"))
+            .map(|d| (d.linea, d.mensaje.clone()))
+            .collect()
+    };
+    let d = propios(&a);
+    assert_eq!(d.len(), 1, "{d:?}");
+    assert_eq!(d[0].0, 1);
+    assert!(d[0].1.contains("línea 4"), "{d:?}");
+
+    // Alt+N lleva a la llave que no se cierra.
+    let fin = a.buf().buf.contenido().chars().count();
+    a.buf_mut().buf.mover_a(fin, false);
+    tecla(&mut a, KeyCode::Char('n'), KeyModifiers::ALT);
+    assert_eq!(a.buf().buf.linea_columna().0, 0);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("Esta llave no se cierra"), "{p}");
+
+    // F1 explica con el ejemplo «así no / así sí».
+    a.foco = Foco::Inferior;
+    tecla(&mut a, KeyCode::F(1), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 120, 40);
+    assert!(p.contains("Así sí"), "{p}");
+    tecla(&mut a, KeyCode::Esc, KeyModifiers::NONE);
+    a.foco = Foco::Editor;
+
+    // Al cerrar la llave, después de la pausa, el problema desaparece.
+    let pos = roto.find("\n\nint main").unwrap() + 1;
+    a.buf_mut().buf.mover_a(pos, false);
+    escribir(&mut a, "}");
+    a.tic();
+    assert_eq!(propios(&a).len(), 1, "durante la pausa no se reanaliza");
+    std::thread::sleep(Duration::from_millis(700));
+    a.tic();
+    assert!(propios(&a).is_empty(), "{:?}", propios(&a));
+}

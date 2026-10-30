@@ -39,6 +39,7 @@ pub mod reporte;
 pub mod sarif;
 pub mod sesion;
 pub mod simbolos;
+pub mod sintaxis;
 pub mod valgrind;
 
 pub use buffer::{Buffer, Delta, Lenguaje};

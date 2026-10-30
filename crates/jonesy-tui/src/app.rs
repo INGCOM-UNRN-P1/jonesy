@@ -832,6 +832,8 @@ pub struct App {
     compilaciones: u64,
     /// Versión de cada buffer analizada (o en análisis) en vivo.
     analizado_en_vivo: HashMap<PathBuf, u64>,
+    /// Versión de cada buffer C cuya estructura (llaves, cadenas, comentarios) ya se revisó.
+    estructura_revisada: HashMap<PathBuf, u64>,
     /// Integraciones cuyo análisis en vivo falló (una versión sin `--stdin`): quedan sólo
     /// al guardar.
     en_vivo_rotas: BTreeSet<String>,
@@ -1064,6 +1066,7 @@ impl App {
             integraciones_programadas: HashMap::new(),
             compilaciones: 0,
             analizado_en_vivo: HashMap::new(),
+            estructura_revisada: HashMap::new(),
             en_vivo_rotas: BTreeSet::new(),
             terminal: None,
             ejecucion: None,
@@ -1991,6 +1994,48 @@ impl App {
                 Some(texto.clone()),
             );
         }
+    }
+
+    /// Estructura del C del buffer activo sin compilar (llaves, paréntesis y corchetes que no
+    /// cierran o sobran, cadenas y comentarios abiertos): al abrirlo y tras la misma pausa que
+    /// el análisis en vivo, sin marcar la línea que se está escribiendo. Va a Problemas como
+    /// `jonesy`, así que Alt+N la recorre.
+    fn revisar_estructura(&mut self) {
+        if self.proyecto.config.integraciones.en_vivo == Some(false) || self.examen_en_pausa() {
+            return;
+        }
+        let Some(ruta) = self.activo_ruta() else {
+            return;
+        };
+        let b = self.buf();
+        if b.buf.lenguaje != Lenguaje::C || b.hex.is_some() {
+            return;
+        }
+        let version = b.buf.version;
+        if self.estructura_revisada.get(&ruta) == Some(&version)
+            || (b.buf.modificado() && b.ultimo_cambio.elapsed() < DEBOUNCE_VIVO)
+        {
+            return;
+        }
+        let cursor = b.buf.modificado().then(|| b.buf.linea_columna().0 + 1);
+        let diags = jonesy_core::sintaxis::revisar_archivo(&b.buf.contenido(), &ruta, cursor);
+        self.estructura_revisada.insert(ruta.clone(), version);
+        let clave = (jonesy_core::sintaxis::HERRAMIENTA.to_string(), ruta);
+        if diags.is_empty() {
+            self.diag_herramientas.remove(&clave);
+        } else {
+            self.diag_herramientas.insert(clave, diags);
+        }
+    }
+
+    /// Cuánto falta para la próxima revisión de estructura del buffer activo.
+    fn espera_estructura(&self) -> Option<Duration> {
+        let ruta = self.activo_ruta()?;
+        let b = self.buf();
+        let pendiente = b.buf.lenguaje == Lenguaje::C
+            && self.estructura_revisada.get(&ruta) != Some(&b.buf.version)
+            && self.proyecto.config.integraciones.en_vivo != Some(false);
+        pendiente.then(|| DEBOUNCE_VIVO.saturating_sub(b.ultimo_cambio.elapsed()))
     }
 
     /// Cuánto falta para el próximo análisis en vivo del buffer activo (None si no hay uno
@@ -6781,6 +6826,9 @@ impl App {
         if let Some(t) = self.espera_en_vivo() {
             espera = espera.min(t.max(Duration::from_millis(10)));
         }
+        if let Some(t) = self.espera_estructura() {
+            espera = espera.min(t.max(Duration::from_millis(10)));
+        }
         if !self.procesos.is_empty() || self.vigilar_programa {
             espera = espera.min(Duration::from_millis(500));
         }
@@ -6832,6 +6880,7 @@ impl App {
             self.lanzar_integracion(&nombre, &archivo);
         }
         self.analizar_en_vivo();
+        self.revisar_estructura();
         if self.vigilar_programa && self.ejecucion.as_mut().is_some_and(|d| d.vivo()) {
             self.vigilar_cuelgue();
         }
