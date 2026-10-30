@@ -913,23 +913,21 @@ pub fn chequeos(
         .en("Terminal")
         .sugerir("export TERM=xterm-256color"),
     );
-    let colorterm = std::env::var("COLORTERM").unwrap_or_default();
-    let color_verdadero = colorterm == "truecolor" || colorterm == "24bit";
+    let profundidad = crate::colores::detectar_entorno(&proyecto.config.interfaz.colores);
     v.push(
         Chequeo::nuevo(
             "color",
             "opcional",
-            color_verdadero,
-            if color_verdadero {
-                "color verdadero (24 bits)".to_string()
-            } else {
-                format!("COLORTERM={colorterm:?}: puede que la terminal sólo tenga 256 colores")
+            profundidad == crate::colores::Profundidad::Verdadero,
+            match profundidad {
+                crate::colores::Profundidad::Verdadero => profundidad.describir().to_string(),
+                otra => format!("{}: jonesy adapta los temas a la paleta de la terminal", otra.describir()),
             },
-            "Los temas oscuro, claro, turbo… usan color verdadero",
+            "Los temas usan color verdadero; con 256 o 16 colores se aproximan",
         )
         .en("Terminal")
         .sugerir(
-            "Si los colores se ven mal, usá el tema contraste ([interfaz] tema = \"contraste\")",
+            "Si la terminal tiene más colores de los que se detectan: [interfaz] colores = \"24bit\" o \"256\"",
         ),
     );
     // Python: versión mínima para el worker.

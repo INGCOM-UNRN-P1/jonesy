@@ -4202,3 +4202,40 @@ fn estructura_del_c_sin_compilar() {
     a.tic();
     assert!(propios(&a).is_empty(), "{:?}", propios(&a));
 }
+
+#[test]
+fn terminal_pura_de_16_colores() {
+    // `[interfaz] colores = "16"` (o TERM=linux): ningún color fuera de los 16 ANSI en pantalla,
+    // en ninguno de los temas.
+    let dir = proyecto(&[
+        ("prueba.c", "#include <stdio.h>\n\n/* hola */\nint main(void) {\n    printf(\"%d\\n\", 42);\n    return 0;\n}\n"),
+        (".jonesy.toml", "[ripley]\nactivo = false\n\n[interfaz]\ncolores = \"16\"\n"),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    for t in jonesy_tui::tema::Tema::TODOS {
+        jonesy_tui::tema::usar(t);
+        let mut term = Terminal::new(TestBackend::new(120, 30)).unwrap();
+        term.draw(|f| jonesy_tui::dibujo::dibujar(f, &mut a))
+            .unwrap();
+        let fuera: Vec<_> = term
+            .backend()
+            .buffer()
+            .content()
+            .iter()
+            .flat_map(|c| [c.fg, c.bg])
+            .filter(|c| {
+                matches!(
+                    c,
+                    ratatui::style::Color::Rgb(..) | ratatui::style::Color::Indexed(_)
+                )
+            })
+            .collect();
+        assert!(
+            fuera.is_empty(),
+            "tema {}: {:?}",
+            t.nombre(),
+            &fuera[..fuera.len().min(5)]
+        );
+    }
+    jonesy_tui::tema::usar_profundidad(jonesy_core::colores::Profundidad::Verdadero);
+}

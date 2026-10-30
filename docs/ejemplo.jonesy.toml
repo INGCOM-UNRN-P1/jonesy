@@ -52,6 +52,9 @@ memoria_mb = 0
 # "alt+u" = "Correr pruebas (make test)"
 
 [interfaz]
+# Colores de la terminal: "24bit", "256" o "16" (vacío = deducirlo de TERM y COLORTERM).
+# En la consola de Linux o en una terminal de 256 colores, los temas se adaptan solos.
+# colores = "16"
 # Posición del quick-doc: "derecha" o "inferior".
 quickdoc = "derecha"
 # Copiar al portapapeles del sistema con OSC 52 (también por SSH).

@@ -1,11 +1,14 @@
 //! Colores y símbolos. Con `--ascii`, `interfaz.ascii = true` o un locale que no es UTF-8,
-//! los caracteres de caja y los íconos se degradan a ASCII.
+//! los caracteres de caja y los íconos se degradan a ASCII. En una terminal sin color
+//! verdadero (256 o 16 colores, ver `[interfaz] colores`) cada color del tema se aproxima al
+//! más cercano de su paleta.
 
 use std::cell::Cell;
 
 use ratatui::style::{Color, Modifier, Style};
 
 use crate::resaltado::Clase;
+use jonesy_core::colores::Profundidad;
 
 #[derive(Debug, Clone)]
 pub struct Simbolos {
@@ -432,6 +435,9 @@ const FOSFORO: Paleta = Paleta {
 };
 
 thread_local! {
+    // Cuántos colores tiene la terminal: los del tema se adaptan al dibujar.
+    static PROFUNDIDAD: Cell<Profundidad> = const { Cell::new(Profundidad::Verdadero) };
+
     // Por hilo: se dibuja siempre desde el hilo principal, y así las pruebas (que corren
     // en paralelo) no se pisan el tema.
     static TEMA: Cell<Tema> = const { Cell::new(Tema::Oscuro) };
@@ -450,12 +456,115 @@ pub fn paleta() -> &'static Paleta {
     actual().paleta()
 }
 
+/// Fija cuántos colores tiene la terminal (`jonesy_core::colores::detectar_entorno`).
+pub fn usar_profundidad(p: Profundidad) {
+    PROFUNDIDAD.with(|c| c.set(p));
+}
+
+pub fn profundidad() -> Profundidad {
+    PROFUNDIDAD.with(Cell::get)
+}
+
+fn distancia(a: (u8, u8, u8), b: (u8, u8, u8)) -> u32 {
+    // Pesos aproximados de la percepción (verde > rojo > azul).
+    let d = |x: u8, y: u8| (i32::from(x) - i32::from(y)).pow(2) as u32;
+    3 * d(a.0, b.0) + 4 * d(a.1, b.1) + 2 * d(a.2, b.2)
+}
+
+/// El índice de la paleta de 256 colores (cubo 6×6×6 o grises) más cercano.
+fn indice_256((r, g, b): (u8, u8, u8)) -> u8 {
+    const NIVELES: [u8; 6] = [0, 95, 135, 175, 215, 255];
+    let nivel = |c: u8| {
+        (0..6)
+            .min_by_key(|&i| (i32::from(NIVELES[i]) - i32::from(c)).abs())
+            .unwrap_or(0)
+    };
+    let (ir, ig, ib) = (nivel(r), nivel(g), nivel(b));
+    let cubo = (NIVELES[ir], NIVELES[ig], NIVELES[ib]);
+    let gris_i = ((u32::from(r) + u32::from(g) + u32::from(b)) / 3).saturating_sub(8) / 10;
+    let gris_i = gris_i.min(23) as u8;
+    let gris = 8 + 10 * gris_i;
+    if distancia((gris, gris, gris), (r, g, b)) < distancia(cubo, (r, g, b)) {
+        232 + gris_i
+    } else {
+        16 + 36 * ir as u8 + 6 * ig as u8 + ib as u8
+    }
+}
+
+fn ansi_cercano((r, g, b): (u8, u8, u8)) -> Color {
+    // Por tono y no por distancia: un rojo apagado (el de los errores) tiene que seguir siendo
+    // rojo aunque en RGB quede más cerca del gris.
+    let (r, g, b) = (
+        f32::from(r) / 255.0,
+        f32::from(g) / 255.0,
+        f32::from(b) / 255.0,
+    );
+    let max = r.max(g).max(b);
+    let min = r.min(g).min(b);
+    let luz = (max + min) / 2.0;
+    let croma = max - min;
+    if croma < 0.12 {
+        return match luz {
+            l if l < 0.2 => Color::Black,
+            l if l < 0.55 => Color::DarkGray,
+            l if l < 0.85 => Color::Gray,
+            _ => Color::White,
+        };
+    }
+    let tono = if max == r {
+        60.0 * ((g - b) / croma).rem_euclid(6.0)
+    } else if max == g {
+        60.0 * ((b - r) / croma + 2.0)
+    } else {
+        60.0 * ((r - g) / croma + 4.0)
+    };
+    let claro = luz > 0.55;
+    let (oscuro, brillante) = match tono {
+        t if !(20.0..330.0).contains(&t) => (Color::Red, Color::LightRed),
+        t if t < 70.0 => (Color::Yellow, Color::LightYellow),
+        t if t < 165.0 => (Color::Green, Color::LightGreen),
+        t if t < 200.0 => (Color::Cyan, Color::LightCyan),
+        t if t < 260.0 => (Color::Blue, Color::LightBlue),
+        _ => (Color::Magenta, Color::LightMagenta),
+    };
+    if luz < 0.18 {
+        // Casi negro con un tinte (fondos de temas oscuros).
+        Color::Black
+    } else if claro {
+        brillante
+    } else {
+        oscuro
+    }
+}
+
+/// Un color del tema en la paleta de la terminal. Con 16 colores, los fondos oscuros del
+/// editor (línea actual, bloques de código) pasan al de la terminal y la selección a azul,
+/// para que no se confundan todos en negro.
+fn adaptar(c: Color, rol: &str) -> Color {
+    let Color::Rgb(r, g, b) = c else {
+        return c;
+    };
+    match profundidad() {
+        Profundidad::Verdadero => c,
+        Profundidad::Paleta256 => Color::Indexed(indice_256((r, g, b))),
+        Profundidad::Ansi16 => {
+            let cercano = ansi_cercano((r, g, b));
+            match (rol, cercano) {
+                ("fondo" | "fondo_linea" | "fondo_codigo", Color::Black) => Color::Reset,
+                ("fondo_seleccion", Color::Black | Color::DarkGray) => Color::Blue,
+                ("fondo_barra", Color::Black) => Color::DarkGray,
+                _ => cercano,
+            }
+        }
+    }
+}
+
 macro_rules! colores {
     ($($nombre:ident),* $(,)?) => {
         $(
             #[inline]
             pub fn $nombre() -> Color {
-                paleta().$nombre
+                adaptar(paleta().$nombre, stringify!($nombre))
             }
         )*
     };
@@ -537,5 +646,55 @@ pub fn tono_catscan(t: jonesy_core::catscan::Tono) -> Style {
         Tono::Vivo => s.fg(ok()).add_modifier(Modifier::BOLD),
         Tono::Liberado => s.fg(atenuado()),
         Tono::Peligro => s.fg(peligro()).add_modifier(Modifier::BOLD),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn colores_en_256_y_16() {
+        assert_eq!(indice_256((0, 0, 0)), 16);
+        assert_eq!(indice_256((255, 255, 255)), 231);
+        assert_eq!(indice_256((128, 128, 128)), 244);
+        assert_eq!(indice_256((224, 108, 117)), 168);
+        assert_eq!(ansi_cercano((224, 108, 117)), Color::LightRed); // error del tema oscuro
+        assert_eq!(ansi_cercano((97, 175, 239)), Color::LightBlue); // acento
+        assert_eq!(ansi_cercano((152, 195, 121)), Color::LightGreen);
+        assert_eq!(ansi_cercano((229, 192, 123)), Color::LightYellow);
+        assert_eq!(ansi_cercano((110, 118, 129)), Color::DarkGray);
+        assert_eq!(ansi_cercano((40, 44, 52)), Color::Black);
+        assert_eq!(ansi_cercano((0, 0, 170)), Color::Blue); // fondo de turbo
+    }
+
+    #[test]
+    fn el_tema_se_adapta_a_la_terminal() {
+        usar(Tema::Oscuro);
+        usar_profundidad(Profundidad::Verdadero);
+        assert!(matches!(error(), Color::Rgb(..)));
+        usar_profundidad(Profundidad::Paleta256);
+        assert!(matches!(error(), Color::Indexed(_)));
+        usar_profundidad(Profundidad::Ansi16);
+        let todos = [
+            fondo(),
+            texto(),
+            acento(),
+            error(),
+            advertencia(),
+            ok(),
+            fondo_linea(),
+            fondo_seleccion(),
+        ];
+        assert!(
+            todos
+                .iter()
+                .all(|c| !matches!(c, Color::Rgb(..) | Color::Indexed(_))),
+            "{todos:?}"
+        );
+        // La selección y la línea actual no se confunden con el fondo.
+        assert_ne!(fondo_seleccion(), fondo_linea());
+        assert_eq!(fondo_linea(), Color::Reset);
+        usar_profundidad(Profundidad::Verdadero);
     }
 }

@@ -147,6 +147,9 @@ pub struct Interfaz {
     /// "turbo" (como Turbo C++ de Borland), "solarizado" o "fosforo" (monitor verde).
     /// El elegido desde Archivo → Configuración del entorno → Apariencia queda en la sesión y tiene prioridad.
     pub tema: String,
+    /// Colores de la terminal: "24bit", "256" o "16" (vacío o "auto" = deducirlo de TERM y
+    /// COLORTERM). Con 256 o 16, los temas se adaptan a la paleta de la terminal.
+    pub colores: String,
     /// Shell de la terminal interna (vacío = $SHELL o bash).
     pub shell: String,
     /// Instalación del entorno de la cátedra (vacío = buscarla en P1_ENTORNO o
@@ -213,6 +216,7 @@ impl Default for Interfaz {
             osc52: true,
             ascii: false,
             tema: String::new(),
+            colores: String::new(),
             recordar_commit_min: 30.0,
             shell: String::new(),
             entorno: String::new(),

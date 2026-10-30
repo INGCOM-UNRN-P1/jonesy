@@ -963,6 +963,9 @@ impl App {
         tema::usar(
             tema::Tema::de_nombre(&proyecto.config.interfaz.tema).unwrap_or(tema::Tema::Oscuro),
         );
+        tema::usar_profundidad(jonesy_core::colores::detectar_entorno(
+            &proyecto.config.interfaz.colores,
+        ));
         let dir_estado = proyecto.dir_estado();
         let examen = op.examen.then(|| {
             let estado = EstadoExamen::cargar(&dir_estado).unwrap_or_else(|| EstadoExamen {

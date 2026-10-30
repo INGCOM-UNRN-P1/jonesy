@@ -10,6 +10,7 @@ pub mod busqueda;
 pub mod casos;
 pub mod catalogo;
 pub mod catscan;
+pub mod colores;
 pub mod completar;
 pub mod conteo_memoria;
 pub mod deckard;
