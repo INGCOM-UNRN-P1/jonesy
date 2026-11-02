@@ -44,6 +44,7 @@ pub enum Accion {
     Entrar,
     SalirFuncion,
     Detener,
+    ReiniciarDepuracion,
     AlternarBreakpoint,
     CatScan,
     // Git
@@ -182,6 +183,7 @@ impl Accion {
             Entrar => ("Entrar en la función (step into)", "F11"),
             SalirFuncion => ("Salir de la función (step out)", "Shift+F11"),
             Detener => ("Detener depuración", "Shift+F5"),
+            ReiniciarDepuracion => ("Reiniciar la depuración (recompila)", "Ctrl+Shift+F5"),
             AlternarBreakpoint => ("Poner / quitar breakpoint", "Ctrl+B"),
             CatScan => ("Inspección visual de memoria (cat-scan)", "Alt+M"),
             GitStageTodo => ("Git: agregar todo al stage", ""),
@@ -294,6 +296,7 @@ impl Accion {
             Entrar,
             SalirFuncion,
             Detener,
+            ReiniciarDepuracion,
             AlternarBreakpoint,
             CatScan,
             Guardar,
@@ -620,6 +623,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
             vec![
                 A(Depurar),
                 A(Detener),
+                A(ReiniciarDepuracion),
                 A(AlternarBreakpoint),
                 SEP,
                 A(Paso),

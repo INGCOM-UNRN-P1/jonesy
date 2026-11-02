@@ -214,6 +214,7 @@ impl App {
             Accion::Depurar => self.depurar(),
             Accion::Paso | Accion::Entrar | Accion::SalirFuncion => self.depurador_paso(a),
             Accion::Detener => self.detener_depuracion(),
+            Accion::ReiniciarDepuracion => self.reiniciar_depuracion(),
             Accion::AlternarBreakpoint => {
                 let (l, _) = self.buf().buf.linea_columna();
                 self.alternar_breakpoint(l);

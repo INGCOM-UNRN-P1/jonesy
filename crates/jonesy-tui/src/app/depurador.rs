@@ -5,11 +5,25 @@ use super::*;
 impl App {
     pub(super) fn depurar(&mut self) {
         if let Some(d) = &mut self.depuracion {
+            // Terminó y el código cambió: correr el ejecutable viejo confundiría; se recompila.
+            if d.fase() == FaseDepuracion::Termino && d.codigo_cambiado {
+                self.reiniciar_depuracion();
+                return;
+            }
             if !d.gdb.corriendo {
                 let _ = d.gdb.continuar();
             }
             return;
         }
+        self.compilar(Luego::Depurar);
+    }
+
+    /// Ctrl+Shift+F5: corta la depuración, recompila y vuelve a empezar (con los breakpoints).
+    pub(super) fn reiniciar_depuracion(&mut self) {
+        if let Some(mut d) = self.depuracion.take() {
+            d.gdb.terminar();
+        }
+        self.avisar("Reiniciando: compilo y vuelvo a depurar.", Nivel::Info);
         self.compilar(Luego::Depurar);
     }
 
@@ -108,6 +122,7 @@ impl App {
             buscar_fuente: false,
             bishop: bishop.clone(),
             memoria: None,
+            codigo_cambiado: false,
         });
         self.panel_inferior = true;
         self.pestana = Pestana::Depurador;

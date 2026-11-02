@@ -718,6 +718,35 @@ pub struct Depuracion {
     pub bishop: Option<PathBuf>,
     /// La memoria de la última parada según bishop, o por qué no se pudo tomar.
     pub memoria: Option<Result<jonesy_core::catscan::Paso, String>>,
+    /// Se editó el código después de compilar lo que se depura: las líneas ya no coinciden y
+    /// hay que reiniciar (recompilar) para depurar la versión nueva.
+    pub codigo_cambiado: bool,
+}
+
+/// En qué está el depurador, para decírselo al alumno con qué puede hacer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FaseDepuracion {
+    Iniciando,
+    Corriendo,
+    Detenido,
+    Fallo,
+    Termino,
+}
+
+impl Depuracion {
+    pub fn fase(&self) -> FaseDepuracion {
+        if self.gdb.corriendo {
+            FaseDepuracion::Corriendo
+        } else if self.estado.starts_with("terminó") {
+            FaseDepuracion::Termino
+        } else if self.estado.starts_with("señal") {
+            FaseDepuracion::Fallo
+        } else if self.ubicacion.is_some() {
+            FaseDepuracion::Detenido
+        } else {
+            FaseDepuracion::Iniciando
+        }
+    }
 }
 
 pub struct EstadoExamenUi {
@@ -1676,6 +1705,16 @@ impl App {
         let id = self.id_buffer(self.activo);
         let b = self.buf_mut();
         if let Some(d) = f(&mut b.buf) {
+            let es_c = b.buf.lenguaje == jonesy_core::buffer::Lenguaje::C;
+            if let (Some(dep), true) = (self.depuracion.as_mut(), es_c) {
+                if !std::mem::replace(&mut dep.codigo_cambiado, true) {
+                    self.avisar(
+                        "Cambiaste el código mientras depurás: lo que corre es la versión anterior. ↻ Reiniciar (Ctrl+Shift+F5) recompila.",
+                        Nivel::Aviso,
+                    );
+                }
+            }
+            let b = self.buf_mut();
             b.ultimo_cambio = Instant::now();
             // Breakpoints, marcadores y hallazgos (gaff, ripley, el compilador…) siguen a su
             // línea si se agregan o quitan líneas, hasta que el próximo análisis los renueve.

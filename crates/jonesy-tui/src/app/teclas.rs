@@ -310,6 +310,7 @@ impl App {
         // Teclas que siempre son globales (también con el foco en la terminal).
         let global = match (k.code, ctrl, alt, shift) {
             (KeyCode::Char('t'), false, true, _) => Some(Accion::Terminal),
+            (KeyCode::F(5), true, _, true) => Some(Accion::ReiniciarDepuracion),
             (KeyCode::F(5), true, _, _) => Some(Accion::Ejecutar),
             (KeyCode::F(5), _, _, true) => Some(Accion::Detener),
             (KeyCode::F(5), _, _, _) => Some(Accion::Depurar),

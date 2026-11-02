@@ -1929,13 +1929,21 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
     let Some(d) = &mut app.depuracion else {
         return None;
     };
-    // Barra de botones (RF-4.1).
-    let botones: [(&str, &str, Accion); 5] = [
-        ("▶ Continuar", "> Continuar", Accion::Depurar),
+    use crate::app::FaseDepuracion as F;
+    let fase = d.fase();
+    // Barra de botones (RF-4.1). Terminado, F5 vuelve a correr (o reinicia si cambió el código).
+    let continuar = if fase == F::Termino {
+        ("▶ Correr de nuevo", "> Correr de nuevo")
+    } else {
+        ("▶ Continuar", "> Continuar")
+    };
+    let botones: [(&str, &str, Accion); 6] = [
+        (continuar.0, continuar.1, Accion::Depurar),
         ("↷ Paso", "Paso", Accion::Paso),
         ("↓ Entrar", "Entrar", Accion::Entrar),
         ("↑ Salir", "Salir", Accion::SalirFuncion),
         ("■ Detener", "Detener", Accion::Detener),
+        ("↻ Reiniciar", "Reiniciar", Accion::ReiniciarDepuracion),
     ];
     let mut x = r.x;
     for (u, a_, accion) in botones {
@@ -1956,10 +1964,83 @@ fn dibujar_depurador(f: &mut Frame, app: &mut App, r: Rect, foco: bool) -> Optio
         app.zonas.botones_depurador.push((zona, accion));
         x += w + 1;
     }
-    let estado = format!(" {} ", d.estado);
-    if x + estado.chars().count() as u16 <= r.x + r.width {
-        f.buffer_mut()
-            .set_string(x, r.y, &estado, Style::default().fg(tema::atenuado()));
+    // El estado, con lo que se puede hacer en él; si el código cambió, que hay que reiniciar.
+    let (insignia, color, ayuda) = match fase {
+        F::Iniciando => ("… INICIANDO", tema::atenuado(), "compilando y lanzando gdb"),
+        F::Corriendo => (
+            "▶ CORRIENDO",
+            tema::ok(),
+            "si pide datos, escribilos en «programa» · Shift+F5 lo corta",
+        ),
+        F::Detenido => (
+            "⏸ DETENIDO",
+            tema::acento(),
+            "F10 paso · F11 entrar · F5 continuar",
+        ),
+        F::Fallo => (
+            "✖ FALLÓ",
+            tema::error(),
+            "mirá la explicación en la consola · Shift+F5 termina",
+        ),
+        F::Termino => (
+            "■ TERMINÓ",
+            tema::atenuado(),
+            "F5 lo corre de nuevo · Shift+F5 cierra el depurador",
+        ),
+    };
+    // Lo que se depura ya no es el código del editor: eso va primero, en la insignia.
+    let (insignia, color) = if d.codigo_cambiado {
+        ("⚠ CÓDIGO CAMBIADO", tema::advertencia())
+    } else {
+        (insignia, color)
+    };
+    let mut partes = vec![Span::styled(
+        format!(" {insignia} "),
+        Style::default()
+            .fg(tema::sobre_acento())
+            .bg(color)
+            .add_modifier(Modifier::BOLD),
+    )];
+    partes.push(Span::styled(
+        format!(" {} ", d.estado),
+        Style::default().fg(color),
+    ));
+    if d.codigo_cambiado {
+        partes.push(Span::styled(
+            "· ↻ Reiniciar (Ctrl+Shift+F5) recompila y vuelve a empezar",
+            Style::default()
+                .fg(tema::advertencia())
+                .add_modifier(Modifier::BOLD),
+        ));
+    } else {
+        partes.push(Span::styled(
+            format!("· {ayuda}"),
+            Style::default().fg(tema::atenuado()),
+        ));
+    }
+    if x < r.x + r.width {
+        let linea: Line = Line::from(
+            partes
+                .into_iter()
+                .map(|s| {
+                    if sim_ascii {
+                        Span::styled(
+                            s.content
+                                .chars()
+                                .map(|c| app.sim.degradar(c))
+                                .collect::<String>(),
+                            s.style,
+                        )
+                    } else {
+                        s
+                    }
+                })
+                .collect::<Vec<_>>(),
+        );
+        f.render_widget(
+            Paragraph::new(linea),
+            Rect::new(x, r.y, r.x + r.width - x, 1),
+        );
     }
     let cuerpo = Rect {
         y: r.y + 1,
@@ -2656,8 +2737,12 @@ fn dibujar_estado(f: &mut Frame, app: &mut App, r: Rect) {
             Accion::Ejecutar,
         ),
         (
-            if app.depuracion.is_some() {
-                "[F5 Continuar]"
+            if let Some(d) = &app.depuracion {
+                match (d.fase(), d.codigo_cambiado) {
+                    (crate::app::FaseDepuracion::Termino, true) => "[F5 Reiniciar]",
+                    (crate::app::FaseDepuracion::Termino, false) => "[F5 Correr de nuevo]",
+                    _ => "[F5 Continuar]",
+                }
             } else if app.ultimo_fallo.is_some() {
                 "[F5 Ver dónde falló]"
             } else {

@@ -2280,7 +2280,7 @@ fn definicion_volver_y_esquema() {
     ]);
     let (mut a, _rx) = app(dir.path(), false);
     a.abrir_archivo(&dir.path().join("main.c"), true);
-    let pos = a.buf().buf.linea_columna_a_pos(4, 12);
+    let pos = a.buf().buf.linea_columna_a_pos(4, 13);
     a.buf_mut().buf.mover_a(pos, false);
     // F12 va a la definición (en lib.c, no al prototipo de lib.h).
     tecla(&mut a, KeyCode::F(12), KeyModifiers::NONE);
@@ -4459,4 +4459,72 @@ fn los_hallazgos_siguen_a_su_linea_al_editar() {
         a.buf().buf.contenido().lines().nth(2).map(str::trim),
         Some("int x;")
     );
+}
+
+#[test]
+#[cfg(unix)] // gcc y gdb
+fn el_depurador_dice_su_estado_y_cuando_reiniciar() {
+    for herramienta in ["gcc", "gdb"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    // Hallazgo: no era claro el estado del depurador ni cuándo detener y reiniciar.
+    let codigo = "#include <stdio.h>\n\nint main(void)\n{\n    int x = 1;\n    printf(\"%d\\n\", x);\n    return 0;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let pos = a.buf().buf.linea_columna_a_pos(5, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Char('b'), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    let detenido = |a: &App| {
+        a.depuracion
+            .as_ref()
+            .is_some_and(|d| d.fase() == jonesy_tui::app::FaseDepuracion::Detenido)
+    };
+    esperar(&mut a, &rx, detenido);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(p.contains("⏸ DETENIDO") && p.contains("F10 paso"), "{p}");
+    // Sin cambios, al terminar F5 vuelve a correr el mismo programa.
+    assert!(a.depuracion.as_ref().is_some_and(|d| !d.codigo_cambiado));
+
+    // Editar el C mientras se depura: hay que reiniciar para depurar la versión nueva.
+    let pos = a.buf().buf.linea_columna_a_pos(4, 13);
+    a.buf_mut().buf.mover_a(pos, false);
+    escribir(&mut a, "0");
+    assert!(a.depuracion.as_ref().unwrap().codigo_cambiado);
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("⚠ CÓDIGO CAMBIADO") && p.contains("↻ Reiniciar"),
+        "{p}"
+    );
+
+    // Termina: F5 ya no corre el ejecutable viejo sino que recompila y vuelve a empezar.
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .is_some_and(|d| d.fase() == jonesy_tui::app::FaseDepuracion::Termino)
+    });
+    let p = pantalla(&mut a, 160, 40);
+    assert!(
+        p.contains("terminó (código 0)") && p.contains("[F5 Reiniciar]"),
+        "{p}"
+    );
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        detenido(a) && !a.depuracion.as_ref().unwrap().codigo_cambiado
+    });
+    assert!(std::fs::read_to_string(dir.path().join("main.c"))
+        .unwrap()
+        .contains("int x = 10;"));
+    a.accion(jonesy_tui::accion::Accion::Detener);
 }
