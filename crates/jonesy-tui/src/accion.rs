@@ -5,6 +5,7 @@ pub enum Accion {
     // Archivo
     Abrir,
     Guardar,
+    GuardarComo,
     GuardarTodo,
     CerrarBuffer,
     SiguienteBuffer,
@@ -145,6 +146,7 @@ impl Accion {
         let (titulo, atajo) = match self {
             Abrir => ("Abrir archivo…", "Ctrl+O"),
             Guardar => ("Guardar", "Ctrl+S / F2"),
+            GuardarComo => ("Guardar como…", ""),
             GuardarTodo => ("Guardar todo", "Ctrl+Shift+S"),
             CerrarBuffer => ("Cerrar pestaña", "Ctrl+W"),
             SiguienteBuffer => ("Pestaña siguiente", "Ctrl+Tab"),
@@ -295,6 +297,7 @@ impl Accion {
             AlternarBreakpoint,
             CatScan,
             Guardar,
+            GuardarComo,
             GuardarTodo,
             Abrir,
             CerrarBuffer,
@@ -509,6 +512,7 @@ pub fn menus(examen: bool) -> Vec<Menu> {
                 A(AbrirProyecto),
                 SEP,
                 A(Guardar),
+                A(GuardarComo),
                 A(GuardarTodo),
                 SEP,
                 A(CerrarBuffer),

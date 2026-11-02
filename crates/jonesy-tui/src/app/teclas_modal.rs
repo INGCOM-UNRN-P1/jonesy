@@ -23,6 +23,7 @@ impl App {
             m @ Modal::Vigilar { .. } => self.tecla_vigilar(m, k),
             m @ Modal::CodigoPausa { .. } => self.tecla_codigo_pausa(m, k),
             m @ Modal::NuevoArchivo { .. } => self.tecla_nuevo_archivo(m, k),
+            m @ Modal::GuardarComo { .. } => self.tecla_guardar_como(m, k),
             m @ Modal::Clonar { .. } => self.tecla_clonar(m, k),
             m @ Modal::AbrirProyecto { .. } => self.tecla_abrir_proyecto(m, k),
             m @ Modal::Diff { .. } => self.tecla_diff(m, k),
@@ -481,6 +482,20 @@ impl App {
         }
         editar_campo(&mut texto, &k);
         self.modal = Some(Modal::NuevoArchivo { texto, carpeta });
+    }
+
+    fn tecla_guardar_como(&mut self, modal: Modal, k: KeyEvent) {
+        let Modal::GuardarComo { mut texto } = modal else {
+            return;
+        };
+        match k.code {
+            KeyCode::Esc => {}
+            KeyCode::Enter => self.guardar_como(&texto),
+            _ => {
+                editar_campo(&mut texto, &k);
+                self.modal = Some(Modal::GuardarComo { texto });
+            }
+        }
     }
 
     fn tecla_clonar(&mut self, modal: Modal, k: KeyEvent) {

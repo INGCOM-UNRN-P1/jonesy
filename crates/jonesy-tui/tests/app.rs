@@ -4353,3 +4353,50 @@ fn memoria_en_vivo_con_bishop_en_cada_paso() {
     assert!(p.contains("⚠ colgante"), "{p}");
     a.accion(jonesy_tui::accion::Accion::Detener);
 }
+
+#[test]
+fn guardar_el_buffer_del_inicio_y_guardar_como() {
+    // Hallazgo: lo que se escribía en el buffer sin nombre del inicio no se podía guardar.
+    let dir = proyecto(&[(".jonesy.toml", "[ripley]\nactivo = false\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    assert!(a.buf().buf.ruta.is_none());
+    escribir(&mut a, "int main(void) { return 0; }");
+    tecla(&mut a, KeyCode::Char('s'), KeyModifiers::CONTROL);
+    // Ctrl+S pregunta dónde, con un nombre libre propuesto.
+    assert!(
+        matches!(&a.modal, Some(Modal::GuardarComo { texto }) if texto == "main.c"),
+        "{:?}",
+        a.mensaje
+    );
+    for _ in 0..6 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "src/hola.c");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    let ruta = dir.path().join("src/hola.c");
+    assert_eq!(
+        std::fs::read_to_string(&ruta).unwrap(),
+        "int main(void) { return 0; }"
+    );
+    assert_eq!(a.buf().buf.ruta.as_deref(), Some(ruta.as_path()));
+    assert!(!a.buf().buf.modificado());
+    assert!(pantalla(&mut a, 120, 30).contains("hola.c"));
+
+    // Archivo → Guardar como… no pisa un archivo que ya existe.
+    std::fs::write(dir.path().join("otro.c"), "// ya estaba\n").unwrap();
+    a.accion(jonesy_tui::accion::Accion::GuardarComo);
+    for _ in 0..20 {
+        tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    }
+    escribir(&mut a, "otro.c");
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert!(a
+        .mensaje
+        .as_ref()
+        .is_some_and(|(m, _, _)| m.contains("Ya existe otro.c")));
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("otro.c")).unwrap(),
+        "// ya estaba\n"
+    );
+    assert!(matches!(a.modal, Some(Modal::GuardarComo { .. })));
+}

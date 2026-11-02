@@ -15,6 +15,7 @@ impl App {
                     self.avisar(format!("Guardado {}", self.buf().buf.nombre()), Nivel::Ok);
                 }
             }
+            Accion::GuardarComo => self.pedir_guardar_como(),
             Accion::GuardarTodo => {
                 if self.guardar_todo() {
                     self.avisar("Todo guardado.", Nivel::Ok);

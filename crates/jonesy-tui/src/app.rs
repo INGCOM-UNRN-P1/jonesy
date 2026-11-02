@@ -338,6 +338,10 @@ pub enum Modal {
     CodigoPausa {
         texto: String,
     },
+    /// Archivo → Guardar como: dónde guardar el buffer activo, relativo a la raíz.
+    GuardarComo {
+        texto: String,
+    },
     /// Nombre del archivo (o carpeta) nuevo, relativo a la raíz.
     NuevoArchivo {
         texto: String,
@@ -1706,10 +1710,15 @@ impl App {
         let id = self.id_buffer(i);
         let b = &mut self.buffers[i].buf;
         if b.ruta.is_none() {
-            self.avisar(
-                "Este buffer no tiene archivo: abrí uno con Ctrl+O.",
-                Nivel::Aviso,
-            );
+            // El buffer sin nombre (el del inicio, por ejemplo): se pregunta dónde guardarlo.
+            if i == self.activo {
+                self.pedir_guardar_como();
+            } else {
+                self.avisar(
+                    "Ese buffer no tiene archivo: activalo y guardalo con Ctrl+S.",
+                    Nivel::Aviso,
+                );
+            }
             return false;
         }
         if b.solo_lectura {
@@ -5848,6 +5857,75 @@ impl App {
     }
 
     /// Crea un archivo vacío (o una carpeta) y lo abre.
+    /// Archivo → Guardar como (y Ctrl+S en un buffer sin archivo): pide la ruta, con el nombre
+    /// actual o, si no tiene, uno libre según el lenguaje.
+    pub(super) fn pedir_guardar_como(&mut self) {
+        if self.buf().buf.solo_lectura {
+            self.avisar("Este buffer es de sólo lectura.", Nivel::Aviso);
+            return;
+        }
+        let texto = match &self.buf().buf.ruta {
+            Some(r) => self.proyecto.relativa(r),
+            None => {
+                let ext = if self.buf().buf.lenguaje == jonesy_core::buffer::Lenguaje::Markdown {
+                    "md"
+                } else {
+                    "c"
+                };
+                std::iter::once(format!("main.{ext}"))
+                    .chain((1..).map(|n| format!("nuevo{n}.{ext}")))
+                    .find(|n| !self.proyecto.raiz.join(n).exists())
+                    .unwrap_or_default()
+            }
+        };
+        self.modal = Some(Modal::GuardarComo { texto });
+    }
+
+    /// Guarda el buffer activo en `rel` (relativo al proyecto) y sigue editando ese archivo. No
+    /// pisa otro archivo que ya exista.
+    pub(super) fn guardar_como(&mut self, rel: &str) {
+        let rel = rel.trim().trim_start_matches('/');
+        if rel.is_empty() {
+            return;
+        }
+        let ruta = self.proyecto.raiz.join(rel);
+        if rel.split('/').any(|c| c == "..") || ruta.is_dir() {
+            self.avisar(
+                "Elegí un nombre de archivo dentro del proyecto.",
+                Nivel::Aviso,
+            );
+            self.modal = Some(Modal::GuardarComo { texto: rel.into() });
+            return;
+        }
+        let actual = self.buf().buf.ruta.clone();
+        if ruta.exists() && actual.as_deref() != Some(ruta.as_path()) {
+            self.avisar(format!("Ya existe {rel}: elegí otro nombre."), Nivel::Aviso);
+            self.modal = Some(Modal::GuardarComo { texto: rel.into() });
+            return;
+        }
+        if let Some(Err(e)) = ruta.parent().map(std::fs::create_dir_all) {
+            self.avisar(format!("No se pudo crear la carpeta: {e}"), Nivel::Error);
+            return;
+        }
+        let i = self.activo;
+        let b = &mut self.buffers[i].buf;
+        b.ruta = Some(ruta.clone());
+        b.lenguaje = jonesy_core::buffer::Lenguaje::de_ruta(&ruta);
+        if self.guardar(i) {
+            self.explorador.reconstruir(&self.proyecto.raiz);
+            self.explorador.revelar(&ruta, &self.proyecto.raiz);
+            self.refrescar_git();
+            self.avisar(format!("Guardado como {rel}."), Nivel::Ok);
+        } else {
+            // No se pudo escribir: el buffer vuelve a su archivo de antes.
+            let b = &mut self.buffers[i].buf;
+            b.ruta = actual;
+            if let Some(r) = b.ruta.clone() {
+                b.lenguaje = jonesy_core::buffer::Lenguaje::de_ruta(&r);
+            }
+        }
+    }
+
     fn crear_archivo(&mut self, rel: &str, carpeta: bool) {
         let rel = rel.trim().trim_start_matches('/');
         if rel.is_empty() {
@@ -7077,6 +7155,7 @@ impl App {
                 | Modal::IrALinea { texto }
                 | Modal::Argumentos { texto, .. }
                 | Modal::NuevoArchivo { texto, .. }
+                | Modal::GuardarComo { texto }
                 | Modal::Renombrar { texto, .. }
                 | Modal::RenombrarSimbolo { texto, .. }
                 | Modal::CodigoPausa { texto }

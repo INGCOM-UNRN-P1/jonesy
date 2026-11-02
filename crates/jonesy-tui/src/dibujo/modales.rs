@@ -14,7 +14,7 @@ pub(super) fn dibujar_modal(f: &mut Frame, app: &mut App, area: Rect) -> Option<
         Modal::Vigilar { .. } => modal_vigilar(f, app, area),
         Modal::RutaPreferencias { .. } => modal_ruta_preferencias(f, app, area),
         Modal::CodigoPausa { .. } => modal_codigo_pausa(f, app, area),
-        Modal::NuevoArchivo { .. } => modal_nuevo_archivo(f, app, area),
+        Modal::NuevoArchivo { .. } | Modal::GuardarComo { .. } => modal_nuevo_archivo(f, app, area),
         Modal::Buscar { .. } | Modal::IrALinea { .. } => modal_buscar_o_ir_a_linea(f, app, area),
         Modal::Recorrido { .. } => modal_recorrido(f, app, area),
         Modal::Simulacro { .. } => modal_simulacro(f, app, area),
@@ -306,13 +306,17 @@ fn modal_codigo_pausa(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, 
 }
 
 fn modal_nuevo_archivo(f: &mut Frame, app: &mut App, area: Rect) -> Option<(u16, u16)> {
-    let Some(Modal::NuevoArchivo { texto, carpeta }) = &app.modal else {
-        return None;
-    };
-    let titulo = if *carpeta {
-        " Nueva carpeta (ruta relativa al proyecto) "
-    } else {
-        " Nuevo archivo (ruta relativa al proyecto) "
+    let (texto, titulo) = match &app.modal {
+        Some(Modal::NuevoArchivo { texto, carpeta }) => (
+            texto,
+            if *carpeta {
+                " Nueva carpeta (ruta relativa al proyecto) "
+            } else {
+                " Nuevo archivo (ruta relativa al proyecto) "
+            },
+        ),
+        Some(Modal::GuardarComo { texto }) => (texto, " Guardar como (ruta relativa al proyecto) "),
+        _ => return None,
     };
     let r = centrado(area, 64, 3);
     limpiar(f, r);

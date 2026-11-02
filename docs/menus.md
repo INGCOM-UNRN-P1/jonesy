@@ -95,7 +95,7 @@ comprueba que esté al día.
 
 | Menú | Letra | Se abre con | Entradas |
 |---|---|---|---|
-| Archivo | [A]rchivo | Alt+A (o F10 y A) | 11 |
+| Archivo | [A]rchivo | Alt+A (o F10 y A) | 12 |
 | Editar | [E]ditar | F10 y E | 29 |
 | Ver | [V]er | Alt+V (o F10 y V) | 17 |
 | Construir | [C]onstruir | Alt+C (o F10 y C) | 15 |
@@ -114,6 +114,7 @@ comprueba que esté al día.
 │ Abrir proyecto o directorio…                 │
 ├──────────────────────────────────────────────┤
 │ Guardar                          Ctrl+S / F2 │
+│ Guardar como…                                │
 │ Guardar todo                    Ctrl+Shift+S │
 ├──────────────────────────────────────────────┤
 │ Cerrar pestaña                        Ctrl+W │
