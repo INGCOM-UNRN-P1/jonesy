@@ -18,6 +18,7 @@ depurar, memoria). Lo de docentes e infraestructura queda en segundo plano.
 | --------------------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Errores de estructura sin compilar      | hecho  | llaves, paréntesis y corchetes que no cierran o sobran, cadenas y caracteres sin cerrar y comentarios `/*` abiertos, marcados donde empieza el problema (no donde gcc lo informa) al abrir y tras la pausa del análisis en vivo; en Problemas como `jonesy`, Alt+N los recorre y F1 explica con «así no / así sí». Ola 41. **Flojo:** es léxico, no un parser: una apertura sin cerrar es error sólo con una señal fuerte (otra función en la columna 0 o el fin del archivo) y las directivas del preprocesador se saltean enteras. Sin falsos positivos en 1.782 fuentes del banco y del apunte. |
 | Colores en una terminal pura            | hecho  | con 256 o 16 colores (consola de Linux, `screen`, terminales sin color verdadero) los temas se aproximan a la paleta de la terminal: al cubo xterm-256, o por tono con 16 (un rojo apagado sigue rojo; fondos del editor al de la terminal, selección en azul). Se deduce de `COLORTERM`/`TERM`/`TERM_PROGRAM`/`WT_SESSION`; `[interfaz] colores` lo fija; `doctor` informa lo detectado. Ola 41. **Flojo:** probado con TestBackend (ningún color fuera de los 16 en los siete temas); falta mirarlo a mano en una consola de Linux real. |
+| Memoria en vivo con bishop (Alt+M)      | hecho  | con bishop instalado (`bishop gdb-script`), la sesión de gdb del depurador carga su módulo y sigue `malloc`/`free` del proyecto sin detener el programa; con la vista abierta cada parada pide `bishop-memoria` y cat-scan la dibuja: bloques numerados con la línea que los pidió, campos de cada struct con flechas entre bloques, colgantes en rojo, fugas (vivos que nadie apunta) y los `malloc`/`free`/`realloc` desde la parada anterior. Es la memoria de esa parada, aunque el programa lea del teclado; sin bishop queda la traza de mem-trace. Ola 42. **Flojo:** no hay globales (bishop sólo recorre marcos) ni resumen al terminar el programa; con el módulo cargado no se corre mem-trace, así que Exportar la traza remite a `bishop trace --html`. |
 | Revisar sólo este archivo (Alt+K)       | hecho  | `gcc -fsyntax-only` sobre el `.c` o `.h` activo con los headers de su módulo y bibliotecas, sin make ni enlazar: los errores de un archivo aunque el TP no enlace entero, con la misma salida que F6 (Problemas, daedalus, Alt+N). Alt+K porque Alt+F6 cambia de consola virtual en Linux. Ola 41. |
 | Atajos que no llegan                    | hecho  | Shift+F3, Ctrl+F3 (`ESC[1;nR`) y Ctrl+, crossterm los toma por la respuesta de posición del cursor (o la terminal no los distingue) y los descarta: se suman Alt+W (buscar siguiente, como nano), Alt+F (buscar en el proyecto, salvo en la terminal) y Alt+, (configuración), que llegan en cualquier terminal. |
 | Avisos cortados en la barra de estado   | hecho  | mientras hay un aviso, los botones se achican a su tecla («[F6]»), primero los de texto fijo y al final «Ver dónde falló» y «Ejecutar < entrada»; si no alcanza se descartan los últimos. |
@@ -51,9 +52,9 @@ depurar, memoria). Lo de docentes e infraestructura queda en segundo plano.
 Cien mejoras chicas pensadas para el alumno, tipificadas por área (las 50
 primeras y otras 50 sumadas después, #51 a #100). **Impacto**: cuánto cambia el
 día a día de quien cursa (alto, medio, bajo). **Esfuerzo**: S (horas), M (un día
-o dos), L (más). Hechas 60 de 100 (ver el historial de git para cada una). Por
+o dos), L (más). Hechas 61 de 100 (ver el historial de git para cada una). Por
 tipo: Edición 16 · Navegación 9 · Compilación 11 · Ejecución 9 · Pruebas 7 ·
-Depuración 9 · Memoria 7 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 ·
+Depuración 9 · Memoria 8 · Git 9 · Aprendizaje 9 · Interfaz 7 · Examen 5 ·
 Mantenimiento 5.
 
 |  #    	|  Mejora                                                                                                      	|  Tipo           	|  Impacto  	|  Esfuerzo  	|  Estado  	|
@@ -87,7 +88,6 @@ Mantenimiento 5.
 | 75    	|  Ver la memoria de un puntero como bytes y como el tipo apuntado                                             	|  Depuración     	|  medio    	|  M         	|  falta   	|
 | 76    	|  Paso atrás en el depurador (`record` y `reverse-step` de gdb)                                               	|  Depuración     	|  medio    	|  L         	|  falta   	|
 | 77    	|  Historial de valores de una variable a lo largo de la ejecución                                             	|  Depuración     	|  bajo     	|  L         	|  falta   	|
-| 78    	|  Comparar el heap entre dos pasos: qué se pidió y qué se liberó en el medio                                  	|  Memoria        	|  medio    	|  M         	|  falta   	|
 | 80    	|  Ver la historia de un archivo (sus commits) y quién cambió cada línea (blame)                               	|  Git            	|  medio    	|  M         	|  falta   	|
 | 82    	|  Iniciar un repositorio desde el IDE (`git init`, primer commit)                                             	|  Git            	|  medio    	|  S         	|  falta   	|
 | 83    	|  Proponer un `.gitignore` para C (binarios, `.o`, `test_bin`) al iniciar o si falta                          	|  Git            	|  medio    	|  S         	|  falta   	|
@@ -147,6 +147,7 @@ Mantenimiento 5.
 | 53    	|  Buscar dónde se usa una función o variable (referencias) en todo el proyecto                                	|  Navegación     	|  alto     	|  M         	|  hecho   	|
 | 56    	|  Insertar el comentario de documentación de una función (`/** @param … */`) a partir de su firma             	|  Edición        	|  medio    	|  S         	|  hecho   	|
 | 68    	|  Límite de tiempo y de memoria por caso configurable, como un juez                                           	|  Ejecución      	|  bajo     	|  S         	|  hecho   	|
+| 78    	|  Comparar el heap entre dos pasos: qué se pidió y qué se liberó en el medio                                  	|  Memoria        	|  medio    	|  M         	|  hecho   	|
 | 79    	|  Al terminar, contar `malloc` y `free` por función (dónde se pide y dónde se libera)                         	|  Memoria        	|  medio    	|  M         	|  hecho   	|
 | 81    	|  Descartar los cambios de un archivo (volver a la última versión) con confirmación                           	|  Git            	|  medio    	|  S         	|  hecho   	|
 | 85    	|  Catálogo navegable de las reglas de estilo de la cátedra, con ejemplos                                      	|  Aprendizaje    	|  medio    	|  M         	|  hecho   	|
@@ -165,7 +166,7 @@ paneles, integraciones y manifiestos propios: los atajos no se pueden cambiar,
 así que no hay atajos que exportar (desde #47 se configuran en `[atajos]` de
 `.jonesy.toml`, que ya viaja con el proyecto). #79 cuenta con un envoltorio de malloc y
 free enlazado con `--wrap` (sólo Linux), así que ve todos los `.c` del ejercicio, a
-diferencia de cat-scan. #68: con límite de memoria, un malloc que lo supera devuelve
+diferencia de cat-scan. #78: con bishop, la vista de memoria lista los `malloc`, `free` y `realloc` entre la parada anterior y la actual (Ola 42). #68: con límite de memoria, un malloc que lo supera devuelve
 NULL; si el programa termina mal se sugiere esa causa en lugar de afirmarla.
 
 ## Lo que queda (fuera del perfil estudiante)
