@@ -1347,10 +1347,10 @@ fn exportar_la_traza_de_memoria() {
     let dir = proyecto(&[("main.c", MAIN)]);
     let (mut a, _rx) = app(dir.path(), false);
     a.accion(jonesy_tui::accion::Accion::ExportarMemoria);
-    assert!(a
-        .mensaje
-        .as_ref()
-        .is_some_and(|(m, _, _)| m.contains("Todavía no hay una traza")));
+    // Con bishop no hay traza de mem-trace: el aviso lleva a `bishop trace --html`.
+    assert!(a.mensaje.as_ref().is_some_and(|(m, _, _)| {
+        m.contains("Todavía no hay una traza") || m.contains("bishop trace")
+    }));
     let mt = dir.path().join(".jonesy/memtrace");
     std::fs::create_dir_all(&mt).unwrap();
     std::fs::write(mt.join("reporte.html"), "<html>traza</html>").unwrap();
@@ -4287,4 +4287,69 @@ fn revisar_solo_este_archivo_con_alt_k() {
                 .as_ref()
                 .is_some_and(|m| m.0.contains("Sin errores"))
     });
+}
+
+#[test]
+#[cfg(unix)] // gcc, gdb y bishop
+fn memoria_en_vivo_con_bishop_en_cada_paso() {
+    for herramienta in ["gcc", "gdb"] {
+        if std::process::Command::new(herramienta)
+            .arg("--version")
+            .output()
+            .is_err()
+        {
+            return;
+        }
+    }
+    // Sin bishop (o con uno anterior a `bishop gdb-script`) queda la traza de mem-trace.
+    if jonesy_core::memoria_viva::script_gdb().is_none() {
+        return;
+    }
+    let codigo = "#include <stdlib.h>\n\ntypedef struct nodo { int dato; struct nodo *sig; } nodo_t;\n\nint main(void)\n{\n    nodo_t *lista = NULL;\n    for (int i = 0; i < 2; i++) {\n        nodo_t *n = malloc(sizeof(nodo_t));\n        n->dato = i;\n        n->sig = lista;\n        lista = n;\n    }\n    int *perdido = malloc(sizeof(int));\n    perdido = NULL;\n    free(lista->sig);\n    return lista->dato;\n}\n";
+    let dir = proyecto(&[
+        ("main.c", codigo),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    // Breakpoint en el free (línea 16), F5 y Alt+M.
+    let pos = a.buf().buf.linea_columna_a_pos(15, 4);
+    a.buf_mut().buf.mover_a(pos, false);
+    tecla(&mut a, KeyCode::Char('b'), KeyModifiers::CONTROL);
+    tecla(&mut a, KeyCode::F(5), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .is_some_and(|d| d.ubicacion.as_ref().is_some_and(|(_, l)| *l == 16))
+    });
+    assert!(a.depuracion.as_ref().unwrap().bishop.is_some());
+    tecla(&mut a, KeyCode::Char('m'), KeyModifiers::ALT);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion
+            .as_ref()
+            .is_some_and(|d| matches!(d.memoria, Some(Ok(_))))
+    });
+    let p = pantalla(&mut a, 200, 50);
+    assert!(
+        p.contains("Memoria (bishop)") && p.contains("en vivo"),
+        "{p}"
+    );
+    // La lista con sus dos nodos numerados, la flecha entre ellos y la fuga de `perdido`.
+    assert!(p.contains("#2 0x") && p.contains("#1 0x"), "{p}");
+    assert!(p.contains("dato = 1") && p.contains("─► #1"), "{p}");
+    assert!(p.contains("#3 0x") && p.contains("fuga"), "{p}");
+    assert!(p.contains("malloc(4) → #3 en main.c:14"), "{p}");
+
+    // F10 sobre el free: el evento y el puntero que quedó colgando en el nodo #2.
+    tecla(&mut a, KeyCode::F(10), KeyModifiers::NONE);
+    esperar(&mut a, &rx, |a| {
+        a.depuracion.as_ref().is_some_and(|d| {
+            d.ubicacion.as_ref().is_some_and(|(_, l)| *l == 17)
+                && matches!(&d.memoria, Some(Ok(m)) if m.line == 17)
+        })
+    });
+    let p = pantalla(&mut a, 200, 50);
+    assert!(p.contains("free(#1) en main.c:16"), "{p}");
+    assert!(p.contains("⚠ colgante"), "{p}");
+    a.accion(jonesy_tui::accion::Accion::Detener);
 }

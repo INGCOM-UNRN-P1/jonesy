@@ -280,9 +280,12 @@ la invoca.
 > Grabación: [CU-19-cat-scan.cast](casos/CU-19-cat-scan.cast) · [qué muestra](casos/CU-19-cat-scan.md)
 
 - **Disparador:** Alt+M durante la depuración.
-- **Flujo:** con la traza de mem-trace, dibuja el stack y el heap con flechas de los
-  punteros a lo que apuntan, los colgantes en rojo, y los eventos del paso. Se puede
-  exportar a HTML.
+- **Flujo:**
+  - Con bishop, la memoria de la parada actual, tomada en la misma sesión de gdb. Sirve también si el programa lee del teclado.
+  - Sin bishop, la memoria sale de la traza de mem-trace.
+  - Dibuja el stack y el heap con flechas de los punteros a lo que apuntan, y cada bloque con su número y la línea que lo pidió.
+  - Los punteros colgantes se marcan en rojo. Los bloques que ya nadie apunta se marcan como fuga, y abajo van los `malloc` y `free` del paso.
+  - La traza de mem-trace se puede exportar a HTML.
 - **Resultado:** el alumno ve qué pasa con sus punteros en cada línea.
 
 ### CU-20 · Versionar con git

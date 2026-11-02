@@ -2457,10 +2457,10 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             }
         }
     }
-    if d.traza.is_some() {
+    if d.traza.is_some() || d.bishop.is_some() {
         l.push(Line::raw(""));
         l.push(Line::styled(
-            "Alt+M: vista de memoria (cat-scan)",
+            "Alt+M: vista de memoria (stack y heap)",
             Style::default().fg(tema::atenuado()),
         ));
     }
@@ -2469,28 +2469,62 @@ fn dibujar_variables(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
 
 fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
     let sim = app.sim.clone();
-    let b = bloque_app(app, " Memoria (cat-scan) ", foco);
+    let en_vivo = app.depuracion.as_ref().is_some_and(|d| d.bishop.is_some());
+    let titulo = if en_vivo {
+        " Memoria (bishop) "
+    } else {
+        " Memoria (cat-scan) "
+    };
+    let b = bloque_app(app, titulo, foco);
     let i = b.inner(r);
     f.render_widget(b, r);
     let Some(d) = &app.depuracion else { return };
-    let (Some(t), Some(p)) = (&d.traza, d.paso_traza) else {
-        let msg = if d.traza.is_none() {
-            "Esperando la traza de mem-trace…"
-        } else {
-            "Esta parada no figura en la traza de mem-trace."
-        };
+    let mensaje = |f: &mut Frame, msg: &str| {
         f.render_widget(
-            Paragraph::new(msg).style(Style::default().fg(tema::atenuado())),
+            Paragraph::new(msg.to_string())
+                .style(Style::default().fg(tema::atenuado()))
+                .wrap(Wrap { trim: false }),
             i,
         );
-        return;
     };
-    let paso = &t.steps[p];
-    // Abajo: lo que pasó con el heap en este paso y, en el último, cómo terminó.
-    let mut notas = jonesy_core::catscan::eventos_del_paso(paso);
-    if p + 1 == t.steps.len() {
-        notas.extend(jonesy_core::catscan::resumen_final(t));
-    }
+    // Con bishop, la memoria de la parada actual; si no, el paso de la traza de mem-trace
+    // que corresponde a la parada.
+    let (paso, notas, pie) = if d.bishop.is_some() {
+        match &d.memoria {
+            Some(Ok(paso)) => {
+                let mut notas = jonesy_core::catscan::eventos_del_paso(paso);
+                notas.extend(jonesy_core::catscan::fugas_del_paso(paso));
+                (paso, notas, " en vivo ".to_string())
+            }
+            Some(Err(e)) => return mensaje(f, &format!("bishop no pudo leer la memoria: {e}")),
+            None if d.gdb.corriendo => return mensaje(f, "El programa está corriendo…"),
+            None if d.ubicacion.is_none() => {
+                return mensaje(f, "La memoria se ve cuando el programa se detiene.")
+            }
+            None => return mensaje(f, "Leyendo la memoria…"),
+        }
+    } else {
+        let (Some(t), Some(p)) = (&d.traza, d.paso_traza) else {
+            return mensaje(
+                f,
+                if d.traza.is_none() {
+                    "Esperando la traza de mem-trace… (con bishop instalado, la memoria se ve en vivo)"
+                } else {
+                    "Esta parada no figura en la traza de mem-trace."
+                },
+            );
+        };
+        // Abajo: lo que pasó con el heap en este paso y, en el último, cómo terminó.
+        let mut notas = jonesy_core::catscan::eventos_del_paso(&t.steps[p]);
+        if p + 1 == t.steps.len() {
+            notas.extend(jonesy_core::catscan::resumen_final(t));
+        }
+        (
+            &t.steps[p],
+            notas,
+            format!(" paso {}/{} ", p + 1, t.steps.len()),
+        )
+    };
     let alto_notas = (notas.len() as u16).min(i.height / 3);
     let lienzo_area = Rect {
         height: i.height - alto_notas,
@@ -2525,10 +2559,9 @@ fn dibujar_catscan(f: &mut Frame, app: &mut App, r: Rect, foco: bool) {
             tema::tono_catscan(*tono),
         );
     }
-    let pie = format!(" paso {}/{} ", p + 1, t.steps.len());
-    if i.width as usize > pie.len() && r.height > 1 {
+    if i.width as usize > pie.chars().count() && r.height > 1 {
         buf.set_string(
-            r.x + r.width - pie.len() as u16 - 1,
+            r.x + r.width - pie.chars().count() as u16 - 1,
             r.y + r.height - 1,
             &pie,
             Style::default().fg(tema::atenuado()),

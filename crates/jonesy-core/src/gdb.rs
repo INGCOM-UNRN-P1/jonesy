@@ -310,6 +310,8 @@ pub enum EventoGdb {
         indice: usize,
         valor: Result<String, String>,
     },
+    /// `bishop-memoria` terminó: la foto está en el archivo pedido (o por qué no se pudo).
+    Memoria(Result<(), String>),
     Salio,
 }
 
@@ -348,6 +350,7 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
                     indice: *indice,
                     valor: Err(msg),
                 }],
+                Some(Pedido::Memoria) => vec![EventoGdb::Memoria(Err(msg))],
                 _ => vec![EventoGdb::Error(msg)],
             }
         }
@@ -381,6 +384,7 @@ pub fn interpretar(r: &Registro, pedido: Option<&Pedido>) -> Vec<EventoGdb> {
                 indice: *indice,
                 valor: Ok(datos.texto("value").unwrap_or("").to_string()),
             }],
+            Some(Pedido::Memoria) => vec![EventoGdb::Memoria(Ok(()))],
             Some(Pedido::Valores) => vec![EventoGdb::Valores(
                 datos
                     .get("variables")
@@ -421,6 +425,8 @@ pub enum Pedido {
     Evaluar(usize),
     /// Los valores completos de las variables (arreglos y structs incluidos).
     Valores,
+    /// La foto de la memoria de bishop (`bishop-memoria`).
+    Memoria,
     Otro,
 }
 
@@ -634,6 +640,26 @@ impl Gdb {
         self.enviar(
             &format!("-interpreter-exec console {}", comillas_mi(comando)),
             Pedido::Otro,
+        )
+        .map(|_| ())
+    }
+
+    /// Carga el módulo de bishop (`bishop gdb-script`) y empieza a seguir malloc y free del
+    /// código bajo `raiz`, sin detener el programa. Va antes de correr.
+    pub fn cargar_bishop(&mut self, script: &Path, raiz: &Path) -> std::io::Result<()> {
+        self.consola(&format!("source {}", script.display()))?;
+        self.consola(&format!(
+            "bishop-seguir {}",
+            comillas_mi(&raiz.to_string_lossy())
+        ))
+    }
+
+    /// Pide a bishop la memoria de la parada actual en `archivo` (llega `EventoGdb::Memoria`).
+    pub fn pedir_memoria(&mut self, archivo: &Path) -> std::io::Result<()> {
+        let orden = format!("bishop-memoria {}", comillas_mi(&archivo.to_string_lossy()));
+        self.enviar(
+            &format!("-interpreter-exec console {}", comillas_mi(&orden)),
+            Pedido::Memoria,
         )
         .map(|_| ())
     }

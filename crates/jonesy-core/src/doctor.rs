@@ -814,8 +814,16 @@ pub fn chequeos(
         .en("Depuración")
         .recomendado(),
         binario(
+            "bishop",
+            "Memoria en vivo al depurar (Alt+M): stack, heap, punteros y fugas en cada paso",
+            false,
+            &sugerencia_ecosistema("bishop"),
+        )
+        .en("Depuración")
+        .recomendado(),
+        binario(
             "mem-trace",
-            "cat-scan: vista de la memoria al depurar",
+            "cat-scan sin bishop: la memoria desde una traza aparte",
             false,
             &sugerencia_ecosistema("mem-trace"),
         )

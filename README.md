@@ -42,8 +42,10 @@ laboratorio, en un servidor por SSH o en el examen, desde terminales de 80×24.
   explicación y el enlace al apunte) y sus acciones (gaff fix, tetsuo, motoko…)
   con Alt+H.
 - **Depurador** visual sobre GDB/MI con breakpoints en el margen, paso a paso,
-  pila y variables, y **cat-scan**: stack y heap dibujados con flechas a partir
-  de la traza de `mem-trace`, con punteros colgantes en rojo.
+  pila y variables, y la **vista de memoria** (Alt+M): stack y heap dibujados con
+  flechas en cada paso, con los bloques numerados por la línea que los pidió, los
+  punteros colgantes en rojo, las fugas y lo que pasó con el heap. La toma bishop
+  desde la misma sesión de gdb; sin bishop, sale de la traza de `mem-trace`.
 - **quick-doc**: firma, retorno, parámetros, trampas y reglas de cátedra de la
   función bajo el cursor (82 funciones de libc/POSIX embebidas, sin red),
   resaltando el parámetro que se está escribiendo.
@@ -112,7 +114,7 @@ install -m 755 target/release/jonesy ~/.local/bin/
 ```
 
 Requiere Rust ≥ 1.85. En tiempo de ejecución usa lo que haya en el `PATH`:
-`gcc`/`make` para compilar, `gdb` para depurar, `git`, `ripley` y `mem-trace`
+`gcc`/`make` para compilar, `gdb` para depurar, `git`, `ripley`, `bishop` (o `mem-trace`)
 (si faltan, esas funciones se desactivan solas) y `python3` sólo si el proyecto
 tiene plugins.
 
@@ -366,10 +368,16 @@ shell del deck domina la cifra; `SHELL=/bin/sh` aísla la del IDE.
 - **Reglas de ripley**: se muestran los códigos reales de cátedra (`0x3001h`, …)
   en lugar de los `P1-MEM-01` de ejemplo de la especificación, y las categorías
   del panel salen del primer dígito del código.
-- **cat-scan** no lee un flujo en vivo de mem-trace: al iniciar la depuración
+- **Vista de memoria con bishop** (Ola 42): al iniciar la depuración, la sesión de
+  gdb carga el módulo de bishop (`bishop gdb-script`).
+  - `bishop-seguir <raíz>` sigue `malloc` y `free` del proyecto sin detener el programa.
+  - Con la vista abierta, cada parada pide `bishop-memoria .jonesy/memoria.json` y la
+    dibuja con cat-scan.
+  - Es la memoria de esa parada, aunque el programa lea del teclado.
+  - gdb corre con `LC_ALL=C`, así que el módulo sólo le pasa texto ASCII.
+- **cat-scan sin bishop** no lee un flujo en vivo de mem-trace. Al iniciar la depuración
   corre `mem-trace run --outdir .jonesy/memtrace` en segundo plano y alinea cada
-  parada de GDB con el paso de la traza por función, línea y profundidad. Sólo
-  para programas de un archivo sin Makefile.
+  parada de GDB con el paso de la traza por función, línea y profundidad.
 - **Detección de cambios de git** por sondeo de las fechas de `.git/HEAD` e
   índice cada 2 s (sin inotify), además de refrescar tras cada guardado o acción
   del panel.

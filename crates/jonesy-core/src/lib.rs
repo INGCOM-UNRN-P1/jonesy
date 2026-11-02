@@ -30,6 +30,7 @@ pub mod gdb;
 pub mod glosario;
 pub mod hex;
 pub mod integraciones;
+pub mod memoria_viva;
 pub mod precedencia;
 pub mod preferencias;
 pub mod proceso;

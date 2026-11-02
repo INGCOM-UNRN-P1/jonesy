@@ -72,6 +72,13 @@ impl App {
                 return;
             }
         };
+        // bishop en la misma sesión: la memoria de cada parada, sin correr el programa aparte.
+        let bishop = jonesy_core::memoria_viva::script_gdb()
+            .filter(|s| gdb.cargar_bishop(s, &self.proyecto.raiz).is_ok())
+            .map(|_| self.proyecto.dir_estado().join("memoria.json"));
+        if let Some(dir) = bishop.as_deref().and_then(Path::parent) {
+            let _ = std::fs::create_dir_all(dir);
+        }
         if let Some((archivo, linea)) = self.hasta_linea.take() {
             let _ = gdb.poner_breakpoint_temporal(&archivo, linea);
         } else if self.breakpoints.is_empty() && !hasta_el_fallo {
@@ -99,6 +106,8 @@ impl App {
             paso_traza: None,
             tam_pty: (filas, cols_pty),
             buscar_fuente: false,
+            bishop: bishop.clone(),
+            memoria: None,
         });
         self.panel_inferior = true;
         self.pestana = Pestana::Depurador;
@@ -109,7 +118,21 @@ impl App {
             "Depurando: F5 continuar · F10 paso · F11 entrar · Shift+F11 salir · Shift+F5 detener",
             Nivel::Info,
         );
-        self.lanzar_memtrace();
+        if bishop.is_none() {
+            self.lanzar_memtrace();
+        }
+    }
+
+    /// Pide a bishop la memoria de la parada actual si la vista de memoria está abierta.
+    pub(super) fn pedir_memoria(&mut self) {
+        if self.lateral != Some(Lateral::CatScan) {
+            return;
+        }
+        if let Some(d) = &mut self.depuracion {
+            if let (Some(archivo), false) = (d.bishop.clone(), d.gdb.corriendo) {
+                let _ = d.gdb.pedir_memoria(&archivo);
+            }
+        }
     }
 
     pub(super) fn detener_depuracion(&mut self) {
@@ -222,6 +245,7 @@ impl App {
                             d.ubicacion = None;
                             d.marcos.clear();
                             d.variables.clear();
+                            d.memoria = None;
                             None
                         }
                     };
@@ -236,6 +260,9 @@ impl App {
                         let _ = d.gdb.pedir_estado();
                         for (i, (e, _)) in self.vigiladas.iter().enumerate() {
                             let _ = d.gdb.evaluar(e, i);
+                        }
+                        if let (Some(archivo), Some(Lateral::CatScan)) = (&d.bishop, self.lateral) {
+                            let _ = d.gdb.pedir_memoria(archivo);
                         }
                         // El valor bajo el cursor se vuelve a pedir en esta parada.
                         self.valor_cursor = None;
@@ -291,6 +318,13 @@ impl App {
                     } else if let Some((_, v)) = self.vigiladas.get_mut(indice) {
                         *v = Some(valor);
                     }
+                }
+                EventoGdb::Memoria(r) => {
+                    d.memoria = Some(r.and_then(|()| {
+                        jonesy_core::memoria_viva::cargar(
+                            d.bishop.as_deref().unwrap_or(Path::new("")),
+                        )
+                    }));
                 }
                 EventoGdb::Salio => fin = true,
             }

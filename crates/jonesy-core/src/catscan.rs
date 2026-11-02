@@ -76,6 +76,11 @@ pub struct Bloque {
     pub status: String,
     pub site: Sitio,
     pub free_site: Option<Sitio>,
+    /// Vivo pero sin ningún puntero que llegue a él (lo marca bishop): ya no se puede liberar.
+    pub fuga: bool,
+    /// Lo que guarda el bloque, si la fuente lo da (bishop); si no, se ve a través del primer
+    /// puntero que lo apunta.
+    pub contenido: Option<Value>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -205,6 +210,26 @@ pub fn eventos_del_paso(paso: &Paso) -> Vec<(Tono, String)> {
                     format!("{kind}({}) → {id}{sitio}", e["size"].as_u64().unwrap_or(0)),
                 ),
             }
+        })
+        .collect()
+}
+
+/// Los bloques vivos que ya nadie apunta en este paso (los marca bishop): fugas en curso.
+pub fn fugas_del_paso(paso: &Paso) -> Vec<(Tono, String)> {
+    paso.heap
+        .blocks
+        .iter()
+        .filter(|b| b.fuga)
+        .map(|b| {
+            (
+                Tono::Peligro,
+                format!(
+                    "⚠ fuga: #{} de {} B reservado en {} ya no lo apunta nadie",
+                    b.id,
+                    b.size,
+                    b.site.corto()
+                ),
+            )
         })
         .collect()
 }
@@ -730,8 +755,11 @@ fn lineas_variable(paso: &Paso, nombre: &str, v: &Value, sangria: usize, out: &m
     }
 }
 
-/// Contenido de un bloque: lo que se ve a través del primer puntero que lo apunta.
+/// Contenido de un bloque: el que trae o lo que se ve a través del primer puntero que lo apunta.
 fn contenido_bloque(paso: &Paso, b: &Bloque) -> Option<Value> {
+    if b.contenido.is_some() {
+        return b.contenido.clone();
+    }
     fn buscar(v: &Value, b: &Bloque, prof: usize) -> Option<Value> {
         if prof > 6 {
             return None;
@@ -841,7 +869,9 @@ fn cajas(paso: &Paso) -> (Vec<Caja>, Vec<Caja>) {
                 }),
             }
         }
-        let (estado, tono) = if b.vivo() {
+        let (estado, tono) = if b.fuga {
+            ("fuga", Tono::Peligro)
+        } else if b.vivo() {
             ("vivo", Tono::Vivo)
         } else {
             ("liberado", Tono::Liberado)

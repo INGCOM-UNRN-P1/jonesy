@@ -230,7 +230,12 @@ impl App {
                 } else {
                     Lateral::CatScan
                 });
-                if self.depuracion.as_ref().is_some_and(|d| d.traza.is_none()) {
+                self.pedir_memoria();
+                if self
+                    .depuracion
+                    .as_ref()
+                    .is_some_and(|d| d.bishop.is_none() && d.traza.is_none())
+                {
                     self.avisar("La traza de mem-trace todavía no está lista (o el proyecto tiene Makefile).", Nivel::Info);
                 }
             }

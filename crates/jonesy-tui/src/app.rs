@@ -709,6 +709,11 @@ pub struct Depuracion {
     /// Se detuvo por una señal dentro de código sin fuente (libc): al llegar los marcos se
     /// salta al primero del proyecto.
     pub buscar_fuente: bool,
+    /// Archivo donde bishop deja la memoria de cada parada; None si bishop no está (queda la
+    /// traza de mem-trace).
+    pub bishop: Option<PathBuf>,
+    /// La memoria de la última parada según bishop, o por qué no se pudo tomar.
+    pub memoria: Option<Result<jonesy_core::catscan::Paso, String>>,
 }
 
 pub struct EstadoExamenUi {
@@ -3082,7 +3087,6 @@ impl App {
 
     // ------------------------------------------------------------ depurador
 
-    /// mem-trace en segundo plano para cat-scan (sólo programas de un archivo).
     /// mem-trace en segundo plano para cat-scan: un .c suelto o el main.c de un ejercicio
     /// con Makefile (con sus fuentes y los de sus bibliotecas).
     fn lanzar_memtrace(&mut self) {
@@ -3110,10 +3114,13 @@ impl App {
         let dir = self.proyecto.dir_estado().join("memtrace");
         let reporte = dir.join("reporte.html");
         if !reporte.is_file() {
-            self.avisar(
-                "Todavía no hay una traza: depurá con F5 y esperá «cat-scan listo».",
-                Nivel::Aviso,
-            );
+            // Con bishop no se corre mem-trace: la página paso a paso la arma bishop.
+            let msg = if jonesy_core::memoria_viva::script_gdb().is_some() {
+                "Con bishop la memoria se ve en vivo (Alt+M); la página paso a paso: bishop trace <archivo.c> --html memoria.html"
+            } else {
+                "Todavía no hay una traza: depurá con F5 y esperá «cat-scan listo»."
+            };
+            self.avisar(msg, Nivel::Aviso);
             return;
         }
         let programa = jonesy_core::catscan::Traza::cargar(&dir.join("trace.json"))
