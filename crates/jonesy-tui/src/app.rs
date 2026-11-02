@@ -1677,23 +1677,45 @@ impl App {
         let b = self.buf_mut();
         if let Some(d) = f(&mut b.buf) {
             b.ultimo_cambio = Instant::now();
-            // Breakpoints y marcadores siguen a su línea si se agregan o quitan líneas.
+            // Breakpoints, marcadores y hallazgos (gaff, ripley, el compilador…) siguen a su
+            // línea si se agregan o quitan líneas, hasta que el próximo análisis los renueve.
             let corrimiento =
                 d.insertado.matches('\n').count() as isize - d.saltos_borrados as isize;
             if corrimiento != 0 {
                 if let Some(ruta) = b.buf.ruta.clone() {
-                    let linea = b.buf.texto.char_to_line(d.offset.min(b.buf.largo())) + 1;
+                    let offset = d.offset.min(b.buf.largo());
+                    let linea = b.buf.texto.char_to_line(offset) + 1;
+                    // Un Enter al principio de la línea la corre entera, con lo que tenga.
+                    let desde = if offset == b.buf.texto.line_to_char(linea - 1) {
+                        linea
+                    } else {
+                        linea + 1
+                    };
+                    let correr = |l: usize| -> usize {
+                        if l >= desde {
+                            (l as isize + corrimiento).max(linea as isize) as usize
+                        } else {
+                            l
+                        }
+                    };
                     for marcas in [&mut self.breakpoints, &mut self.marcadores] {
                         *marcas = std::mem::take(marcas)
                             .into_iter()
-                            .map(|(p, l)| {
-                                if p == ruta && l > linea {
-                                    (p, (l as isize + corrimiento).max(linea as isize) as usize)
-                                } else {
-                                    (p, l)
-                                }
-                            })
+                            .map(|(p, l)| if p == ruta { (p, correr(l)) } else { (p, l) })
                             .collect();
+                    }
+                    for d in self
+                        .diag_compilador
+                        .iter_mut()
+                        .chain(self.diag_herramientas.values_mut().flatten())
+                        .chain(self.diag_plugins.values_mut().flatten())
+                    {
+                        if d.archivo
+                            .as_deref()
+                            .is_some_and(|a| mismo_archivo(a, &ruta))
+                        {
+                            d.linea = correr(d.linea);
+                        }
                     }
                 }
             }

@@ -4400,3 +4400,63 @@ fn guardar_el_buffer_del_inicio_y_guardar_como() {
     );
     assert!(matches!(a.modal, Some(Modal::GuardarComo { .. })));
 }
+
+#[test]
+fn los_hallazgos_siguen_a_su_linea_al_editar() {
+    // Hallazgo: las anotaciones de gaff quedaban en su número de línea mientras el código se
+    // corría, hasta el próximo análisis.
+    let dir = proyecto(&[
+        (
+            "main.c",
+            "int main(void)\n{\n    int x;\n    return 0;\n}\n",
+        ),
+        (
+            ".jonesy.toml",
+            "[ripley]\nactivo = false\n[integraciones]\nen_vivo = false\n",
+        ),
+    ]);
+    let (mut a, _rx) = app(dir.path(), false);
+    let ruta = dir.path().join("main.c");
+    a.abrir_archivo(&ruta, true);
+    let ruta = a.buf().buf.ruta.clone().unwrap();
+    a.diag_herramientas.insert(
+        ("gaff".into(), ruta.clone()),
+        vec![jonesy_core::diagnostico::Diagnostico {
+            archivo: Some(ruta.clone()),
+            linea: 3,
+            mensaje: "x sin usar".into(),
+            herramienta: Some("gaff".into()),
+            ..Default::default()
+        }],
+    );
+    let linea_gaff = |a: &App| a.diag_herramientas.values().flatten().next().unwrap().linea;
+    // Dos líneas nuevas arriba (Enter al final de la línea 1).
+    let fin = a.buf().buf.linea_columna_a_pos(0, 14);
+    a.buf_mut().buf.mover_a(fin, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(linea_gaff(&a), 5);
+    // Enter al principio de su línea: baja con el código.
+    let inicio = a.buf().buf.linea_columna_a_pos(4, 0);
+    a.buf_mut().buf.mover_a(inicio, false);
+    tecla(&mut a, KeyCode::Enter, KeyModifiers::NONE);
+    assert_eq!(linea_gaff(&a), 6);
+    // Borrar las líneas vacías de arriba la vuelve a subir.
+    let p = a.buf().buf.linea_columna_a_pos(2, 0);
+    a.buf_mut().buf.mover_a(p, false);
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    assert_eq!(linea_gaff(&a), 4);
+    let p = a.buf().buf.linea_columna_a_pos(2, 0);
+    a.buf_mut().buf.mover_a(p, false);
+    tecla(&mut a, KeyCode::Backspace, KeyModifiers::NONE);
+    assert_eq!(linea_gaff(&a), 3);
+    assert!(a
+        .diagnosticos_linea(&ruta, 2)
+        .iter()
+        .any(|d| d.mensaje == "x sin usar"));
+    assert_eq!(
+        a.buf().buf.contenido().lines().nth(2).map(str::trim),
+        Some("int x;")
+    );
+}
