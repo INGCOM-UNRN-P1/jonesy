@@ -151,6 +151,13 @@ pub fn markdown_hallazgo(r: &Regla, hallazgo: Option<&str>, enlace: Option<&str>
     if let Some(e) = enlace {
         s.push_str(&format!("\n**Apunte:** {e}\n"));
     }
+    if r.herramienta == "gaff" {
+        // Los hallazgos de estilo se pueden aceptar con una justificación (gaff:ignore).
+        s.push_str(&format!(
+            "\n**Si en este caso está bien a propósito:** escribí el porqué en esa línea (o en un comentario justo arriba):\n\n```c\n// gaff:ignore {} <por qué en este caso está bien>\n```\n\nSin justificación no se acepta.\n",
+            r.codigo
+        ));
+    }
     s
 }
 
@@ -162,6 +169,18 @@ mod tests {
     const KANEDA: &str = r#"{"reglas": [{"codigo": "KAN001", "titulo": "gets() prohibida", "descripcion": "No verifica límites.", "sugerencia": "Usá fgets.", "cwe": "CWE-242", "regla_catedra": "0x5008h", "ejemplo_incorrecto": "gets(b);", "ejemplo_correcto": "fgets(b, sizeof b, stdin);"}]}"#;
     const SPUNK: &str = r#"aviso previo
 {"patrones": [{"codigo": "0x0001h", "alias": "AP006", "nombre": "Punto y coma tras el if", "explicacion": "Crea una sentencia vacía.", "sugerencia": "Sacá el ;", "ejemplo_incorrecto": "if (x);", "ejemplo_correcto": "if (x)"}]}"#;
+
+    #[test]
+    fn los_hallazgos_de_gaff_dicen_como_aceptarlos() {
+        let r = &desde_json("gaff", GAFF)[0];
+        let md = markdown_hallazgo(r, None, None);
+        assert!(
+            md.contains("// gaff:ignore 0x0001h <por qué en este caso está bien>"),
+            "{md}"
+        );
+        let k = &desde_json("kaneda", KANEDA)[0];
+        assert!(!markdown_hallazgo(k, None, None).contains("gaff:ignore"));
+    }
 
     #[test]
     fn lee_los_catalogos_de_cada_herramienta() {
