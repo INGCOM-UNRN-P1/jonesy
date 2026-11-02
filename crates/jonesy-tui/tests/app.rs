@@ -4528,3 +4528,63 @@ fn el_depurador_dice_su_estado_y_cuando_reiniciar() {
         .contains("int x = 10;"));
     a.accion(jonesy_tui::accion::Accion::Detener);
 }
+
+#[test]
+#[cfg(unix)] // sh
+fn el_explorador_ve_los_archivos_creados_desde_afuera() {
+    // Hallazgo: el plugin de holden creaba holden_mocks.c y no aparecía en el explorador.
+    let manifiesto = r#"
+[[integracion]]
+nombre = "mocks"
+descripcion = "Crea un archivo como holden generate"
+binario = "sh"
+cuando = "manual"
+archivos = ["*.c"]
+
+  [[integracion.accion]]
+  titulo = "Generar mocks"
+  comando = "touch {dir}/holden_mocks.c"
+  modo = "panel"
+"#;
+    let dir = proyecto(&[
+        ("main.c", MAIN),
+        (".jonesy/integraciones/mocks.toml", manifiesto),
+        (".jonesy.toml", "[ripley]\nactivo = false\n"),
+    ]);
+    let (mut a, rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("main.c"), true);
+    let nombres = |a: &App| -> Vec<String> {
+        a.explorador
+            .filas
+            .iter()
+            .map(|f| f.nombre.clone())
+            .collect()
+    };
+    pantalla(&mut a, 120, 30);
+    assert!(!nombres(&a).contains(&"holden_mocks.c".to_string()));
+    a.correr_accion_herramienta("mocks", 0);
+    esperar(&mut a, &rx, |a| a.tareas_en_curso().is_empty());
+    assert!(nombres(&a).contains(&"holden_mocks.c".to_string()));
+    assert_eq!(
+        a.explorador.seleccionada().unwrap().nombre,
+        "holden_mocks.c"
+    );
+    assert!(
+        a.mensaje
+            .as_ref()
+            .is_some_and(|(m, _, _)| m.contains("mocks creó holden_mocks.c")),
+        "{:?}",
+        a.mensaje
+    );
+
+    // Un archivo creado desde la terminal aparece en el sondeo siguiente, sin apretar r, y la
+    // selección sigue en su archivo.
+    std::fs::write(dir.path().join("aaa.c"), "").unwrap();
+    std::thread::sleep(jonesy_tui::app::SONDEO_GIT + Duration::from_millis(100));
+    a.tic();
+    assert!(nombres(&a).contains(&"aaa.c".to_string()));
+    assert_eq!(
+        a.explorador.seleccionada().unwrap().nombre,
+        "holden_mocks.c"
+    );
+}

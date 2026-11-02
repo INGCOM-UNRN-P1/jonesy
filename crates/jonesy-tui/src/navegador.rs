@@ -42,6 +42,26 @@ impl PestanaNav {
 /// Directorios que no se muestran (estado interno de herramientas).
 const OCULTOS: [&str; 3] = [".git", ".jonesy", "target"];
 
+/// Los archivos del proyecto (sin `.git`, `.jonesy` ni `target`), hasta 5000: para ver qué
+/// creó una herramienta.
+pub fn archivos_del_proyecto(raiz: &Path) -> BTreeSet<PathBuf> {
+    fn recorrer(dir: &Path, v: &mut BTreeSet<PathBuf>) {
+        for (ruta, _, es_dir) in listar(dir) {
+            if v.len() >= 5000 {
+                return;
+            }
+            if es_dir {
+                recorrer(&ruta, v);
+            } else {
+                v.insert(ruta);
+            }
+        }
+    }
+    let mut v = BTreeSet::new();
+    recorrer(raiz, &mut v);
+    v
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct FilaArchivo {
     pub ruta: PathBuf,
@@ -99,10 +119,28 @@ impl Explorador {
                 }
             }
         }
+        // La selección sigue a su archivo aunque aparezcan o desaparezcan filas arriba.
+        let elegida = self.seleccionada().map(|f| f.ruta.clone());
         let mut filas = vec![];
         agregar(self, raiz, 0, &mut filas);
         self.filas = filas;
-        self.sel = self.sel.min(self.filas.len().saturating_sub(1));
+        self.sel = elegida
+            .and_then(|r| self.filas.iter().position(|f| f.ruta == r))
+            .unwrap_or(self.sel)
+            .min(self.filas.len().saturating_sub(1));
+    }
+
+    /// Huella de las carpetas que se ven (la raíz y las desplegadas): su fecha cambia cuando
+    /// se crea, borra o renombra algo adentro, también desde afuera de jonesy (una
+    /// herramienta, la terminal).
+    pub fn huella(&self, raiz: &Path) -> Vec<(PathBuf, Option<std::time::SystemTime>)> {
+        std::iter::once(raiz.to_path_buf())
+            .chain(self.expandidos.iter().cloned())
+            .map(|d| {
+                let fecha = std::fs::metadata(&d).and_then(|m| m.modified()).ok();
+                (d, fecha)
+            })
+            .collect()
     }
 
     pub fn seleccionada(&self) -> Option<&FilaArchivo> {

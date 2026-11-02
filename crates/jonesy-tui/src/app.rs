@@ -952,6 +952,11 @@ pub struct App {
 
     pub repo: Option<Repo>,
     pub git_estado: Option<jonesy_git::Estado>,
+    /// Una acción de herramienta en curso y los archivos que había antes (ver
+    /// `revisar_archivos_nuevos`).
+    archivos_antes: Option<(String, BTreeSet<PathBuf>)>,
+    /// Fechas de las carpetas que muestra el explorador (ver `Explorador::huella`).
+    huella_explorador: Vec<(PathBuf, Option<std::time::SystemTime>)>,
     git_marca: Option<(std::time::SystemTime, std::time::SystemTime)>,
     ultimo_sondeo_git: Instant,
     pub git: PanelGit,
@@ -1151,8 +1156,10 @@ impl App {
             vigia: None,
             repo,
             git_estado: None,
+            huella_explorador: Vec::new(),
             git_marca: None,
             ultimo_sondeo_git: Instant::now(),
+            archivos_antes: None,
             git: PanelGit::default(),
             examen,
             telemetria,
@@ -2333,6 +2340,11 @@ impl App {
         }
         // Las herramientas leen el archivo del disco.
         self.guardar_todo();
+        // Lo que haya creado se avisa al terminar, corra donde corra (panel, terminal, visor).
+        self.archivos_antes = Some((
+            integracion.to_string(),
+            crate::navegador::archivos_del_proyecto(&self.proyecto.raiz),
+        ));
         let modulo = self
             .proyecto
             .estructura
@@ -2435,6 +2447,49 @@ impl App {
                 });
             }
         }
+    }
+
+    /// Lo que creó una acción de herramienta (holden generate, corbel scaffold…), cuando
+    /// terminó: se muestra en el explorador y se avisa dónde quedó, en lugar de dejar que el
+    /// alumno lo busque.
+    fn revisar_archivos_nuevos(&mut self) {
+        if self.archivos_antes.is_none()
+            || !self.tareas_en_curso().is_empty()
+            || self.ejecucion.as_mut().is_some_and(|d| d.vivo())
+        {
+            return;
+        }
+        let Some((integracion, antes)) = self.archivos_antes.take() else {
+            return;
+        };
+        let nuevos: Vec<PathBuf> = crate::navegador::archivos_del_proyecto(&self.proyecto.raiz)
+            .difference(&antes)
+            .cloned()
+            .collect();
+        self.explorador.reconstruir(&self.proyecto.raiz);
+        self.refrescar_git();
+        let Some(primero) = nuevos.first() else {
+            return;
+        };
+        self.explorador.revelar(primero, &self.proyecto.raiz);
+        self.huella_explorador = self.explorador.huella(&self.proyecto.raiz);
+        let nombres: Vec<String> = nuevos
+            .iter()
+            .take(3)
+            .map(|r| self.proyecto.relativa(r))
+            .collect();
+        let resto = if nuevos.len() > 3 {
+            format!(" y {} más", nuevos.len() - 3)
+        } else {
+            String::new()
+        };
+        self.avisar(
+            format!(
+                "{integracion} creó {}{resto}: está marcado en el explorador (Alt+E); Enter lo abre.",
+                nombres.join(", ")
+            ),
+            Nivel::Ok,
+        );
     }
 
     /// Después de una herramienta que modificó el archivo en disco (gaff fix, corbel
@@ -2553,6 +2608,16 @@ impl App {
         }
         self.ultimo_sondeo_git = Instant::now();
         self.sondear_doc();
+        self.revisar_archivos_nuevos();
+        // Archivos creados, borrados o renombrados desde afuera (una herramienta, la terminal):
+        // el explorador y las marcas de git los muestran sin tener que apretar r.
+        let huella = self.explorador.huella(&self.proyecto.raiz);
+        if huella != self.huella_explorador {
+            self.huella_explorador = huella;
+            self.explorador.reconstruir(&self.proyecto.raiz);
+            self.refrescar_git();
+            return;
+        }
         if let Some(r) = &self.repo {
             let marca = r.marca();
             if marca != self.git_marca {
@@ -3719,6 +3784,7 @@ impl App {
                     return;
                 };
                 self.fin_proceso(t, codigo, salida);
+                self.revisar_archivos_nuevos();
             }
         }
     }
