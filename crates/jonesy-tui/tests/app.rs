@@ -1919,7 +1919,11 @@ fn tema_turbo_pinta_como_turbo_c() {
     use ratatui::style::Color;
     let dir = proyecto(&[
         ("main.c", MAIN),
-        (".jonesy.toml", "[interfaz]\ntema = \"turbo\"\n"),
+        // La prueba mira el color verdadero: sin fijarlo depende de la terminal que corre los tests.
+        (
+            ".jonesy.toml",
+            "[interfaz]\ntema = \"turbo\"\ncolores = \"24bit\"\n",
+        ),
     ]);
     let (mut a, _rx) = app(dir.path(), false);
     assert_eq!(tema::actual(), Tema::Turbo);
