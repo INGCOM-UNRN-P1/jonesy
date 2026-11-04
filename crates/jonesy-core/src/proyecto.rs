@@ -615,7 +615,11 @@ impl Proyecto {
     }
 
     pub fn relativa(&self, ruta: &Path) -> String {
+        // La raíz está canonizada y `ruta` puede no estarlo: un enlace simbólico (`/var` en
+        // macOS) o un nombre corto de Windows (`RUNNER~1`) no coinciden con ella tal cual.
+        let canonica = crate::canonica(ruta);
         ruta.strip_prefix(&self.raiz)
+            .or_else(|_| canonica.strip_prefix(&self.raiz))
             .unwrap_or(ruta)
             .to_string_lossy()
             .into_owned()
@@ -791,6 +795,20 @@ pub fn lee_entrada(codigo: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    #[test]
+    fn relativa_entiende_una_ruta_por_un_enlace_simbolico() {
+        let d = tempfile::tempdir().unwrap();
+        let real = d.path().join("real");
+        std::fs::create_dir(&real).unwrap();
+        std::fs::write(real.join("main.c"), "int main(void) { return 0; }\n").unwrap();
+        let enlace = d.path().join("enlace");
+        std::os::unix::fs::symlink(&real, &enlace).unwrap();
+        let p = Proyecto::abrir(&enlace);
+        assert_eq!(p.relativa(&enlace.join("main.c")), "main.c");
+        assert_eq!(p.relativa(&real.join("main.c")), "main.c");
+    }
+
     #[test]
     fn comando_revisar_un_archivo_con_sus_headers() {
         let d = tempfile::tempdir().unwrap();
@@ -824,7 +842,10 @@ mod tests {
         let p = Proyecto::abrir(raiz);
         let cmd = p
             .comando_revisar(&raiz.join("ejercicios/ej1/main.c"))
-            .unwrap();
+            .unwrap()
+            // En Windows las rutas relativas llevan `\\` y el intérprete puede pedir comillas.
+            .replace('\\', "/")
+            .replace('\'', "");
         assert!(
             cmd.contains("-Iejercicios/ej1 ") && cmd.contains("-Ilibs/pila/include"),
             "{cmd}"
