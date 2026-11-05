@@ -28,12 +28,14 @@ por nombre. La reorganización sigue [la crítica y propuesta](critica_y_propues
   panel de git (`a`, `u`, `c`, `l`, `z`, `m`) no aparecen en los menús: se muestran al pie
   del panel cuando tiene el foco.
 
-## La barra de estado
+## Cerrar paneles con el mouse
 
 Cada panel tiene un botón `[×]` en su borde superior derecho para cerrarlo con el mouse; en la barra
 izquierda va en el borde inferior, porque sus pestañas ocupan toda la fila. Al cerrar, la barra de estado
 dice con qué atajo se vuelve a abrir. Si el panel es muy angosto, o las pestañas del panel inferior no
 dejan lugar, no aparece: el teclado sigue funcionando.
+
+## La barra de estado
 
 Abajo a la derecha hay botones para lo de todos los días (se usan con clic o con su
 tecla):
