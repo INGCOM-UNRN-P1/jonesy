@@ -4272,7 +4272,11 @@ fn revisar_solo_este_archivo_con_alt_k() {
     esperar(&mut a, &rx, |a| !a.diag_compilador.is_empty());
     assert!(a.salida[0].0.contains("-fsyntax-only"), "{:?}", a.salida[0]);
     assert!(
-        a.salida[0].0.contains("-Ilibs/pila/include"),
+        // En Windows la ruta va con barras invertidas y entre comillas.
+        a.salida[0]
+            .0
+            .replace('\\', "/")
+            .contains("libs/pila/include"),
         "{:?}",
         a.salida[0]
     );
@@ -4382,7 +4386,17 @@ fn guardar_el_buffer_del_inicio_y_guardar_como() {
         std::fs::read_to_string(&ruta).unwrap(),
         "int main(void) { return 0; }"
     );
-    assert_eq!(a.buf().buf.ruta.as_deref(), Some(ruta.as_path()));
+    // Canónicas: el temporal cambia de nombre (/var es /private/var en macOS, RUNNER~1 en Windows).
+    let abierta = a
+        .buf()
+        .buf
+        .ruta
+        .clone()
+        .expect("el buffer quedó con su ruta");
+    assert_eq!(
+        abierta.canonicalize().unwrap(),
+        ruta.canonicalize().unwrap()
+    );
     assert!(!a.buf().buf.modificado());
     assert!(pantalla(&mut a, 120, 30).contains("hola.c"));
 
