@@ -37,6 +37,13 @@ fn estado_de_prueba() {
     });
 }
 
+/// `JONESY_ESTADO` es del proceso y las pruebas corren en paralelo: las que la cambian se turnan.
+/// Si no, la de la bienvenida guardaba su marca en un directorio y la buscaba en el de otra prueba.
+fn entorno_exclusivo() -> std::sync::MutexGuard<'static, ()> {
+    static ENTORNO: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    ENTORNO.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 fn app(dir: &Path, examen: bool) -> (App, Receiver<Aviso>) {
     estado_de_prueba();
     let (tx, rx) = channel();
@@ -637,6 +644,7 @@ fn navegador_de_archivos_y_proyecto_con_objetivos() {
 
 #[test]
 fn abrir_otro_proyecto_desde_el_dialogo() {
+    let _entorno = entorno_exclusivo();
     let base = tempfile::tempdir().unwrap();
     std::env::set_var("JONESY_ESTADO", base.path().join("estado"));
     let a_dir = base.path().join("tp1");
@@ -665,6 +673,7 @@ fn abrir_otro_proyecto_desde_el_dialogo() {
 #[test]
 #[cfg(unix)] // usa sh, make, gcc o el deck
 fn clonar_un_repositorio_y_abrirlo() {
+    let _entorno = entorno_exclusivo();
     let git = |dir: &Path, args: &[&str]| {
         assert!(std::process::Command::new("git")
             .args([
@@ -2122,6 +2131,7 @@ fn diagnostico_del_entorno_desde_ayuda() {
 
 #[test]
 fn bienvenida_la_primera_vez_y_desde_ayuda() {
+    let _entorno = entorno_exclusivo();
     // El estado del usuario (marca de «ya vista») en un directorio propio de la prueba:
     // un subdirectorio para no depender de lo que hagan las demás.
     estado_de_prueba();
