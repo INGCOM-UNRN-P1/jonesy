@@ -4,7 +4,7 @@ use std::path::Path;
 use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
 
-use jonesy_tui::app::{Foco, Modal, Pestana};
+use jonesy_tui::app::{Foco, Modal, PanelCerrable, Pestana};
 use jonesy_tui::sistema::Aviso;
 use jonesy_tui::{App, Opciones};
 use ratatui::backend::TestBackend;
@@ -4615,4 +4615,202 @@ archivos = ["*.c"]
         a.explorador.seleccionada().unwrap().nombre,
         "holden_mocks.c"
     );
+}
+
+// ------------------------------------------------------------------ cierre de paneles con el mouse
+
+fn clic_en_cierre_en(a: &mut App, zona: ratatui::layout::Rect) {
+    use ratatui::crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+    a.evento(Event::Mouse(MouseEvent {
+        kind: MouseEventKind::Down(MouseButton::Left),
+        column: zona.x + 1,
+        row: zona.y,
+        modifiers: KeyModifiers::NONE,
+    }));
+}
+
+fn clic_en_cierre(a: &mut App, panel: PanelCerrable) {
+    let (zona, _) = *a
+        .zonas
+        .cierres_paneles
+        .iter()
+        .find(|(_, p)| *p == panel)
+        .unwrap_or_else(|| panic!("sin botón para {panel:?}"));
+    clic_en_cierre_en(a, zona);
+}
+
+fn tiene_cierre(a: &App, panel: PanelCerrable) -> bool {
+    a.zonas.cierres_paneles.iter().any(|(_, p)| *p == panel)
+}
+
+#[test]
+fn cada_panel_se_cierra_con_su_boton() {
+    let dir = proyecto(&[("main.c", MAIN), ("consigna.md", "# Consigna\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('t'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::F(4), KeyModifiers::NONE);
+    let p = pantalla(&mut a, 160, 45);
+    assert!(p.contains("[×]"), "{p}");
+
+    clic_en_cierre(&mut a, PanelCerrable::Navegador);
+    assert!(a.navegador.is_none());
+    clic_en_cierre_tras_dibujar(&mut a, PanelCerrable::Inferior);
+    assert!(!a.panel_inferior);
+    clic_en_cierre_tras_dibujar(&mut a, PanelCerrable::Lateral);
+    assert!(a.lateral.is_none());
+    clic_en_cierre_tras_dibujar(&mut a, PanelCerrable::QuickDoc);
+    assert!(!a.quickdoc_visible);
+    clic_en_cierre_tras_dibujar(&mut a, PanelCerrable::Consigna);
+    assert!(!a.consigna_visible);
+    pantalla(&mut a, 160, 45);
+    assert!(a.zonas.cierres_paneles.is_empty());
+}
+
+fn clic_en_cierre_tras_dibujar(a: &mut App, panel: PanelCerrable) {
+    pantalla(a, 160, 45);
+    clic_en_cierre(a, panel);
+}
+
+#[test]
+fn cerrar_el_panel_con_foco_lo_devuelve_al_editor_y_dice_como_volver() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    assert_eq!(a.foco, Foco::Navegador);
+    pantalla(&mut a, 120, 30);
+
+    clic_en_cierre(&mut a, PanelCerrable::Navegador);
+
+    assert_eq!(a.foco, Foco::Editor);
+    let aviso = a.mensaje.as_ref().map(|m| m.0.clone()).unwrap_or_default();
+    assert!(aviso.contains("Alt+E"), "{aviso}");
+}
+
+#[test]
+fn cerrar_un_panel_sin_foco_no_se_lo_quita_a_otro() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('g'), KeyModifiers::ALT);
+    assert_eq!(a.foco, Foco::Lateral);
+    pantalla(&mut a, 160, 40);
+
+    clic_en_cierre(&mut a, PanelCerrable::Navegador);
+
+    assert_eq!(a.foco, Foco::Lateral);
+    assert!(a.lateral.is_some());
+}
+
+#[test]
+fn cerrar_un_panel_maximizado_vuelve_a_la_vista_normal() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    tecla(&mut a, KeyCode::Char('z'), KeyModifiers::ALT);
+    assert!(a.maximizado);
+    pantalla(&mut a, 120, 30);
+
+    clic_en_cierre(&mut a, PanelCerrable::Navegador);
+
+    assert!(!a.maximizado);
+    assert!(a.navegador.is_none());
+}
+
+#[test]
+fn con_un_modal_abierto_el_boton_no_cierra_el_panel() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    pantalla(&mut a, 120, 30);
+    let zona = *a
+        .zonas
+        .cierres_paneles
+        .iter()
+        .find(|(_, p)| *p == PanelCerrable::Navegador)
+        .unwrap();
+    tecla(&mut a, KeyCode::Char('k'), KeyModifiers::CONTROL);
+    assert!(a.modal.is_some());
+    pantalla(&mut a, 120, 30);
+
+    clic_en_cierre_en(&mut a, zona.0);
+
+    assert!(a.navegador.is_some());
+}
+
+#[test]
+fn las_pestanas_de_la_barra_izquierda_no_ceden_su_lugar() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(
+        p.contains("Archivos") && p.contains("Proyecto") && p.contains("Esquema"),
+        "{p}"
+    );
+
+    let r = a.areas.izquierdo.unwrap();
+    let (zona, _) = *a
+        .zonas
+        .cierres_paneles
+        .iter()
+        .find(|(_, p)| *p == PanelCerrable::Navegador)
+        .unwrap();
+    assert!(a
+        .zonas
+        .pestanas_nav
+        .iter()
+        .all(|(t, _)| !t.intersects(zona)));
+    assert_eq!(zona.y, r.y + r.height - 1, "va al borde inferior");
+
+    clic_en_cierre(&mut a, PanelCerrable::Navegador);
+    assert!(a.navegador.is_none());
+}
+
+#[test]
+fn el_boton_no_tapa_las_pestanas_del_panel_inferior() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    tecla(&mut a, KeyCode::Char('t'), KeyModifiers::ALT);
+    for ancho in [40, 60, 90, 120, 160] {
+        pantalla(&mut a, ancho, 30);
+        for (zona, panel) in &a.zonas.cierres_paneles {
+            if *panel == PanelCerrable::Inferior {
+                assert!(
+                    a.zonas
+                        .pestanas_inferior
+                        .iter()
+                        .all(|(r, _)| !r.intersects(*zona)),
+                    "{ancho}"
+                );
+            }
+        }
+    }
+    pantalla(&mut a, 160, 30);
+    assert!(tiene_cierre(&a, PanelCerrable::Inferior));
+}
+
+#[test]
+fn la_vista_previa_se_cierra_con_su_boton() {
+    let dir = proyecto(&[("main.c", MAIN), ("notas.md", "# Notas\n")]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.abrir_archivo(&dir.path().join("notas.md"), true);
+    tecla(&mut a, KeyCode::Char('p'), KeyModifiers::CONTROL);
+    assert!(a.preview_markdown);
+    pantalla(&mut a, 120, 30);
+
+    clic_en_cierre(&mut a, PanelCerrable::Preview);
+
+    assert!(!a.preview_markdown);
+}
+
+#[test]
+fn en_ascii_el_boton_no_usa_unicode() {
+    let dir = proyecto(&[("main.c", MAIN)]);
+    let (mut a, _rx) = app(dir.path(), false);
+    a.sim.ascii = true;
+    tecla(&mut a, KeyCode::Char('e'), KeyModifiers::ALT);
+    let p = pantalla(&mut a, 120, 30);
+    assert!(p.contains("[x]") && !p.contains("[×]"), "{p}");
 }

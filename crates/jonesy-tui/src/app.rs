@@ -789,6 +789,19 @@ pub struct Zonas {
     pub items_menu: Vec<(Rect, usize)>,
     pub modal_items: Option<(Rect, usize)>,
     pub botones_depurador: Vec<(Rect, Accion)>,
+    /// Botón [×] de cada panel que se puede cerrar.
+    pub cierres_paneles: Vec<(Rect, PanelCerrable)>,
+}
+
+/// Los paneles con botón de cierre. El editor no: siempre hay uno.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PanelCerrable {
+    Navegador,
+    Consigna,
+    QuickDoc,
+    Inferior,
+    Lateral,
+    Preview,
 }
 
 #[derive(Clone, Copy)]

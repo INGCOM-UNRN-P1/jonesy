@@ -3,6 +3,57 @@
 use super::*;
 
 impl App {
+    /// El botón [×] de un panel: lo mismo que los atajos que lo ocultan, y avisa cómo volver a abrirlo,
+    /// porque un clic se da sin querer. Con un panel maximizado se vuelve a la vista normal.
+    fn cerrar_panel(&mut self, panel: PanelCerrable) {
+        let (foco, volver) = match panel {
+            PanelCerrable::Navegador => {
+                self.navegador = None;
+                (Foco::Navegador, Some(Accion::Explorador))
+            }
+            PanelCerrable::Consigna => {
+                self.consigna_visible = false;
+                (Foco::Consigna, Some(Accion::VistaConsigna))
+            }
+            PanelCerrable::QuickDoc => {
+                self.quickdoc_visible = false;
+                (Foco::Doc, Some(Accion::QuickDoc))
+            }
+            PanelCerrable::Inferior => {
+                self.panel_inferior = false;
+                (Foco::Inferior, Some(Accion::Terminal))
+            }
+            PanelCerrable::Lateral => {
+                let volver = match self.lateral.take() {
+                    Some(Lateral::Git) => Some(Accion::PanelGit),
+                    Some(Lateral::Reglas) => Some(Accion::PanelReglas),
+                    _ => None,
+                };
+                (Foco::Lateral, volver)
+            }
+            PanelCerrable::Preview => {
+                self.preview_markdown = false;
+                (Foco::Preview, Some(Accion::PreviewMarkdown))
+            }
+        };
+        self.maximizado = false;
+        // En el modo compacto cada panel es una vista: se vuelve al código.
+        let compacto = self.modo() == Modo::Compacto;
+        if compacto {
+            self.vista = Vista::Codigo;
+        }
+        if self.foco == foco || compacto {
+            self.cambiar_foco(Foco::Editor);
+        }
+        let atajo = volver.map(|a| a.info().atajo).filter(|t| !t.is_empty());
+        if let Some(atajo) = atajo {
+            self.avisar(
+                format!("Panel cerrado: {atajo} lo vuelve a abrir."),
+                Nivel::Info,
+            );
+        }
+    }
+
     pub(super) fn mouse(&mut self, m: MouseEvent) {
         let (x, y) = (m.column, m.row);
         let dentro = |r: Rect| x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height;
@@ -226,6 +277,16 @@ impl App {
         }
         if let Some((_, i)) = self.zonas.menu.iter().find(|(r, _)| dentro(*r)).copied() {
             self.abrir_menu(i);
+            return;
+        }
+        if let Some((_, panel)) = self
+            .zonas
+            .cierres_paneles
+            .iter()
+            .find(|(r, _)| dentro(*r))
+            .copied()
+        {
+            self.cerrar_panel(panel);
             return;
         }
         if let Some((_, a)) = self

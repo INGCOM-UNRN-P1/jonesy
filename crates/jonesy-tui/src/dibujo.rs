@@ -13,7 +13,8 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::accion::{self, Accion};
 use crate::app::{
-    columnas_visuales, mismo_archivo, App, Foco, Lateral, Modal, Nivel, Pestana, ZonaEditor,
+    columnas_visuales, mismo_archivo, App, Foco, Lateral, Modal, Nivel, PanelCerrable, Pestana,
+    ZonaEditor,
 };
 use crate::layout::{self, Modo, Vista};
 use crate::markdown;
@@ -23,6 +24,10 @@ use crate::tema::{self, estilo_clase};
 
 mod modales;
 use modales::dibujar_modal;
+
+/// Lo que ocupa el botón [×] de un panel, y el ancho desde el que lo lleva.
+const ANCHO_CIERRE: u16 = 3;
+const ANCHO_MINIMO_CON_CIERRE: u16 = 12;
 
 pub fn dibujar(f: &mut Frame, app: &mut App) {
     let area = f.area();
@@ -92,12 +97,66 @@ pub fn dibujar(f: &mut Frame, app: &mut App) {
         }
         dibujar_quickdoc(f, app, r);
     }
+    dibujar_cierres(f, app, &a);
     dibujar_estado(f, app, a.estado);
     if app.modal.is_some() {
         cursor = dibujar_modal(f, app, area);
     }
     if let Some((x, y)) = cursor {
         f.set_cursor_position(Position { x, y });
+    }
+}
+
+fn choca<T>(pestanas: &[(Rect, T)], zona: Rect) -> bool {
+    pestanas.iter().any(|(r, _)| r.intersects(zona))
+}
+
+/// El botón [×] de cada panel, sobre su borde superior. Va después de dibujarlos a todos: una sola
+/// función en lugar de una por panel, y el quick-doc flotante tapa a los que tiene debajo.
+fn dibujar_cierres(f: &mut Frame, app: &mut App, a: &layout::Areas) {
+    let preview = app.zonas.preview.map(|i| Rect {
+        x: i.x.saturating_sub(1),
+        y: i.y.saturating_sub(1),
+        width: i.width + 2,
+        height: i.height + 2,
+    });
+    let flotante = a.quickdoc.filter(|_| a.quickdoc_flotante);
+    let paneles = [
+        (a.quickdoc, PanelCerrable::QuickDoc, Foco::Doc),
+        (a.izquierdo, PanelCerrable::Navegador, Foco::Navegador),
+        (a.consigna, PanelCerrable::Consigna, Foco::Consigna),
+        (a.inferior, PanelCerrable::Inferior, Foco::Inferior),
+        (a.lateral, PanelCerrable::Lateral, Foco::Lateral),
+        (preview, PanelCerrable::Preview, Foco::Preview),
+    ];
+    let texto = if app.sim.ascii { "[x]" } else { "[×]" };
+    for (area, panel, foco) in paneles {
+        let Some(r) = area.filter(|r| r.width >= ANCHO_MINIMO_CON_CIERRE && r.height >= 2) else {
+            continue;
+        };
+        let x = r.x + r.width - ANCHO_CIERRE - 1;
+        let mut zona = Rect::new(x, r.y, ANCHO_CIERRE, 1);
+        // Las pestañas no ceden su lugar. La barra izquierda tiene borde inferior: con el ancho por
+        // omisión sus tres pestañas llenan la fila. El panel inferior, si no entra, queda sin botón.
+        if panel == PanelCerrable::Navegador && choca(&app.zonas.pestanas_nav, zona) {
+            zona.y = r.y + r.height - 1;
+        }
+        if panel == PanelCerrable::Inferior && choca(&app.zonas.pestanas_inferior, zona) {
+            continue;
+        }
+        if panel != PanelCerrable::QuickDoc && flotante.is_some_and(|q| q.intersects(zona)) {
+            continue;
+        }
+        let color = if app.foco == foco {
+            tema::error()
+        } else {
+            tema::atenuado()
+        };
+        f.render_widget(
+            Paragraph::new(texto).style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+            zona,
+        );
+        app.zonas.cierres_paneles.push((zona, panel));
     }
 }
 
